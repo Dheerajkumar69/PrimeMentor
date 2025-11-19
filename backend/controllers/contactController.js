@@ -1,12 +1,20 @@
-import sgMail from '@sendgrid/mail';
+import nodemailer from 'nodemailer'; // 💡 Changed from sgMail
 
-// Set the API Key for SendGrid globally using the environment variable
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// 💡 Nodemailer Transporter Setup
+const transporter = nodemailer.createTransport({
+    host: process.env.MAIL_HOST,
+    port: process.env.MAIL_PORT,
+    secure: process.env.MAIL_PORT == 465, // true for 465, false for other ports
+    auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS,
+    },
+});
 
 /**
- * @desc    Send contact form email
- * @route   POST /api/contact
- * @access  Public
+ * @desc 	Send contact form email
+ * @route 	POST /api/contact
+ * @access 	Public
  */
 const sendContactEmail = async (req, res) => {
     // 💡 Capture all possible data fields
@@ -26,12 +34,12 @@ const sendContactEmail = async (req, res) => {
 
     // Determine the page source for dynamic content and styling
     const pageSource = source === 'Refund Request' ? 'Refund Policy Page' : 
-                       source === 'Support Page' ? 'Support Page' : 
-                       'Contact Us Page';
-                       
+                        source === 'Support Page' ? 'Support Page' : 
+                        'Contact Us Page';
+                        
     const primaryColor = source === 'Refund Request' ? '#E9882C' : // Orange/Gold for Refund
-                         source === 'Support Page' ? '#1E90FF' : // Blue for Support
-                         '#ff9900'; // Default Orange for Contact Us
+                          source === 'Support Page' ? '#1E90FF' : // Blue for Support
+                          '#ff9900'; // Default Orange for Contact Us
 
     const subjectPrefix = source === 'Refund Request' ? '[URGENT REFUND REQUEST]' : 
                           source === 'Support Page' ? '[Prime Mentor SUPPORT REQUEST]' : 
@@ -130,21 +138,21 @@ const sendContactEmail = async (req, res) => {
     `;
     // --- UI RICH HTML CONTENT END ---
 
-    // The message object for SendGrid
-    const msg = {
+    // The message object for Nodemailer (similar to SendGrid)
+    const mailOptions = { // 💡 Renamed from msg
         to: process.env.CONTACT_FORM_RECEIVER_EMAIL, 
-        from: process.env.SENDGRID_SENDER_EMAIL,     
-        replyTo: email,                              
+        from: process.env.MAIL_USER,         // 💡 Changed from SENDGRID_SENDER_EMAIL to MAIL_USER
+        replyTo: email,                              
         subject: `${subjectPrefix} Submission from ${name}`, 
         text: `ORIGIN: ${pageSource}\nName: ${name}\nEmail: ${email}\nPhone: ${phone || 'N/A'}\nMessage: ${messageContent}`,
         html: htmlContent,
     };
 
     try {
-        await sgMail.send(msg);
+        await transporter.sendMail(mailOptions); // 💡 Changed from sgMail.send(msg)
         res.status(200).json({ message: 'Message sent successfully.' });
     } catch (error) {
-        console.error('SendGrid Error:', error.response ? error.response.body : error);
+        console.error('Nodemailer Error:', error); // 💡 Changed error logging
         res.status(500).json({ message: 'Server error. Failed to send message.' });
     }
 };

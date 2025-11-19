@@ -173,8 +173,6 @@ const TermsOfServicePage = () => {
                     </div>
                 </main>
 
-                <Footer />
-
             </div>
         </div>
     );

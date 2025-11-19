@@ -147,8 +147,6 @@ const FaqPage = () => {
                     </div>
                 </main>
 
-                {/* Footer must be integrated here */}
-                <Footer />
 
             </div>
         </div>

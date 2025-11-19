@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube, Send, User, MessageSquare, Star } from 'lucide-react';
+import { AppContext } from '../context/AppContext.jsx';
 
 // Import Header and Footer based on your folder structure
 import Header from '../components/Home/Header.jsx'; 
@@ -14,8 +15,10 @@ const ContactPage = () => {
     // State for error feedback
     const [error, setError] = useState(null);
 
+    const { backendUrl } = useContext(AppContext);
+
     // Endpoint for your backend Express route
-    const CONTACT_API_URL = '/api/contact'; 
+    const CONTACT_API_URL = `${backendUrl}/api/contact`; 
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -279,8 +282,6 @@ const ContactPage = () => {
 
                     </div>
                 </main>
-                
-                <Footer />
                 
             </div>
         </div>

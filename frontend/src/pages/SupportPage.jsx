@@ -245,8 +245,6 @@ const SupportPage = () => {
                         </div>
                     </div>
                 </main>
-
-                <Footer />
             </div>
         </div>
     );

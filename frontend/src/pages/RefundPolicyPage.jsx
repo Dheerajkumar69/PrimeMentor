@@ -337,9 +337,6 @@ const RefundPolicyPage = () => {
                     </div>
                 </main>
 
-                {/* Footer must be integrated here */}
-                <Footer />
-
             </div>
         </div>
     );

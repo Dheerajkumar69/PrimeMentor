@@ -6,23 +6,23 @@ import axios from 'axios';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import ClassRequest from '../models/ClassRequest.js';
-// 🛑 FIX: Updated to use the recommended @clerk/express package 🛑
 import { clerkClient } from '@clerk/express'; 
 
 dotenv.config();
 
-// 🛑 NEW: Initialize Stripe Client 🛑
-import Stripe from 'stripe'; 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+// 🛑 NEW: Initialize eWAY Client 🛑
+import rapid from 'eway-rapid'; 
+const EWAY_API_KEY = process.env.EWAY_API_KEY;
+const EWAY_PASSWORD = process.env.EWAY_PASSWORD;
+const EWAY_ENDPOINT = process.env.EWAY_ENDPOINT || 'sandbox'; // Default to sandbox
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-if (!STRIPE_SECRET_KEY) {
-    console.error("FATAL ERROR: STRIPE_SECRET_KEY is not defined in .env");
+if (!EWAY_API_KEY || !EWAY_PASSWORD) {
+    console.error("FATAL ERROR: EWAY_API_KEY or EWAY_PASSWORD is not defined in .env");
 }
-// Pass the API key directly to Stripe for initialization
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-    apiVersion: '2020-08-27', // Use a stable API version
-}); 
-// 🛑 END Stripe Initialization 🛑
+
+const ewayClient = rapid.createClient(EWAY_API_KEY, EWAY_PASSWORD, EWAY_ENDPOINT);
+// 🛑 END eWAY Initialization 🛑
 
 
 const getClerkUserIdFromToken = (req) => {
@@ -42,8 +42,8 @@ const getClerkUserIdFromToken = (req) => {
 }
 
 
-// 🛑 MODIFIED: Controller for Payment and Booking (Now using Stripe Payment Intent) 🛑
-export const processPaymentAndBooking = asyncHandler(async (req, res) => {
+// 🛑 MODIFIED: Controller to Initiate eWAY Payment and Booking 🛑
+export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
     const studentClerkId = getClerkUserIdFromToken(req);
 
     if (!studentClerkId) {
@@ -51,16 +51,90 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
     }
 
     const { 
+        bookingPayload,
+    } = req.body;
+    
+    const { 
         courseDetails, 
         scheduleDetails, 
         studentDetails, 
         guardianDetails,
-        paymentMethodId, // 🛑 NEW: Expecting Stripe PaymentMethod ID 🛑
-        amount, // Amount in cents
-        currency,
-        cardHolderEmail,
-        customerName,
-    } = req.body;
+        paymentAmount, // Amount in dollars (e.g., 100.00)
+        currency = 'AUD',
+    } = bookingPayload;
+
+    try {
+        // --- 1. Prepare eWAY Payload ---
+        const amountInCents = Math.round(paymentAmount * 100); 
+        const customerEmail = studentDetails?.email || guardianDetails?.email || 'unknown@example.com';
+        const customerName = (studentDetails?.first && studentDetails?.last) 
+            ? `${studentDetails.first} ${studentDetails.last}`
+            : "Customer";
+            
+        // The CancelUrl redirects to the payment step, allowing the user to re-attempt payment
+        const cancelUrl = `${FRONTEND_URL}/enrollment?step=3`;
+        
+        console.log(`Creating eWAY Shared Payment URL for clerkId: ${studentClerkId} amount: $${paymentAmount}`);
+
+        const response = await ewayClient.createTransaction(rapid.Enum.Method.RESPONSIVE_SHARED, {
+            Payment: {
+                TotalAmount: amountInCents, // Required in cents
+                CurrencyCode: currency,
+            },
+            Customer: {
+                // eWAY requires a customer ID for shared page (can be arbitrary)
+                Reference: studentClerkId, 
+                FirstName: studentDetails?.first || '',
+                LastName: studentDetails?.last || '',
+                Email: customerEmail,
+                Phone: studentDetails?.phone || guardianDetails?.phone || '',
+            },
+            // The RedirectUrl will receive the AccessCode for the backend to query the result
+            // The frontend is responsible for calling the /finish-payment route with the AccessCode and clerkId
+            RedirectUrl: `${FRONTEND_URL}/payment-status?clerkId=${studentClerkId}`, 
+            CancelUrl: cancelUrl,
+            TransactionType: "Purchase",
+            PartnerAgreementGuid: studentClerkId, 
+            DeviceID: 'NODESDK',
+        });
+        
+        if (response.getErrors().length > 0) {
+            const errors = response.getErrors().map(error => rapid.getMessage(error, "en"));
+            console.error('eWAY Error during createTransaction:', errors);
+            return res.status(500).json({ success: false, message: errors.join(' | ') || 'eWAY initialization failed.' });
+        }
+        
+        const redirectURL = response.get('SharedPaymentUrl');
+        const accessCode = response.get('AccessCode');
+        
+        if (!redirectURL) {
+             return res.status(500).json({ success: false, message: 'eWAY did not return a Redirect URL.' });
+        }
+        
+        console.log(`✅ eWAY Shared Page created. AccessCode: ${accessCode}`);
+
+        // --- 2. Send Redirect URL and AccessCode back to Frontend ---
+        res.status(200).json({ 
+            success: true, 
+            redirectUrl: redirectURL,
+            accessCode: accessCode, 
+            message: 'Redirecting to eWAY secure payment page.'
+        });
+
+    } catch (error) {
+        console.error('Error initiating eWAY payment:', error.message);
+        res.status(500).json({ success: false, message: error.message || 'Server error during eWAY payment initiation.' });
+    }
+});
+
+
+// 🛑 NEW: Controller to Finish eWAY Payment (Called after redirect) 🛑
+export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
+    const { accessCode, clerkId, bookingPayload } = req.body; 
+
+    if (!accessCode || !clerkId) {
+        return res.status(400).json({ success: false, message: "Missing eWAY AccessCode or Clerk ID." });
+    }
 
     // --- Variables initialized for payment response ---
     let transactionSucceeded = false;
@@ -69,71 +143,41 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
     // --- END Variables ---
 
     try {
-        // --- 1. Process STRIPE Payment Intent ---
-        
-        if (!paymentMethodId) {
-            throw new Error("Missing secure payment details. Ensure frontend uses Stripe Elements.");
+        // --- 1. Query eWAY Transaction Result ---
+        const response = await ewayClient.queryTransaction(accessCode);
+        const transaction = response.get('Transactions[0]');
+
+        if (!transaction) {
+             throw new Error("Transaction result not found with the provided AccessCode.");
         }
-
-        console.log(`Creating Stripe Payment Intent for clerkId: ${studentClerkId} amount: ${amount}`);
-
-        // Create and Confirm the Payment Intent
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: amount, // Amount in cents
-            currency: currency.toLowerCase(), // 'aud'
-            payment_method: paymentMethodId,
-            confirm: true,
-            off_session: false, // Ensure confirmation occurs immediately
-            receipt_email: cardHolderEmail,
-            description: `Course enrollment for ${courseDetails.courseTitle}`,
-            metadata: {
-                clerkId: studentClerkId,
-                courseTitle: courseDetails.courseTitle,
-                purchaseType: scheduleDetails.purchaseType
-            }
-        });
         
-        // Check the status of the Payment Intent
-        if (paymentIntent.status === 'succeeded') {
+        // Check the status
+        if (transaction.TransactionStatus) {
             transactionSucceeded = true;
-            transactionID = paymentIntent.id;
-        } else if (paymentIntent.status === 'requires_action') {
-             // 3D Secure or other action required. The frontend should handle this,
-             // but we return the client_secret so the client can confirm it.
-             console.log("Stripe requires additional action. Sending client secret back.");
-             // This branch is usually hit only if 'confirm: false' or requires manual confirmation.
-             // If confirm: true is used, the intent will likely go straight to succeeded or failed.
-             
-             // For a successful end-to-end flow, we need to handle the intent client secret.
-             // For simplicity, if this is hit, we return a success but with the client secret.
-             return res.status(200).json({ 
-                success: true, 
-                requiresAction: true,
-                clientSecret: paymentIntent.client_secret,
-                message: 'Payment requires additional action (3DS). Proceeding to final step.'
-             });
-
+            transactionID = transaction.TransactionID;
+            console.log(`✅ eWAY Payment Successful. Transaction ID: ${transactionID}`);
         } else {
-            // General failure (e.g., declined)
-            errorDetails = `Payment declined by Stripe. Status: ${paymentIntent.status}`;
-            throw new Error(errorDetails);
+            const responseMessage = transaction.ResponseMessage;
+            const errorCodes = responseMessage.split(', ').map(errorCode => rapid.getMessage(errorCode, "en"));
+            errorDetails = `Payment declined by eWAY. Messages: ${errorCodes.join(' | ')}`;
+            console.error(`eWAY Transaction Failed: ${errorDetails}`);
+            
+            throw new Error(`Payment declined. Reason: ${errorCodes[0] || 'Transaction declined by bank.'}`);
         }
         
-        // 🛑 END CORE STRIPE LOGIC 🛑
-
-
-        if (!transactionSucceeded) {
-            console.error(`Transaction failed: ${errorDetails} (ID: ${transactionID})`);
-            return res.status(402).json({ 
-                success: false, 
-                message: `Payment failed. Reason: ${errorDetails.split(',')[0] || 'Transaction declined by bank.'}` 
-            });
-        }
-        
-        console.log(`✅ Stripe Payment Successful. Transaction ID: ${transactionID}`);
-
-
         // --- 2. Finalize Booking (Booking Logic) ---
+        if (!bookingPayload) {
+            throw new Error("Payment successful, but booking data was lost during redirect. Please contact support.");
+        }
+        
+        const { 
+            courseDetails, 
+            scheduleDetails, 
+            studentDetails, 
+            guardianDetails,
+            paymentAmount,
+        } = bookingPayload;
+        
         const { 
             purchaseType, 
             preferredDate, 
@@ -154,7 +198,7 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
 
         let clerkUser;
         try {
-            clerkUser = await clerkClient.users.getUser(studentClerkId);
+            clerkUser = await clerkClient.users.getUser(clerkId);
         } catch (clerkError) {
             if (!emailToUse) {
                 emailToUse = 'unknown_clerk_failure@example.com';
@@ -166,7 +210,7 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
         }
         
         let student = await User.findOneAndUpdate(
-            { clerkId: studentClerkId },
+            { clerkId: clerkId },
             { 
                 $set: { 
                     email: emailToUse, 
@@ -184,7 +228,13 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
         
         const courseExists = student.courses.some(c => c.name === courseDetails.courseTitle);
         if (courseExists) {
-            return res.status(409).json({ success: false, message: 'You have already enrolled in this course.' });
+            // Log warning but return success since payment succeeded
+            console.warn(`User ${clerkId} already has course ${courseDetails.courseTitle} but payment just succeeded for ID: ${transactionID}.`);
+            return res.status(200).json({ 
+                success: true, 
+                message: 'Payment successful. Course already enrolled.', 
+                course: student.courses.find(c => c.name === courseDetails.courseTitle)
+            });
         }
 
         const isTrial = purchaseType === 'TRIAL';
@@ -200,7 +250,7 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
         const newRequest = new ClassRequest({
             courseId: courseDetails.courseId,
             courseTitle: courseDetails.courseTitle,
-            studentId: studentClerkId,
+            studentId: clerkId,
             studentName: student.studentName, 
             purchaseType: purchaseType,
             preferredDate: isTrial ? preferredDate : preferredWeekStart, 
@@ -211,10 +261,10 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
             status: 'pending',
             subject: courseDetails.subject || 'N/A', 
             zoomMeetingLink: '',
-            // 🛑 Payment Details 🛑
+            // 🛑 Payment Details (eWAY) 🛑
             paymentStatus: 'paid', 
-            transactionId: transactionID, // Using Stripe Payment Intent ID
-            amountPaid: amount / 100,
+            transactionId: transactionID, // Using eWAY Transaction ID
+            amountPaid: paymentAmount, // Amount in dollars (sent in payload)
         });
         await newRequest.save();
 
@@ -232,15 +282,15 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
             preferredTimeMonFri: isTrial ? null : preferredTimeMonFri,
             preferredTimeSaturday: isTrial ? null : preferredTimeSaturday,
             sessionsRemaining: isTrial ? 1 : numberOfSessions,
-            // 🛑 Payment Details 🛑
+            // 🛑 Payment Details (eWAY) 🛑
             paymentStatus: 'paid', 
-            transactionId: transactionID, // Using Stripe Payment Intent ID
-            amountPaid: amount / 100,
+            transactionId: transactionID, // Using eWAY Transaction ID
+            amountPaid: paymentAmount, // Amount in dollars (sent in payload)
         };
         student.courses.push(newCourse);
         await student.save();
 
-        // Final successful response (not requires_action)
+        // Final successful response
         res.status(201).json({ 
             success: true, 
             message: 'Payment successful. Booking submitted to admin for assignment.', 
@@ -248,19 +298,11 @@ export const processPaymentAndBooking = asyncHandler(async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error in Stripe payment/booking flow:', error.message);
-        // Handle Stripe Errors
-        if (error.type === 'StripeCardError' || error.type === 'StripeInvalidRequestError') {
-             return res.status(400).json({ success: false, message: error.message });
-        }
-        res.status(500).json({ success: false, message: error.message || 'Server error during payment and booking. Please try again.' });
+        console.error('Error in eWAY finish payment/booking flow:', error.message);
+        res.status(500).json({ success: false, message: error.message || 'Server error during eWAY payment confirmation.' });
     }
 });
 
-// 🛑 REMOVED: Old createBooking is redundant 🛑
-export const createBooking = asyncHandler(async (req, res) => {
-    return res.status(405).json({ success: false, message: "Use /process-payment endpoint for new bookings." });
-});
 
 // getUserCourses (No Change needed)
 export const getUserCourses = asyncHandler(async (req, res) => {
@@ -321,4 +363,10 @@ export const getUserCourses = asyncHandler(async (req, res) => {
         }
         res.status(500).json({ courses: [], message: 'Internal Server Error while fetching courses.' });
     }
+});
+
+
+// 🛑 REMOVED: Old createBooking is redundant 🛑
+export const createBooking = asyncHandler(async (req, res) => {
+    return res.status(405).json({ success: false, message: "Use /initiate-payment endpoint for new bookings." });
 });

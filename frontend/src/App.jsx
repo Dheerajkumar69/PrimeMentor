@@ -31,6 +31,7 @@ import AdminDashboard from './components/AdminPanel/AdminDashboard.jsx';
 import AssessmentModal from './components/Booking/AssessmentModal.jsx';
 import AssessmentCallout from './components/Home/AssessmentCallout.jsx'; 
 import Header from './components/Home/Header.jsx'; 
+import PaymentSuccessRedirect from './pages/PaymentSuccessRedirect.jsx';
 
 /**
  * Component to protect the Admin Dashboard route.
@@ -181,6 +182,13 @@ const App = () => {
                     <Route path="/enrollment" element={
                         <>
                             <SignedIn><Enrollment /></SignedIn>
+                            <SignedOut><RedirectToSignIn /></SignedOut>
+                        </>
+                    } />
+
+                    <Route path="/payment-status" element={
+                        <>
+                            <SignedIn><PaymentSuccessRedirect /></SignedIn>
                             <SignedOut><RedirectToSignIn /></SignedOut>
                         </>
                     } />

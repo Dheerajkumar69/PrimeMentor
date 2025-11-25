@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
+// 👇 NEW IMPORT
+import { useLocation } from 'react-router-dom';
 import Header from '../components/Home/Header.jsx';
 import Footer from '../components/Home/Footer.jsx';
 import CourseCard from '../components/StudentPanel/CourseCard.jsx';
@@ -12,10 +14,14 @@ import UserProfileCard from '../components/StudentPanel/UserProfileCard.jsx';
 const MyCourses = () => {
     const { user } = useUser();
     const { isSignedIn, getToken } = useAuth();
+    // 👇 NEW HOOK
+    const location = useLocation(); 
+    
     const [courses, setCourses] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // 👇 MODIFIED DEPENDENCY ARRAY
     useEffect(() => {
         const fetchCourses = async () => {
             if (!isSignedIn) {
@@ -119,7 +125,8 @@ const MyCourses = () => {
         };
 
         fetchCourses();
-    }, [isSignedIn, getToken]);
+    // 👇 CRITICAL FIX: Add location.search to dependency array
+    }, [isSignedIn, getToken, location.search]); 
     
     // ... (rest of the component code remains the same) ...
     const containerVariants = {
@@ -199,7 +206,7 @@ const MyCourses = () => {
                                                 Explore Courses
                                             </motion.a>
                                         </motion.div>
-                                    ) : (
+                                        ) : (
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                             {courses.map((course) => (

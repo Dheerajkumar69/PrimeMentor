@@ -1,95 +1,75 @@
 // frontend/src/components/Enrollment/Step3Payment.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
-// 🛑 NEW: Stripe Element Imports 🛑
-import { 
-    useStripe, 
-    useElements, 
-    PaymentElement, 
-} from '@stripe/react-stripe-js';
 
-// Using a generic API endpoint for payment processing
-const PAYMENT_API_ENDPOINT = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/user/process-payment`;
+// Using the new API endpoint for payment initiation
+const INITIATE_PAYMENT_API_ENDPOINT = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/user/initiate-payment`;
+
+// Local storage keys for state persistence across redirects
+const EWAY_BOOKING_PAYLOAD_KEY = 'eway_booking_payload';
+const EWAY_ACCESS_CODE_KEY = 'eway_access_code';
+const EWAY_PRODUCT_DETAILS_KEY = 'eway_product_details';
 
 const Step3Payment = ({ bookingPayload, productDetails }) => {
     const navigate = useNavigate();
     const { getToken } = useAuth();
-    
-    // 🛑 NEW: Stripe Hooks 🛑
-    const stripe = useStripe();
-    const elements = useElements();
+    const [searchParams] = useSearchParams();
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(false);
+    const [success, setSuccess] = useState(false); // Can be removed later if we rely fully on the new redirect page
+    
+    // State to manage the payload across redirects
+    const [persistedPayload, setPersistedPayload] = useState(bookingPayload);
+    const [persistedProductDetails, setPersistedProductDetails] = useState(productDetails);
+    
+    // --- 🛑 MODIFICATION: Handle Payment Return Here (Simple redirect to status page) 🛑 ---
+    useEffect(() => {
+        const accessCode = searchParams.get('AccessCode');
+        const clerkId = searchParams.get('clerkId');
+        
+        // If we detect the return parameters, the user should be on the dedicated PaymentSuccessRedirect page.
+        // If they land back here, it means something went wrong with the initial redirect, or 
+        // the server-side RedirectUrl points here. 
+        // We will keep the redirection logic simple for this component now:
+        if (accessCode && clerkId) {
+            // Check if the server's RedirectUrl is still pointing here (it shouldn't be, but as a fallback)
+            // Redirect the user to the dedicated success page to handle finalization.
+            navigate(`/payment-status?AccessCode=${accessCode}&clerkId=${clerkId}`, { replace: true });
+            return;
+        } 
+        
+        // If no accessCode is present, this is a clean step 3 page load.
+        // Clear any old/stale data
+        localStorage.removeItem(EWAY_BOOKING_PAYLOAD_KEY);
+        localStorage.removeItem(EWAY_ACCESS_CODE_KEY);
+        localStorage.removeItem(EWAY_PRODUCT_DETAILS_KEY);
+        // Ensure we use the fresh props data for the current session
+        setPersistedPayload(bookingPayload);
+        setPersistedProductDetails(productDetails);
+        
+    }, [searchParams, navigate, bookingPayload, productDetails]);
+    // --- 🛑 END MODIFICATION 🛑 ---
 
-    // Removed manual card state and validation as PaymentElement handles this.
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
-
-        if (!stripe || !elements) {
-            // Stripe.js hasn't yet loaded.
-            setError("Payment gateway is not ready. Please wait a moment.");
-            return;
-        }
-
         setIsLoading(true);
 
         try {
-            // 🛑 1. CRITICAL FIX: Call elements.submit() FIRST 🛑
-            // This triggers form validation and payment method collection internally.
-            const { error: submitError } = await elements.submit();
-            if (submitError) {
-                setError(submitError.message);
-                setIsLoading(false);
-                return;
-            }
+            // 1. Store booking payload in Local Storage before redirecting
+            localStorage.setItem(EWAY_BOOKING_PAYLOAD_KEY, JSON.stringify(bookingPayload));
+            localStorage.setItem(EWAY_PRODUCT_DETAILS_KEY, JSON.stringify(productDetails));
 
-            // 2. Securely Create Payment Method from Payment Element
-            // This step is now safe because elements.submit() has completed.
-            const result = await stripe.createPaymentMethod({
-                elements,
-                params: {
-                    billing_details: {
-                        name: bookingPayload.studentDetails?.first + ' ' + bookingPayload.studentDetails?.last,
-                        email: bookingPayload.studentDetails?.email || bookingPayload.guardianDetails?.email,
-                    }
-                }
-            });
-
-            if (result.error) {
-                // Show error to your customer (e.g., incorrect details)
-                setError(result.error.message);
-                setIsLoading(false);
-                return;
-            }
-
-            const paymentMethodId = result.paymentMethod.id;
-            
-            // 3. Prepare the final payload for the server
-            const finalPayload = {
-                ...bookingPayload,
-                paymentMethodId: paymentMethodId, // <-- send the secure PaymentMethod ID to the backend
-                currency: 'AUD', 
-                amount: Math.round(bookingPayload.paymentAmount * 100), // Convert to cents
-                cardHolderEmail: bookingPayload.studentDetails?.email || bookingPayload.guardianDetails?.email,
-                customerIP: '127.0.0.1', 
-                customerName: bookingPayload.studentDetails?.first + ' ' + bookingPayload.studentDetails?.last,
-            };
-
-            console.log('Sending final payment payload to server (masked)...');
-
-            // 4. Send the Payment Method ID and booking data to the backend
+            // 2. Call backend to create the Shared Payment URL
             const token = await getToken();
-
             const response = await axios.post(
-                PAYMENT_API_ENDPOINT,
-                finalPayload,
+                INITIATE_PAYMENT_API_ENDPOINT,
+                { bookingPayload: bookingPayload },
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -98,58 +78,35 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
                 }
             );
 
-            if (response.data.success) {
-                // Handle 3DS Challenge (requiresAction) if needed
-                if (response.data.requiresAction) {
-                    console.log("Handling 3DS challenge...");
-                    const { clientSecret } = response.data;
+            if (response.data.success && response.data.redirectUrl) {
+                // 3. Save the AccessCode before redirect
+                localStorage.setItem(EWAY_ACCESS_CODE_KEY, response.data.accessCode);
 
-                    const confirmResult = await stripe.confirmCardPayment(clientSecret, {
-                        elements, // Pass elements to confirm the payment
-                        confirmParams: {
-                            return_url: `${window.location.origin}/my-courses?payment_intent=${clientSecret}`,
-                        }
-                    });
+                // 4. Redirect the customer to the eWAY Shared Page
+                window.location.href = response.data.redirectUrl;
 
-                    if (confirmResult.error) {
-                         throw new Error(confirmResult.error.message || '3DS challenge failed.');
-                    }
-                    if (confirmResult.paymentIntent.status !== 'succeeded') {
-                         throw new Error(`Payment confirmation failed. Status: ${confirmResult.paymentIntent.status}`);
-                    }
-                }
-                
-                // Final success state
-                setSuccess(true);
-                // Redirect to MyCourses on final success
-                setTimeout(() => {
-                    navigate('/my-courses');
-                }, 2000);
             } else {
-                // If backend responds with data but success is false (e.g., payment declined)
-                throw new Error(response.data.message || 'Payment failed. Please check your card details.');
+                throw new Error(response.data.message || 'Failed to get eWAY redirect link.');
             }
 
         } catch (err) {
-            console.error('Payment processing failed:', err);
-            // Display specific error message
-            setError(err.response?.data?.message || err.message || 'An unexpected error occurred during payment.');
+            console.error('eWAY payment initiation failed:', err);
+            // Revert loading state and clean up storage on failure
+            localStorage.removeItem(EWAY_BOOKING_PAYLOAD_KEY);
+            localStorage.removeItem(EWAY_ACCESS_CODE_KEY);
+            localStorage.removeItem(EWAY_PRODUCT_DETAILS_KEY);
+
+            setError(err.response?.data?.message || err.message || 'An unexpected error occurred during payment initiation.');
             setIsLoading(false);
         }
     };
 
-    if (success) {
-        return (
-            <div className="bg-green-50 p-6 md:p-10 rounded-xl shadow-lg border border-green-300 text-center">
-                <CheckCircle size={48} className="text-green-600 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-green-800 mb-2">Payment Successful!</h2>
-                <p className="text-gray-700">Your enrollment is confirmed. Redirecting to your courses...</p>
-            </div>
-        );
-    }
+    // Use the current or persisted payload/product details
+    const currentPayload = persistedPayload || bookingPayload;
+    const currentProductDetails = persistedProductDetails || productDetails;
 
     // Determine if the Pay button should be disabled
-    const isButtonDisabled = isLoading || !stripe || !elements;
+    const isButtonDisabled = isLoading;
 
     return (
         <div className="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-lg border border-gray-200">
@@ -158,16 +115,16 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
                 Step 3: Secure Payment
             </h2>
             <div className="bg-blue-50 p-4 rounded-lg text-blue-800 mb-6">
-                <p className="font-semibold text-base">Amount Due: <span className='text-lg font-bold'>${bookingPayload.paymentAmount} AUD</span></p>
-                <p className="text-sm">You are paying for the **{productDetails.name}**.</p>
+                <p className="font-semibold text-base">Amount Due: <span className='text-lg font-bold'>${currentPayload.paymentAmount} AUD</span></p>
+                <p className="text-sm">You are paying for the {currentProductDetails.name}.</p>
             </div>
 
             <form onSubmit={handleSubmit}>
-                {/* 🛑 STRIPE PAYMENT ELEMENT 🛑 */}
-                <div className="mb-6">
-                    <PaymentElement options={{layout: "auto"}} />
+                {/* eWAY Shared Page Notice */}
+                <div className="mb-6 border-l-4 border-yellow-500 bg-yellow-50 p-4 text-yellow-800">
+                    <p className="font-semibold">Payment Method:</p>
+                    <p className="text-sm">You will be securely redirected to the <b>eWAY Shared Payment Page</b> to enter your card details and finalize the payment.</p>
                 </div>
-                {/* 🛑 END STRIPE ELEMENT 🛑 */}
 
                 {/* ERROR DISPLAY */}
                 {error && (
@@ -188,14 +145,14 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
                     {isLoading ? (
                         <>
                             <Loader2 size={20} className="animate-spin" />
-                            <span>Processing Payment...</span>
+                            <span>Redirecting to Payment...</span>
                         </>
                     ) : (
-                        <span>Pay ${bookingPayload.paymentAmount} AUD Now</span>
+                        <span>Pay ${currentPayload.paymentAmount} AUD Now</span>
                     )}
                 </button>
                 <p className="mt-4 text-xs text-center text-gray-500">
-                    Your payment details are securely processed by **Stripe**.
+                    Your payment details are securely processed by <b>eWAY</b>.
                 </p>
             </form>
         </div>

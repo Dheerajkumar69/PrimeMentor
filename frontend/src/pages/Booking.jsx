@@ -291,15 +291,15 @@ const Booking = () => {
         const nextStepQuizData = {
             ...quizData,
             courseId: program.courseId,
+            // 🛑 FIX: Use the specific calculated price for the selected purchase type 🛑
             price: purchaseType === 'TRIAL' ? program.package.trialFee : program.package.starterPackTotalPrice,
             initialClassRange: program.initialClassRange,
-            // Pass the discounted session price for Enrollment to use in its display calculation
+            // Pass the effective per-session price for Enrollment to use in its display calculation
             sessionPrice: purchaseType === 'STARTER_PACK' ? program.package.price : program.package.trialFee,
-            // NEW: Pass number of sessions
             numberOfSessions: purchaseType === 'STARTER_PACK' ? program.package.numberOfSessions : 1,
         };
 
-        navigate('/enrollment', { 
+        navigate('/enrollment?step=1', { // Start at step 1 for a clean booking
             state: { 
                 quizData: nextStepQuizData, 
                 purchaseType: purchaseType

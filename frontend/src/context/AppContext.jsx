@@ -15,17 +15,18 @@ export const AppContextProvider = (props) => {
     const [teacherToken, setTeacherToken] = useState(localStorage.getItem('teacherToken') || null);
     const [teacherData, setTeacherData] = useState(null); 
 
-    // 🛑 FIX 1: Add adminToken state and load it from localStorage
+    // Admin states
     const [adminToken, setAdminToken] = useState(localStorage.getItem('adminToken') || null);
-    // 🛑 FIX 2: Add useEffect to refresh token from localStorage if the component mounts 
-    // and token state is initially null, in case of a page reload.
+    
     useEffect(() => {
+        // Ensure tokens are loaded if they exist in localStorage but state was null
         if (!adminToken && localStorage.getItem('adminToken')) {
             setAdminToken(localStorage.getItem('adminToken'));
         }
-        console.log("🧩 Backend URL from env:", backendUrl);
-    }, [backendUrl]);
+        // Note: Teacher token loads fine during initial state setup.
 
+        console.log("🧩 Backend URL from env:", backendUrl);
+    }, [backendUrl, adminToken]); // Depend on adminToken to prevent loop if state changes
 
     return (
         <AppContext.Provider 
@@ -37,7 +38,6 @@ export const AppContextProvider = (props) => {
                 setTeacherToken,
                 teacherData,
                 setTeacherData,
-                // 🛑 FIX 3: Include adminToken and setAdminToken in the context value
                 adminToken,
                 setAdminToken,
                 isLoaded,

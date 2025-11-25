@@ -20,34 +20,28 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(false); // Can be removed later if we rely fully on the new redirect page
+    const [success, setSuccess] = useState(false);
     
     // State to manage the payload across redirects
     const [persistedPayload, setPersistedPayload] = useState(bookingPayload);
     const [persistedProductDetails, setPersistedProductDetails] = useState(productDetails);
     
-    // --- 🛑 MODIFICATION: Handle Payment Return Here (Simple redirect to status page) 🛑 ---
+    // --- 🛑 MODIFICATION: Handle Payment Return Here (Redirect to status page) 🛑 ---
     useEffect(() => {
         const accessCode = searchParams.get('AccessCode');
         const clerkId = searchParams.get('clerkId');
         
-        // If we detect the return parameters, the user should be on the dedicated PaymentSuccessRedirect page.
-        // If they land back here, it means something went wrong with the initial redirect, or 
-        // the server-side RedirectUrl points here. 
-        // We will keep the redirection logic simple for this component now:
+        // If we detect the return parameters, redirect to the dedicated PaymentSuccessRedirect page
         if (accessCode && clerkId) {
-            // Check if the server's RedirectUrl is still pointing here (it shouldn't be, but as a fallback)
-            // Redirect the user to the dedicated success page to handle finalization.
             navigate(`/payment-status?AccessCode=${accessCode}&clerkId=${clerkId}`, { replace: true });
             return;
         } 
         
         // If no accessCode is present, this is a clean step 3 page load.
-        // Clear any old/stale data
-        localStorage.removeItem(EWAY_BOOKING_PAYLOAD_KEY);
+        // We rely on the parent (Enrollment.jsx) to handle state restoration.
+        // We only clear the transient EWAY keys here.
         localStorage.removeItem(EWAY_ACCESS_CODE_KEY);
-        localStorage.removeItem(EWAY_PRODUCT_DETAILS_KEY);
-        // Ensure we use the fresh props data for the current session
+        // We only need to check/set the persisted payload once on mount.
         setPersistedPayload(bookingPayload);
         setPersistedProductDetails(productDetails);
         
@@ -59,17 +53,20 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
         e.preventDefault();
         setError(null);
         setIsLoading(true);
+        
+        // Use current payload from props/parent state
+        const payloadToSend = persistedPayload || bookingPayload;
 
         try {
             // 1. Store booking payload in Local Storage before redirecting
-            localStorage.setItem(EWAY_BOOKING_PAYLOAD_KEY, JSON.stringify(bookingPayload));
+            localStorage.setItem(EWAY_BOOKING_PAYLOAD_KEY, JSON.stringify(payloadToSend));
             localStorage.setItem(EWAY_PRODUCT_DETAILS_KEY, JSON.stringify(productDetails));
 
             // 2. Call backend to create the Shared Payment URL
             const token = await getToken();
             const response = await axios.post(
                 INITIATE_PAYMENT_API_ENDPOINT,
-                { bookingPayload: bookingPayload },
+                { bookingPayload: payloadToSend },
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -105,6 +102,11 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
     const currentPayload = persistedPayload || bookingPayload;
     const currentProductDetails = persistedProductDetails || productDetails;
 
+    if (currentPayload === null) {
+         return <div className="text-red-500 p-6">Loading payment details... Please wait or go back to Step 2.</div>;
+    }
+
+
     // Determine if the Pay button should be disabled
     const isButtonDisabled = isLoading;
 
@@ -116,7 +118,7 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
             </h2>
             <div className="bg-blue-50 p-4 rounded-lg text-blue-800 mb-6">
                 <p className="font-semibold text-base">Amount Due: <span className='text-lg font-bold'>${currentPayload.paymentAmount} AUD</span></p>
-                <p className="text-sm">You are paying for the {currentProductDetails.name}.</p>
+                <p className="text-sm">You are paying for the <b>{currentProductDetails.name}</b>.</p>
             </div>
 
             <form onSubmit={handleSubmit}>

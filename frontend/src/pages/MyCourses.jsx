@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-// 👇 NEW IMPORT
 import { useLocation } from 'react-router-dom';
 import Header from '../components/Home/Header.jsx';
 import Footer from '../components/Home/Footer.jsx';
@@ -12,24 +11,26 @@ import CourseCard from '../components/StudentPanel/CourseCard.jsx';
 import UserProfileCard from '../components/StudentPanel/UserProfileCard.jsx';
 
 const MyCourses = () => {
-    const { user } = useUser();
+    const { user, isLoaded } = useUser(); // Get isLoaded state
     const { isSignedIn, getToken } = useAuth();
-    // 👇 NEW HOOK
     const location = useLocation(); 
     
     const [courses, setCourses] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // 👇 MODIFIED DEPENDENCY ARRAY
+    // CRITICAL FIX: Wait for Clerk to load AND confirm isSignedIn.
     useEffect(() => {
         const fetchCourses = async () => {
-            if (!isSignedIn) {
+            // 🛑 CRITICAL FIX: Wait for Clerk user data to be fully loaded and signed in 🛑
+            if (!isLoaded || !isSignedIn) {
                 setIsLoading(false);
+                setCourses([]); // Clear courses if not signed in or loading
                 return;
             }
 
             try {
+                // Now we are sure the user is signed in, we can get the token safely.
                 const token = await getToken();
                 const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -44,16 +45,13 @@ const MyCourses = () => {
 
                 const getSessionDate = (startDate, sessionIndex) => {
                     const date = new Date(startDate);
-                    
                     if (isNaN(date)) return date; 
 
                     let count = 0;
                     let currentDate = new Date(date.getTime());
                     
-                    // Only advance the date if we are calculating subsequent sessions
                     while (count < sessionIndex) {
                         currentDate.setDate(currentDate.getDate() + 1);
-                        // Skip Sundays (0)
                         if (currentDate.getDay() !== 0) { 
                             count++;
                         }
@@ -62,7 +60,6 @@ const MyCourses = () => {
                 };
 
                 rawCourses.forEach(course => {
-                    // 🛑 FIX: Robust check for Starter Pack fields 🛑
                     const isStarterPack = 
                         course.sessionsRemaining > 1 && 
                         typeof course.preferredTimeMonFri === 'string' && 
@@ -70,11 +67,9 @@ const MyCourses = () => {
                         course.preferredDate; 
 
                     if (isStarterPack) {
-                        // Use sessionsRemaining from the course model
                         for (let i = 0; i < course.sessionsRemaining; i++) { 
                             const sessionDate = getSessionDate(course.preferredDate, i);
                             
-                            // 🛑 FIX: Check for Invalid Date Object before processing 🛑
                             if (isNaN(sessionDate.getTime())) { 
                                 console.error("Invalid session date found, skipping session:", course);
                                 continue;
@@ -83,13 +78,12 @@ const MyCourses = () => {
                             const dayOfWeek = sessionDate.getDay(); 
                             let sessionTime = course.preferredTimeMonFri;
                             
-                            if (dayOfWeek === 6) { // Saturday
+                            if (dayOfWeek === 6) { 
                                 sessionTime = course.preferredTimeSaturday;
                             } else if (dayOfWeek === 0) {
-                                continue; // Skip Sundays (0)
+                                continue; 
                             }
 
-                            // Create a new card object for each session
                             sessions.push({
                                 ...course,
                                 zoomMeetingLink: course.zoomMeetingUrl || null, 
@@ -102,7 +96,6 @@ const MyCourses = () => {
                             });
                         }
                     } else {
-                        // Single trial session or regular course (handles old data format gracefully)
                         sessions.push({
                             ...course,
                             zoomMeetingLink: course.zoomMeetingUrl || null, 
@@ -113,10 +106,6 @@ const MyCourses = () => {
                 setCourses(sessions);
                 setError(null);
             } catch (err) {
-                // Display server error message if available
-                const serverMessage = err.response?.data?.message || err.message;
-                console.error('Failed to fetch courses (Full Error):', err);
-                
                 const finalError = err.response?.data?.message || 'Internal Server Error while fetching courses.';
                 setError(`Failed to load your courses. Error: ${finalError}`);
             } finally {
@@ -125,10 +114,35 @@ const MyCourses = () => {
         };
 
         fetchCourses();
-    // 👇 CRITICAL FIX: Add location.search to dependency array
-    }, [isSignedIn, getToken, location.search]); 
+    }, [isLoaded, isSignedIn, getToken, location.search]); // Depend on isLoaded, isSignedIn, and URL search params
     
-    // ... (rest of the component code remains the same) ...
+    
+    // Top-level Loading Check for initial render 
+    // This handles the initial "flicker" while Clerk initializes.
+    if (isLoading || !isLoaded) {
+        return (
+            <>
+                <Header />
+                <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
+                    <p className="text-xl text-gray-700">Loading user profile and courses...</p>
+                </div>
+            </>
+        );
+    }
+    
+    // Fallback if user object is not available but isLoaded is true 
+    if (!user) {
+         return (
+            <>
+                <Header />
+                <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
+                    <p className="text-xl text-red-500">Authentication required. Please log in.</p>
+                </div>
+            </>
+        );
+    }
+
+    // --- Rest of render logic (remains the same) ---
     const containerVariants = {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0, transition: { duration: 0.5, staggerChildren: 0.1 } },
@@ -138,17 +152,6 @@ const MyCourses = () => {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0 },
     };
-
-    if (isLoading) {
-        return (
-            <>
-                <Header />
-                <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
-                    <p className="text-xl text-gray-700">Loading your courses...</p>
-                </div>
-            </>
-        );
-    }
 
     if (error) {
         return (

@@ -1,9 +1,11 @@
 // frontend/src/components/Enrollment/Step1Account.jsx
 import React, { useEffect } from 'react';
 
-const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setGuardianDetails, onNext, quizData }) => {
+const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setGuardianDetails, onNext, quizData, enrollmentDataKey }) => {
 
     useEffect(() => {
+        // ... (Initialization logic remains the same for the first load) ...
+
         if (quizData) {
             const { isParent, name, email, contactNumber } = quizData;
 
@@ -16,7 +18,6 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                     email: email || '',
                     phone: contactNumber || ''
                 }));
-                // Clear student details (in case they were pre-filled by a Clerk user previously)
                 setStudentDetails({ first: '', last: '', email: '' });
 
             } else if (isParent === false) {
@@ -32,9 +33,8 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                     ...prev,
                     phone: contactNumber || ''
                 }));
-                // Clear Guardian name/email
+                
                 if (guardianDetails.first && guardianDetails.email) {
-                    // Only clear if they were already pre-filled. We'll rely on the user filling them now.
                     setGuardianDetails(prev => ({
                         ...prev,
                         first: '',
@@ -51,6 +51,11 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
     const isNextDisabled = !studentDetails.first || !studentDetails.last || !studentDetails.email ||
         !guardianDetails.first || !guardianDetails.last || !guardianDetails.email ||
         !guardianDetails.phone;
+        
+    // 🛑 NEW HANDLER: Pass current state to parent before moving to the next step
+    const handleNextClick = () => {
+        onNext(studentDetails, guardianDetails);
+    };
 
     return (
         <div className="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-lg border border-gray-200">
@@ -143,7 +148,7 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                 </div>
             </div>
             <button
-                onClick={onNext}
+                onClick={handleNextClick} // 🛑 Use new handler 🛑
                 disabled={isNextDisabled}
                 className={`w-full mt-8 font-bold py-3 rounded-lg transition text-base sm:text-lg ${isNextDisabled ? 'bg-gray-400 text-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
             >

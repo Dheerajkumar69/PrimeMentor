@@ -15,6 +15,7 @@ import rapid from 'eway-rapid';
 const EWAY_API_KEY = process.env.EWAY_API_KEY;
 const EWAY_PASSWORD = process.env.EWAY_PASSWORD;
 const EWAY_ENDPOINT = process.env.EWAY_ENDPOINT || 'sandbox'; // Default to sandbox
+// This variable MUST be set to your live domain in the .env file (e.g., https://primementor.com.au)
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 if (!EWAY_API_KEY || !EWAY_PASSWORD) {
@@ -71,8 +72,9 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
             ? `${studentDetails.first} ${studentDetails.last}`
             : "Customer";
             
-        // The CancelUrl redirects to the payment step, allowing the user to re-attempt payment
-        const cancelUrl = `${FRONTEND_URL}/enrollment?step=3`;
+        // 🛑 CRITICAL FIX: The CancelUrl should point to a clean page (Step 3) 
+        // to allow the user to re-attempt payment without interference.
+        const cleanCancelUrl = `${FRONTEND_URL}/enrollment?step=3`;
         
         console.log(`Creating eWAY Shared Payment URL for clerkId: ${studentClerkId} amount: $${paymentAmount}`);
 
@@ -89,10 +91,10 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
                 Email: customerEmail,
                 Phone: studentDetails?.phone || guardianDetails?.phone || '',
             },
-            // The RedirectUrl will receive the AccessCode for the backend to query the result
-            // The frontend is responsible for calling the /finish-payment route with the AccessCode and clerkId
+            // RedirectUrl: Correctly points to the dedicated success/verification page
             RedirectUrl: `${FRONTEND_URL}/payment-status?clerkId=${studentClerkId}`, 
-            CancelUrl: cancelUrl,
+            // 👇 USE CLEAN CANCEL URL
+            CancelUrl: cleanCancelUrl,
             TransactionType: "Purchase",
             PartnerAgreementGuid: studentClerkId, 
             DeviceID: 'NODESDK',

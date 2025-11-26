@@ -236,7 +236,7 @@ export default function Enrollment() {
                             <span className="hidden xs:inline">Schedule</span>
                         </div>
                         <div className="flex items-center">
-                            <span className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mr-1 sm:mr-2 ${step === 3 ? 'text-orange-500 bg-orange-500 text-white' : 'border-2 border-gray-300'}`}>3</span>
+                            <span className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mr-1 sm:mr-2 ${step === 3 ? 'text-orange-500 bg-orange-500' : 'border-2 border-gray-300'}`}>3</span>
                             <span className="hidden xs:inline">Payment</span>
                         </div>
                     </div>

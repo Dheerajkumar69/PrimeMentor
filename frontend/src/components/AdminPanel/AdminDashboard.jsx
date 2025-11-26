@@ -85,13 +85,13 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
         }
     };
 
-    // Fetch data based on the active tab change (Modified to exclude 'assessment')
+    // Fetch data based on the active tab change (Modified to only handle external fetches like Student/Syllabus/Requests)
     useEffect(() => {
         if (isAuthenticated) { 
+            // Teacher data fetching is handled internally by TeacherManagement.jsx on mount
+            
             if (activeTab === 'student') {
                 fetchData('students', setStudents);
-            } else if (activeTab === 'teacher') {
-                fetchData('teachers', setTeachers);
             } else if (activeTab === 'syllabus') {
                 fetchData('syllabus', setSyllabus);
             } else if (activeTab === 'requests') {
@@ -99,7 +99,7 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             }
             // 'assessment' data is now handled by AssessmentBookings component
         }
-    }, [activeTab, isAuthenticated, onLogout]); // Added onLogout to dependency array for clarity
+    }, [activeTab, isAuthenticated, onLogout]); 
 
     // Logout handler (remains the same)
     const handleLogout = () => {
@@ -120,25 +120,29 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
              return <div className='text-center p-10 text-red-600 font-medium'>Please log in to access the dashboard.</div>;
         }
         
-        if (dataLoading) {
-            return <div className='text-center p-10 text-xl font-medium text-gray-600'>Loading {activeTab} data...</div>;
-        }
+        // NOTE: We rely on the child component's internal loading state now, 
+        // especially for TeacherManagement.
+        
         if (fetchError) {
              return <div className='text-center p-10 text-red-600 font-medium'>{fetchError}</div>;
         }
 
         switch (activeTab) {
             case 'student':
-                return <StudentManagement students={students} />;
+                // ✅ FIX: Added key={activeTab} to force remount
+                return <StudentManagement key={activeTab} students={students} />;
             case 'teacher':
-                return <TeacherManagement teachers={teachers} />;
+                // 🚀 CRITICAL FIX: Added key={activeTab} to force the component to remount 
+                // every time the 'teacher' tab is clicked, ensuring its useEffect runs.
+                return <TeacherManagement key={activeTab} teachers={teachers} />;
             case 'syllabus':
-                return <SyllabusManagement syllabus={syllabus} />;
+                // ✅ FIX: Added key={activeTab} to force remount
+                return <SyllabusManagement key={activeTab} syllabus={syllabus} />;
             case 'requests':
                 return <div className='p-4 text-gray-600'>Class requests feature coming soon.</div>;
             case 'assessment':
-                // --- MODIFICATION: RENDER NEW COMPONENT ---
-                return <AssessmentBookings />;
+                // ✅ FIX: Added key={activeTab} to force remount
+                return <AssessmentBookings key={activeTab} />;
             default:
                 return null;
         }

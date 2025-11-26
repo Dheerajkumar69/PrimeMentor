@@ -1,3 +1,4 @@
+// backend/controllers/teacherController.js
 import TeacherModel from '../models/TeacherModel.js';
 import UserModel from '../models/UserModel.js';
 import bcrypt from 'bcrypt';
@@ -7,7 +8,7 @@ import ClassRequest from '../models/ClassRequest.js';
 
 const createToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-// --- Register ---
+// --- Register (UNCHANGED) ---
 export const registerTeacher = async (req, res) => {
   // Destructure all expected fields from the request body
   const { 
@@ -27,12 +28,12 @@ export const registerTeacher = async (req, res) => {
     if (!validator.isEmail(email)) return res.json({ success: false, message: 'Invalid email' });
     if (password.length < 8) return res.json({ success: false, message: 'Password too short' });
 
-    // 3. Hash Password
+    // 3. Hash Password
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
 
     // 4. Create Teacher Document with ALL fields
-    // NOTE: The model will set empty strings to null for fields that are not strictly required.
+    // NOTE: The model will set empty strings to null for fields that are not strictly required.
     const teacher = await TeacherModel.create({ 
         name, 
         email, 
@@ -56,19 +57,19 @@ export const registerTeacher = async (req, res) => {
     res.json({ success: true, token, teacher: { _id: teacher._id, name: teacher.name, email: teacher.email, image: teacher.image } });
   } catch (err) {
     console.error('Teacher registration error:', err);
-    
-    // 🛑 FIX: Handle Mongoose Validation Error 
-    if (err.name === 'ValidationError') {
-        const errors = Object.values(err.errors).map(el => el.message);
-        const firstError = errors.length > 0 ? errors[0] : 'Missing required data or invalid format.';
-        return res.json({ success: false, message: `Validation Failed: ${firstError}` });
-    }
-    
+    
+    // 🛑 FIX: Handle Mongoose Validation Error 
+    if (err.name === 'ValidationError') {
+        const errors = Object.values(err.errors).map(el => el.message);
+        const firstError = errors.length > 0 ? errors[0] : 'Missing required data or invalid format.';
+        return res.json({ success: false, message: `Validation Failed: ${firstError}` });
+    }
+    
     res.json({ success: false, message: 'Server error during registration. Check server console for details.' });
   }
 };
 
-// --- Login (No change needed) ---
+// --- Login (UNCHANGED) ---
 export const loginTeacher = async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -91,7 +92,31 @@ export const loginTeacher = async (req, res) => {
   }
 };
 
-// --- Class Requests/Managed Classes (No change needed) ---
+// **NEW: Forgot Password Logic Placeholder**
+export const forgotPasswordTeacher = async (req, res) => {
+    const { email } = req.body;
+    try {
+        const teacher = await TeacherModel.findOne({ email });
+        
+        if (!teacher) {
+            // Send a generic success message even if the user doesn't exist to prevent email enumeration
+            return res.json({ success: true, message: 'If a teacher account exists with that email, a password reset link has been sent.' });
+        }
+        
+        // *** Actual implementation would involve: ***
+        // 1. Generate a unique, time-limited reset token.
+        // 2. Save the token and its expiry to the teacher's document in TeacherModel.
+        // 3. Send an email to the teacher's email address containing a link 
+        //     (e.g., frontendUrl/reset-password?token=XYZ&id=ABC).
+        
+        res.json({ success: true, message: 'Password reset link sent to your email.' });
+    } catch (err) {
+        console.error('Teacher forgot password error:', err);
+        res.json({ success: false, message: 'Server error during password reset request' });
+    }
+};
+
+// --- Class Requests/Managed Classes (UNCHANGED) ---
 export const getClassRequests = async (req, res) => {
     try {
         const teacherId = req.user?._id;

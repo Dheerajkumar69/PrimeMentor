@@ -1,11 +1,11 @@
 // frontend/src/components/TeacherPanel/TeacherLogin.jsx
 
 import React, { useContext, useEffect, useState } from 'react';
-import { AppContext } from '../../context/AppContext.jsx'; // Corrected relative path
+import { AppContext } from '../../context/AppContext.jsx';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast'; 
-import { X, User, Lock, Mail, Upload, ArrowLeft, Phone, MapPin, DollarSign, CreditCard, IdCard, FileText, BookOpen } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { X, User, Lock, Mail, Upload, ArrowLeft, Phone, MapPin, DollarSign, CreditCard, IdCard, FileText, BookOpen, Eye, EyeOff } from 'lucide-react';
 
 // Placeholder assets object
 const assets = {
@@ -14,35 +14,51 @@ const assets = {
 
 // --- Step Components ---
 
-// Step 1: Basic Info (UNCHANGED)
-const Step1 = ({ formData, setFormData }) => (
+// Step 1: Basic Info (UPDATED with Password Toggle)
+const Step1 = ({ formData, setFormData, showPassword, setShowPassword }) => (
     <div className='space-y-4'>
         <h2 className='text-lg font-medium text-neutral-700'>1. Account Details</h2>
         <div className='flex gap-3'>
-            <input 
-                className='border px-4 py-2 text-sm w-1/2 rounded-full outline-none focus:border-blue-500 transition' 
-                onChange={e => setFormData(prev => ({...prev, firstName: e.target.value}))} 
-                value={formData.firstName} 
-                type="text" 
-                placeholder='First Name' 
-                required 
+            <input
+                className='border px-4 py-2 text-sm w-1/2 rounded-full outline-none focus:border-blue-500 transition'
+                onChange={e => setFormData(prev => ({...prev, firstName: e.target.value}))}
+                value={formData.firstName}
+                type="text"
+                placeholder='First Name'
+                required
             />
-            <input 
-                className='border px-4 py-2 text-sm w-1/2 rounded-full outline-none focus:border-blue-500 transition' 
-                onChange={e => setFormData(prev => ({...prev, lastName: e.target.value}))} 
-                value={formData.lastName} 
-                type="text" 
-                placeholder='Last Name' 
-                required 
+            <input
+                className='border px-4 py-2 text-sm w-1/2 rounded-full outline-none focus:border-blue-500 transition'
+                onChange={e => setFormData(prev => ({...prev, lastName: e.target.value}))}
+                value={formData.lastName}
+                type="text"
+                placeholder='Last Name'
+                required
             />
         </div>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <Mail size={20} className='w-5 text-gray-400' />
             <input className='outline-none text-sm w-full' onChange={e => setFormData(prev => ({...prev, email: e.target.value}))} value={formData.email} type="email" placeholder='Email Id' required />
         </div>
+
+        {/* **Password Input with Toggle (Sign Up)** */}
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <Lock size={20} className='w-5 text-gray-400' />
-            <input className='outline-none text-sm w-full' onChange={e => setFormData(prev => ({...prev, password: e.target.value}))} value={formData.password} type="password" placeholder='Create Password' required />
+            <input 
+                className='outline-none text-sm w-full' 
+                onChange={e => setFormData(prev => ({...prev, password: e.target.value}))} 
+                value={formData.password} 
+                type={showPassword ? 'text' : 'password'}
+                placeholder='Create Password' 
+                required 
+            />
+            <button 
+                type='button' 
+                onClick={() => setShowPassword(prev => !prev)}
+                className='text-gray-400 hover:text-blue-600 transition'
+            >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
         </div>
     </div>
 );
@@ -53,15 +69,15 @@ const Step2 = ({ formData, setFormData }) => (
         <h2 className='text-lg font-medium text-neutral-700'>2. Profile Picture</h2>
         <div className='flex flex-col items-center gap-4 my-6'>
             <label htmlFor="image" className='cursor-pointer flex flex-col items-center gap-2'>
-                <img 
-                    className='w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-full border-4 border-gray-300 hover:border-blue-500 transition duration-200' 
-                    src={formData.image ? URL.createObjectURL(formData.image) : assets.upload_area} 
-                    alt="Profile Upload Area" 
+                <img
+                    className='w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-full border-4 border-gray-300 hover:border-blue-500 transition duration-200'
+                    src={formData.image ? URL.createObjectURL(formData.image) : assets.upload_area}
+                    alt="Profile Upload Area"
                 />
-                <input 
-                    onChange={e => setFormData(prev => ({...prev, image: e.target.files[0]}))} 
-                    type="file" 
-                    id='image' 
+                <input
+                    onChange={e => setFormData(prev => ({...prev, image: e.target.files[0]}))}
+                    type="file"
+                    id='image'
                     hidden
                     accept='image/*'
                 />
@@ -74,12 +90,12 @@ const Step2 = ({ formData, setFormData }) => (
     </div>
 );
 
-// 🛑 Step 3: Personal Information (Address, Phone, Subject) - UPDATED 🛑
+// Step 3: Personal Information (UNCHANGED)
 const Step3 = ({ formData, setFormData }) => {
     // All 7 subject combinations as specified
     const SUBJECT_OPTIONS = [
-        'Science', 'Maths', 'English', 
-        'Science + Maths', 'Science + English', 'Maths + English', 
+        'Science', 'Maths', 'English',
+        'Science + Maths', 'Science + English', 'Maths + English',
         'All Subjects'
     ];
     
@@ -88,24 +104,24 @@ const Step3 = ({ formData, setFormData }) => {
             <h2 className='text-lg font-medium text-neutral-700'>3. Personal Information</h2>
             <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
                 <MapPin size={20} className='w-5 text-gray-400' />
-                <input 
-                    className='outline-none text-sm w-full' 
-                    onChange={e => setFormData(prev => ({...prev, address: e.target.value}))} 
-                    value={formData.address} 
-                    type="text" 
-                    placeholder='Enter Address' 
-                    required 
+                <input
+                    className='outline-none text-sm w-full'
+                    onChange={e => setFormData(prev => ({...prev, address: e.target.value}))}
+                    value={formData.address}
+                    type="text"
+                    placeholder='Enter Address'
+                    required
                 />
             </div>
             <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
                 <Phone size={20} className='w-5 text-gray-400' />
-                <input 
-                    className='outline-none text-sm w-full' 
-                    onChange={e => setFormData(prev => ({...prev, mobileNumber: e.target.value}))} 
-                    value={formData.mobileNumber} 
-                    type="tel" 
-                    placeholder='Enter Mobile Number' 
-                    required 
+                <input
+                    className='outline-none text-sm w-full'
+                    onChange={e => setFormData(prev => ({...prev, mobileNumber: e.target.value}))}
+                    value={formData.mobileNumber}
+                    type="tel"
+                    placeholder='Enter Mobile Number'
+                    required
                 />
             </div>
 
@@ -138,46 +154,46 @@ const Step4 = ({ formData, setFormData }) => (
         <h2 className='text-lg font-medium text-neutral-700'>4. Banking Details</h2>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <DollarSign size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, accountHolderName: e.target.value}))} 
-                value={formData.accountHolderName} 
-                type="text" 
-                placeholder='Enter Account Holder Name' 
-                required 
+            <input
+                className='outline-none text-sm w-full'
+                onChange={e => setFormData(prev => ({...prev, accountHolderName: e.target.value}))}
+                value={formData.accountHolderName}
+                type="text"
+                placeholder='Enter Account Holder Name'
+                required
             />
         </div>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <CreditCard size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, bankName: e.target.value}))} 
-                value={formData.bankName} 
-                type="text" 
-                placeholder='Enter Bank Name' 
-                required 
+            <input
+                className='outline-none text-sm w-full'
+                onChange={e => setFormData(prev => ({...prev, bankName: e.target.value}))}
+                value={formData.bankName}
+                type="text"
+                placeholder='Enter Bank Name'
+                required
             />
         </div>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <IdCard size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, ifscCode: e.target.value}))} 
-                value={formData.ifscCode} 
-                type="text" 
-                placeholder='Enter IFSC Code' 
-                required 
+            <input
+                className='outline-none text-sm w-full'
+                onChange={e => setFormData(prev => ({...prev, ifscCode: e.target.value}))}
+                value={formData.ifscCode}
+                type="text"
+                placeholder='Enter IFSC Code'
+                required
             />
         </div>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <CreditCard size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, accountNumber: e.target.value}))} 
-                value={formData.accountNumber} 
-                type="text" 
-                placeholder='Enter Account Number' 
-                required 
+            <input
+                className='outline-none text-sm w-full'
+                onChange={e => setFormData(prev => ({...prev, accountNumber: e.target.value}))}
+                value={formData.accountNumber}
+                type="text"
+                placeholder='Enter Account Number'
+                required
             />
         </div>
     </div>
@@ -189,24 +205,24 @@ const Step5 = ({ formData, setFormData }) => (
         <h2 className='text-lg font-medium text-neutral-700'>5. Identification & Documents</h2>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <IdCard size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, aadharCard: e.target.value}))} 
-                value={formData.aadharCard} 
-                type="text" 
-                placeholder='Enter Aadhar Card Number' 
-                required 
+            <input
+                className='outline-none text-sm w-full'
+                onChange={e => setFormData(prev => ({...prev, aadharCard: e.target.value}))}
+                value={formData.aadharCard}
+                type="text"
+                placeholder='Enter Aadhar Card Number'
+                required
             />
         </div>
         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
             <IdCard size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, panCard: e.target.value}))} 
-                value={formData.panCard} 
-                type="text" 
-                placeholder='Enter Pan Card Number' 
-                required 
+            <input
+                className='outline-none text-sm w-full'
+                onChange={e => setFormData(prev => ({...prev, panCard: e.target.value}))}
+                value={formData.panCard}
+                type="text"
+                placeholder='Enter Pan Card Number'
+                required
             />
         </div>
         
@@ -219,10 +235,10 @@ const Step5 = ({ formData, setFormData }) => (
                     {formData.cvFile ? formData.cvFile.name : 'Click here to select file'}
                 </span>
                 <Upload size={18} className='text-blue-500 flex-shrink-0 ml-2' />
-                <input 
-                    onChange={e => setFormData(prev => ({...prev, cvFile: e.target.files[0]}))} 
-                    type="file" 
-                    id='cv_file' 
+                <input
+                    onChange={e => setFormData(prev => ({...prev, cvFile: e.target.files[0]}))}
+                    type="file"
+                    id='cv_file'
                     hidden
                     accept='.pdf,.doc,.docx'
                 />
@@ -241,6 +257,12 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
     const [state, setState] = useState('Login'); // 'Login' or 'Sign Up'
     const [step, setStep] = useState(1); // 1 to 5 for Sign Up steps
     const [loading, setLoading] = useState(false);
+    
+    // State for Login password visibility
+    const [showLoginPassword, setShowLoginPassword] = useState(false); 
+    
+    // State for Sign Up password visibility (NEW)
+    const [showSignUpPassword, setShowSignUpPassword] = useState(false); 
     
     // Consolidated form data state - UPDATED to use 'subject' (String) instead of 'subjects' (Array)
     const [formData, setFormData] = useState({
@@ -268,7 +290,15 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
     // Function to render the current step component
     const renderStep = () => {
         const StepComponent = steps[step - 1].component;
-        return <StepComponent formData={formData} setFormData={setFormData} />;
+        // Pass the password visibility state/setter only to Step 1**
+        return (
+            <StepComponent 
+                formData={formData} 
+                setFormData={setFormData}
+                showPassword={showSignUpPassword}
+                setShowPassword={setShowSignUpPassword}
+            />
+        );
     };
     
     // Handles 'Next' button clicks in the Sign Up flow
@@ -318,7 +348,7 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
                 // Personal Info
                 formDataPayload.append('address', formData.address);
                 formDataPayload.append('mobileNumber', formData.mobileNumber);
-                // 🛑 UPDATED: Use the single 'subject' string from the dropdown 🛑
+                // UPDATED: Use the single 'subject' string from the dropdown
                 formDataPayload.append('subject', formData.subject); 
                 
                 // Banking Details
@@ -342,7 +372,7 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
                     setTeacherToken(data.token);
                     localStorage.setItem('teacherToken', data.token);
                     setShowTeacherLogin(false);
-                    toast.success("Account Created Successfully! Awaiting Admin Approval."); // Changed toast message
+                    toast.success("Account Created Successfully! Awaiting Admin Approval.");
                     navigate('/teacher/dashboard');
                 } else {
                     toast.error(data.message);
@@ -356,7 +386,29 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
         }
     };
 
-    // Effect to prevent scrolling the background when the modal is open
+    // Forgot Password Handler (UNCHANGED)
+    const handleForgotPassword = async () => {
+        const email = prompt("Please enter your email address to reset your password:");
+        if (email && email.trim() !== '') {
+            setLoading(true);
+            try {
+                // Placeholder for a real API call
+                const { data } = await axios.post(`${backendUrl}/api/teacher/forgot-password`, { email });
+                
+                if (data.success) {
+                    toast.success(data.message || "Password reset link sent to your email.");
+                } else {
+                    toast.error(data.message || "Failed to send reset link.");
+                }
+            } catch (error) {
+                toast.error(error.response?.data?.message || "Server error during password reset.");
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    // Effect to prevent scrolling the background when the modal is open (UNCHANGED)
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = 'unset'; };
@@ -365,7 +417,9 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
     const handleSwitchState = (newState) => {
         setState(newState);
         setStep(1); // Reset step when switching mode
-        setFormData({ // Reset form data on switch - UPDATED subject field
+        setShowLoginPassword(false); // Reset login password visibility
+        setShowSignUpPassword(false); // Reset signup password visibility (NEW)
+        setFormData({ // Reset form data on switch
             firstName: '', lastName: '', email: '', password: '', image: null,
             address: '', mobileNumber: '', subject: '', 
             accountHolderName: '', bankName: '', ifscCode: '', accountNumber: '',
@@ -383,7 +437,7 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
                 </h1>
                 <p className='text-sm text-center mb-6'>{state === 'Login' ? 'Welcome back! Please sign in to continue' : 'Join us! Tell us about yourself.'}</p>
                 
-                {/* 🛑 BACK BUTTON (Only for Sign Up steps > 1) 🛑 */}
+                {/* BACK BUTTON (Only for Sign Up steps > 1) */}
                 {state === 'Sign Up' && step > 1 && (
                     <button 
                         type='button' 
@@ -395,17 +449,44 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
                     </button>
                 )}
 
-                {/* --- LOGIN FORM --- */}
+                {/* --- LOGIN FORM (UPDATED to use showLoginPassword) --- */}
                 {state === 'Login' && (
                     <div className='space-y-4'>
+                        {/* Email Input */}
                         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
                             <Mail size={20} className='w-5 text-gray-400' />
                             <input className='outline-none text-sm w-full' onChange={e => setFormData(prev => ({...prev, email: e.target.value}))} value={formData.email} type="email" placeholder='Email Id' required />
                         </div>
+
+                        {/* Password Input with Toggle */}
                         <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
                             <Lock size={20} className='w-5 text-gray-400' />
-                            <input className='outline-none text-sm w-full' onChange={e => setFormData(prev => ({...prev, password: e.target.value}))} value={formData.password} type="password" placeholder='Password' required />
+                            <input 
+                                className='outline-none text-sm w-full' 
+                                onChange={e => setFormData(prev => ({...prev, password: e.target.value}))} 
+                                value={formData.password} 
+                                type={showLoginPassword ? 'text' : 'password'} 
+                                placeholder='Password' 
+                                required 
+                            />
+                            <button 
+                                type='button' 
+                                onClick={() => setShowLoginPassword(prev => !prev)}
+                                className='text-gray-400 hover:text-blue-600 transition'
+                            >
+                                {showLoginPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
                         </div>
+
+                        {/* Forgot Password Link */}
+                        <p className='text-right text-xs pt-1'>
+                            <span 
+                                onClick={handleForgotPassword}
+                                className='text-blue-600 cursor-pointer hover:underline font-medium'
+                            >
+                                Forgot Password?
+                            </span>
+                        </p>
                     </div>
                 )}
                 

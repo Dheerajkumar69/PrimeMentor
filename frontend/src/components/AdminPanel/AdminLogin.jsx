@@ -1,23 +1,22 @@
-// components/AdminPanel/AdminLogin.jsx (FULL CODE)
+// components/AdminPanel/AdminLogin.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';          // ⬅️ useContext added
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios'; // Import axios for API calls
-import { Shield, LogIn, AlertTriangle } from 'lucide-react';
+import axios from 'axios'; 
+import { Shield, LogIn, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { AppContext } from '../../context/AppContext.jsx';    // ⬅️ import context
 
-// --- Configuration ---
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
-/**
- * AdminLogin component provides a login form for administrator access, now using backend authentication.
- * @param {function} setAdminAuthenticated - Function to update the parent App.jsx state. // 🛑 NEW: Document prop
- */
-export default function AdminLogin({ setAdminAuthenticated }) { // 🛑 FIX 1: Accept the prop
+export default function AdminLogin({ setAdminAuthenticated }) { 
     const navigate = useNavigate();
+    const { setAdminToken } = useContext(AppContext);         // ⬅️ get setter from context
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false); 
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -31,17 +30,19 @@ export default function AdminLogin({ setAdminAuthenticated }) { // 🛑 FIX 1: A
             });
 
             if (response.data.token) {
-                // 🔑 1. Set persistent session flag for client-side routing protection
+                // 1) Persist to localStorage (for page refreshes)
                 localStorage.setItem('adminAuthenticated', 'true');
-                // 🔑 2. Store the **signed JWT** token received from the backend
                 localStorage.setItem('adminToken', response.data.token);
-                
-                // 🛑 FIX 2: Immediately update the parent state. This is CRITICAL for the router to re-evaluate and allow navigation.
+
+                // 2) 🔥 IMPORTANT: update context so TeacherManagement sees the token immediately
+                setAdminToken(response.data.token);
+
+                // 3) Update parent state (your existing behaviour)
                 if (setAdminAuthenticated) {
                     setAdminAuthenticated(true);
                 }
 
-                // Navigate to the protected dashboard
+                // 4) Go to dashboard
                 navigate('/admin/dashboard', { replace: true }); 
             } else {
                 setError('Login failed: Token missing.');
@@ -53,6 +54,10 @@ export default function AdminLogin({ setAdminAuthenticated }) { // 🛑 FIX 1: A
         } finally {
             setLoading(false);
         }
+    };
+    
+    const togglePasswordVisibility = () => {
+        setShowPassword(prev => !prev);
     };
 
     return (
@@ -80,20 +85,36 @@ export default function AdminLogin({ setAdminAuthenticated }) { // 🛑 FIX 1: A
                             required
                         />
                     </div>
+                    {/* 🛑 MODIFICATION 4: Password field with Eye button */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="password">
                             Password
                         </label>
-                        <input
-                            id="password"
-                            type="password"
-                            placeholder="admin@123"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 transition duration-150"
-                            required
-                        />
+                        <div className="relative">
+                            <input
+                                id="password"
+                                type={showPassword ? "text" : "password"} // Conditional type
+                                placeholder="admin@123"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 transition duration-150 pr-10" // Added pr-10 for button
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={togglePasswordVisibility}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="h-5 w-5" /> // Icon when password is visible
+                                ) : (
+                                    <Eye className="h-5 w-5" /> // Icon when password is hidden
+                                )}
+                            </button>
+                        </div>
                     </div>
+                    {/* 🛑 END OF MODIFICATION 4 */}
                     {error && (
                         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center">
                             <AlertTriangle className="w-5 h-5 mr-2" />

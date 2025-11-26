@@ -7,8 +7,8 @@ import ClassRequest from '../models/ClassRequest.js';
 import generateToken from '../utils/generateToken.js'; 
 
 // --- Hardcoded Admin Credentials (Matching Frontend) ---
-const HARDCODED_ADMIN_EMAIL = 'shobhit2004poddar@gmail.com';
-const HARDCODED_ADMIN_PASSWORD = 'Shobhit@007';
+const HARDCODED_ADMIN_EMAIL = 'admin@primementor.com.au';
+const HARDCODED_ADMIN_PASSWORD = 'Adminprime@315';
 const DUMMY_ADMIN_ID = 'admin_root_id'; 
 
 // 🛑 NEW FUNCTION: deleteTeacherById 🛑

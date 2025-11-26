@@ -222,7 +222,7 @@ const ContactPage = () => {
                                         <Phone className="w-6 h-6 mr-4 mt-1 flex-shrink-0" />
                                         <div>
                                             <h3 className="text-sm font-light uppercase opacity-80">Mobile</h3>
-                                            <p className="text-xl font-bold">ABN 32 672 503 678</p>
+                                            <p className="text-xl font-bold">(03) 9069 7512</p>
                                         </div>
                                     </div>
                                     

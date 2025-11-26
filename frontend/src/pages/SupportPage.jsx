@@ -160,7 +160,7 @@ const SupportPage = () => {
                                         </li>
                                         <li className="flex items-center">
                                             <Phone className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
-                                            <strong className="text-gray-900">Phone:</strong> <a href="tel:32672503678" className="hover:text-orange-500 text-blue-600">ABN 32 672 503 678</a>
+                                            <strong className="text-gray-900">Phone:</strong> <a href="tel:0390697512" className="hover:text-orange-500 text-blue-600">(03) 9069 7512</a>
                                         </li>
                                     </ul>
                                 }

@@ -306,7 +306,7 @@ export default function Enrollment() {
                     <div>
                         <p className="font-bold text-base">Prime Mentor PTY Ltd.</p>
                         <p className="text-xs sm:text-sm text-gray-600">Office 1, Floor 1, 105a High Street Cranbourne Vic 3977</p>
-                        <p className="text-xs sm:text-sm text-gray-600">ABN 32 672 503 678</p>
+                        <p className="text-xs sm:text-sm text-gray-600">(03) 9069 7512</p>
                     </div>
                 </div>
             </footer>

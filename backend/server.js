@@ -13,46 +13,47 @@ import { clerkMiddleware } from '@clerk/express';
 
 dotenv.config();
 
-// Make sure in your .env you have (NO trailing slash):
-// FRONTEND_URL=https://primementor.com.au
-
-// Express
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- CORS Configuration (FIXED) ---
+/**
+ * 🔍 DEBUG LOGGING – to confirm requests are reaching this server
+ * This will print every incoming request method, URL, and Origin.
+ */
+app.use((req, res, next) => {
+  console.log(
+    `[REQ] ${req.method} ${req.url} | Origin: ${req.headers.origin || 'N/A'}`
+  );
+  next();
+});
 
-// Raw value from env, or fallback to production URL
-const RAW_FRONTEND_URL = process.env.FRONTEND_URL || 'https://primementor.com.au';
-
-// Normalize: remove any trailing slash
-const FRONTEND_ORIGIN = RAW_FRONTEND_URL.replace(/\/$/, '');
-
-// Extract domain part (primementor.com.au)
-const FRONTEND_DOMAIN = FRONTEND_ORIGIN.replace(/https?:\/\//, '');
-
-// Whitelist of allowed origins
+/**
+ * ✅ VERY SIMPLE, HARD-CODED CORS SETUP
+ * Allows exactly:
+ *  - https://primementor.com.au  (production frontend)
+ *  - http://localhost:5173       (local dev)
+ */
 const allowedOrigins = [
-  'http://localhost:5173',          // Local dev
-  FRONTEND_ORIGIN,                  // https://primementor.com.au
-  `https://www.${FRONTEND_DOMAIN}`, // https://www.primementor.com.au (if ever used)
+  'https://primementor.com.au',
+  'http://localhost:5173',
 ];
-
-console.log('CORS allowedOrigins:', allowedOrigins);
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow non-browser clients (Postman, curl, same-origin SSR without Origin header)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
+      // Allow non-browser clients or same-origin calls without Origin header
+      if (!origin) {
+        console.log('[CORS] No Origin header -> allowed');
         return callback(null, true);
       }
 
-      const msg = `CORS blocked origin: ${origin}`;
-      console.error(msg);
-      return callback(new Error(msg), false);
+      if (allowedOrigins.includes(origin)) {
+        console.log('[CORS] Allowed Origin:', origin);
+        return callback(null, true);
+      }
+
+      console.error('[CORS] Blocked Origin:', origin);
+      return callback(new Error('Not allowed by CORS'), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -60,15 +61,13 @@ app.use(
   })
 );
 
-// Handle preflight requests explicitly
+// Explicitly handle preflight OPTIONS requests
 app.options('*', cors());
-
-// --- End CORS Configuration ---
 
 app.use(express.json());
 connectDB();
 
-// Clerk middleware (auth) – after CORS so preflight works
+// Clerk middleware (after CORS so OPTIONS can be handled correctly)
 app.use(clerkMiddleware());
 
 // Static uploads
@@ -97,9 +96,9 @@ app.get('/', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('💥 Error:', err);
+  console.error('💥 Error middleware caught:', err);
 
-  // Clerk errors now have an httpStatus property
+  // Clerk errors
   if (err?.clerkError || err?.httpStatus) {
     const status = err.httpStatus || err.statusCode || 401;
     return res
@@ -107,11 +106,10 @@ app.use((err, req, res, next) => {
       .json({ message: err.message || 'Unauthorized' });
   }
 
-  // Generic server error
   res.status(500).json({ message: 'Internal Server Error' });
 });
 
 // Start server
-app.listen(PORT, () =>
-  console.log(`✅ Server started on http://localhost:${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`✅ Server started on port ${PORT}`);
+});

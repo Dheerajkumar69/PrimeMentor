@@ -6,57 +6,70 @@ import dotenv from 'dotenv';
 import { connectDB } from './config/db.js';
 import teacherRouter from './routes/teacherRoutes.js';
 import userRoutes from './routes/userRoutes.js';
-import assessmentRoutes from './routes/assessmentRoutes.js'; 
+import assessmentRoutes from './routes/assessmentRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
-import adminRoutes from './routes/adminRoutes.js'; 
-import { clerkMiddleware } from '@clerk/express'; 
+import adminRoutes from './routes/adminRoutes.js';
+import { clerkMiddleware } from '@clerk/express';
 
 dotenv.config();
 
-// ... (Environment Variable Validations remain the same) ...
+// Make sure in your .env you have (NO trailing slash):
+// FRONTEND_URL=https://primementor.com.au
 
 // Express
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- CORS Configuration Update ---
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://primementor.com.au'; 
+// --- CORS Configuration (FIXED) ---
 
-// 🎯 CRITICAL FIX: Ensure all necessary origins are explicitly listed.
+// Raw value from env, or fallback to production URL
+const RAW_FRONTEND_URL = process.env.FRONTEND_URL || 'https://primementor.com.au';
+
+// Normalize: remove any trailing slash
+const FRONTEND_ORIGIN = RAW_FRONTEND_URL.replace(/\/$/, '');
+
+// Extract domain part (primementor.com.au)
+const FRONTEND_DOMAIN = FRONTEND_ORIGIN.replace(/https?:\/\//, '');
+
+// Whitelist of allowed origins
 const allowedOrigins = [
-    'http://localhost:5173', // Local development
-    FRONTEND_URL, // e.g., https://primementor.com.au (the origin reported in the error)
-    `https://www.${FRONTEND_URL.replace(/https?:\/\//, '')}`, // e.g., https://www.primementor.com.au
-    
-    // Explicitly add a common API subdomain just in case it's used as an origin.
-    // NOTE: This usually isn't necessary, but is a good safeguard.
-    `https://api.${FRONTEND_URL.replace(/https?:\/\//, '')}` 
+  'http://localhost:5173',          // Local dev
+  FRONTEND_ORIGIN,                  // https://primementor.com.au
+  `https://www.${FRONTEND_DOMAIN}`, // https://www.primementor.com.au (if ever used)
 ];
 
-app.use(cors({
+console.log('CORS allowedOrigins:', allowedOrigins);
+
+app.use(
+  cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, curl, or same-server requests)
-        if (!origin) return callback(null, true); 
-        
-        if (allowedOrigins.indexOf(origin) === -1) {
-            var msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
-            console.error('CORS Blocked Origin:', origin); // Log blocked origins for debugging
-            return callback(new Error(msg), false);
-        }
+      // Allow non-browser clients (Postman, curl, same-origin SSR without Origin header)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
+      }
+
+      const msg = `CORS blocked origin: ${origin}`;
+      console.error(msg);
+      return callback(new Error(msg), false);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Ensure all methods are allowed
-    allowedHeaders: ['Content-Type', 'Authorization'], // Ensure necessary headers are allowed
-}));
-// --- End CORS Configuration Update ---
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
+// Handle preflight requests explicitly
+app.options('*', cors());
+
+// --- End CORS Configuration ---
 
 app.use(express.json());
-connectDB(); 
+connectDB();
 
-// ADD the clerkMiddleware as a global middleware
-app.use(clerkMiddleware()); 
+// Clerk middleware (auth) – after CORS so preflight works
+app.use(clerkMiddleware());
 
 // Static uploads
 app.use('/images', express.static('uploads'));
@@ -69,29 +82,36 @@ console.log('✅ Registering student/user routes...');
 app.use('/api/user', userRoutes);
 
 console.log('✅ Registering assessment routes...');
-app.use('/api/assessments', assessmentRoutes); 
+app.use('/api/assessments', assessmentRoutes);
 
 console.log('✅ Registering admin routes...');
-app.use('/api/admin', adminRoutes); 
+app.use('/api/admin', adminRoutes);
 
 console.log('✅ Registering contact routes...');
-app.use('/api/contact', contactRoutes); 
-
-// Global error handler
-app.use((err, req, res, next) => {
-    console.error('💥 Error:', err);
-    // Clerk errors now have an httpStatus property
-    if (err?.clerkError || err?.httpStatus) { 
-        const status = err.httpStatus || err.statusCode || 401;
-        return res.status(status).json({ message: err.message || 'Unauthorized' });
-    }
-    res.status(500).json({ message: 'Internal Server Error' });
-});
+app.use('/api/contact', contactRoutes);
 
 // Root
 app.get('/', (req, res) => {
-    res.send('Prime Mentor Backend API is running!');
+  res.send('Prime Mentor Backend API is running!');
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('💥 Error:', err);
+
+  // Clerk errors now have an httpStatus property
+  if (err?.clerkError || err?.httpStatus) {
+    const status = err.httpStatus || err.statusCode || 401;
+    return res
+      .status(status)
+      .json({ message: err.message || 'Unauthorized' });
+  }
+
+  // Generic server error
+  res.status(500).json({ message: 'Internal Server Error' });
 });
 
 // Start server
-app.listen(PORT, () => console.log(`✅ Server started on http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ Server started on http://localhost:${PORT}`)
+);

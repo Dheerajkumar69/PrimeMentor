@@ -17,8 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /**
- * 🔍 DEBUG LOGGING – to confirm requests are reaching this server
- * This will print every incoming request method, URL, and Origin.
+ * DEBUG logging – see every incoming request
  */
 app.use((req, res, next) => {
   console.log(
@@ -28,10 +27,7 @@ app.use((req, res, next) => {
 });
 
 /**
- * ✅ VERY SIMPLE, HARD-CODED CORS SETUP
- * Allows exactly:
- *  - https://primementor.com.au  (production frontend)
- *  - http://localhost:5173       (local dev)
+ * CORS – hard-coded for now
  */
 const allowedOrigins = [
   'https://primementor.com.au',
@@ -41,7 +37,6 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow non-browser clients or same-origin calls without Origin header
       if (!origin) {
         console.log('[CORS] No Origin header -> allowed');
         return callback(null, true);
@@ -61,13 +56,13 @@ app.use(
   })
 );
 
-// Explicitly handle preflight OPTIONS requests
-app.options('*', cors());
+// ❌ REMOVE THIS – it was crashing the app
+// app.options('*', cors());
 
 app.use(express.json());
 connectDB();
 
-// Clerk middleware (after CORS so OPTIONS can be handled correctly)
+// If Clerk causes issues you can temporarily comment this out
 app.use(clerkMiddleware());
 
 // Static uploads
@@ -98,7 +93,6 @@ app.get('/', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('💥 Error middleware caught:', err);
 
-  // Clerk errors
   if (err?.clerkError || err?.httpStatus) {
     const status = err.httpStatus || err.statusCode || 401;
     return res

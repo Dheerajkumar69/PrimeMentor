@@ -14,7 +14,7 @@ const assets = {
 
 // --- Step Components ---
 
-// Step 1: Basic Info (UPDATED with Password Toggle)
+// Step 1: Basic Info (UPDATED with Password Constraint)
 const Step1 = ({ formData, setFormData, showPassword, setShowPassword }) => (
     <div className='space-y-4'>
         <h2 className='text-lg font-medium text-neutral-700'>1. Account Details</h2>
@@ -42,28 +42,34 @@ const Step1 = ({ formData, setFormData, showPassword, setShowPassword }) => (
         </div>
 
         {/* **Password Input with Toggle (Sign Up)** */}
-        <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
-            <Lock size={20} className='w-5 text-gray-400' />
-            <input 
-                className='outline-none text-sm w-full' 
-                onChange={e => setFormData(prev => ({...prev, password: e.target.value}))} 
-                value={formData.password} 
-                type={showPassword ? 'text' : 'password'}
-                placeholder='Create Password' 
-                required 
-            />
-            <button 
-                type='button' 
-                onClick={() => setShowPassword(prev => !prev)}
-                className='text-gray-400 hover:text-blue-600 transition'
-            >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
+        <div> {/* Added a div to contain input and constraint text */}
+            <div className='border px-4 py-2 flex items-center gap-2 rounded-full focus-within:border-blue-500 transition'>
+                <Lock size={20} className='w-5 text-gray-400' />
+                <input 
+                    className='outline-none text-sm w-full' 
+                    onChange={e => setFormData(prev => ({...prev, password: e.target.value}))} 
+                    value={formData.password} 
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder='Create Password' 
+                    required 
+                />
+                <button 
+                    type='button' 
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className='text-gray-400 hover:text-blue-600 transition'
+                >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+            </div>
+            {/* Password Constraint */}
+            <p className='text-xs text-red-500 mt-1 ml-4'>
+                Password must be <b>more than 8 characters</b>.
+            </p>
         </div>
     </div>
 );
 
-// Step 2: Profile Picture (UNCHANGED)
+// Step 2: Profile Picture (UPDATED with Image Size Constraint)
 const Step2 = ({ formData, setFormData }) => (
     <div className='space-y-4 text-center'>
         <h2 className='text-lg font-medium text-neutral-700'>2. Profile Picture</h2>
@@ -86,7 +92,8 @@ const Step2 = ({ formData, setFormData }) => (
             <p className='text-sm text-center font-medium'>
                 {formData.image ? 'Profile Photo Selected' : 'Click to Upload Profile Photo'}
             </p>
-            <p className='text-xs text-gray-500'>(Required)</p>
+            {/* Image Size Constraint */}
+            <p className='text-xs text-red-500'>(Required, size must be <b>less than 1MB</b>)</p>
         </div>
     </div>
 );
@@ -200,7 +207,7 @@ const Step4 = ({ formData, setFormData }) => (
     </div>
 );
 
-// Step 5: Documents (ID and CV Upload) (UNCHANGED)
+// Step 5: Documents (ID and CV Upload) (UPDATED with CV Size Constraint)
 const Step5 = ({ formData, setFormData }) => (
     <div className='space-y-4'>
         <h2 className='text-lg font-medium text-neutral-700'>5. Identification & Documents</h2>
@@ -245,6 +252,9 @@ const Step5 = ({ formData, setFormData }) => (
                     required // Added required attribute
                 />
             </label>
+            <p className='text-xs text-red-500 mt-1'>
+                (Required, file size must be <b>less than 1MB</b>)
+            </p>
             {formData.cvFile && <p className='text-xs text-green-600 mt-1'>File ready for upload.</p>}
         </div>
     </div>
@@ -281,12 +291,14 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
     });
 
     // Validation array: Ensures all fields for the current step are filled
+    // NOTE: Frontend visual constraints (like size/length) are added here for completeness,
+    // though proper validation should also happen in `handleNext` or `onSubmitHandler`
     const steps = [
-        { component: Step1, validation: () => formData.firstName && formData.lastName && formData.email && formData.password },
-        { component: Step2, validation: () => formData.image !== null },
+        { component: Step1, validation: () => formData.firstName && formData.lastName && formData.email && formData.password && formData.password.length > 8 },
+        { component: Step2, validation: () => formData.image !== null && formData.image.size <= 1048576 }, // 1MB = 1048576 bytes
         { component: Step3, validation: () => formData.address && formData.mobileNumber && formData.subject !== '' },
         { component: Step4, validation: () => formData.accountHolderName && formData.bankName && formData.ifscCode && formData.accountNumber },
-        { component: Step5, validation: () => formData.aadharCard && formData.panCard && formData.cvFile !== null },
+        { component: Step5, validation: () => formData.aadharCard && formData.panCard && formData.cvFile !== null && formData.cvFile.size <= 1048576 }, // 1MB = 1048576 bytes
     ];
     
     // Function to render the current step component
@@ -306,8 +318,28 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
     // Handles 'Next' button clicks in the Sign Up flow
     const handleNext = (e) => {
         e.preventDefault();
-        const isValid = steps[step - 1].validation();
-        if (isValid) {
+        
+        // Custom Validation checks based on step
+        const currentStep = step;
+        const currentValidation = steps[currentStep - 1].validation;
+        
+        if (currentStep === 1 && formData.password.length <= 8) {
+            toast.error("Password must be more than 8 characters.");
+            return;
+        }
+
+        if (currentStep === 2 && formData.image && formData.image.size > 1048576) {
+            toast.error("Profile picture size must be less than 1MB.");
+            return;
+        }
+
+        if (currentStep === 5 && formData.cvFile && formData.cvFile.size > 1048576) {
+            toast.error("CV/Resume file size must be less than 1MB.");
+            return;
+        }
+        
+        // General check for required fields for the step
+        if (currentValidation()) {
             if (step < steps.length) {
                 setStep(step + 1);
             } else {
@@ -341,7 +373,12 @@ const TeacherLogin = ({ setShowTeacherLogin }) => {
                     toast.error(data.message);
                 }
             } else { // Final Sign Up Submission
-                // This section is only reached if all previous steps passed validation.
+                // Final validation check for last step if not handled by handleNext before calling onSubmitHandler
+                if (step === steps.length && !steps[step - 1].validation()) {
+                    toast.error("Please fill in all required fields for this section.");
+                    setLoading(false);
+                    return;
+                }
                 
                 const formDataPayload = new FormData();
                 

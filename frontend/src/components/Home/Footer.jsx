@@ -59,7 +59,7 @@ export default function Footer() {
                         </p>
                         <div className="space-y-3">
                             {/* UPDATED: Phone Link */}
-                            <a href="tel:32672503678" className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition">
+                            <a href="tel:0390697512" className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition">
                                 <Phone className="w-5 h-5 text-orange-500" />
                                 <span>(03) 9069 7512</span>
                             </a>

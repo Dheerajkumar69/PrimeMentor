@@ -31,6 +31,7 @@ app.use((req, res, next) => {
  */
 const allowedOrigins = [
   'https://primementor.com.au',
+  'https://www.primementor.com.au',
   'http://localhost:5173',
 ];
 

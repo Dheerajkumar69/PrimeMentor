@@ -1,34 +1,51 @@
 // backend/utils/emailService.js
-
 import { Resend } from 'resend';
 
-// Initialize Resend Client using the API Key from .env
-const resend = new Resend(process.env.RESEND_API_KEY);
-const senderEmail = process.env.EMAIL_SENDER; // info@primementor.com.au
+let resendClient = null;
+function getResendClient() {
+  if (resendClient) return resendClient;
+
+  const key = process.env.RESEND_API_KEY || process.env.RESEND_KEY;
+  if (!key) {
+    console.error('❌ RESEND API key missing at runtime. Expected RESEND_API_KEY in env.');
+    return null;
+  }
+
+  try {
+    resendClient = new Resend(key);
+    console.log('RESEND client initialized.');
+    return resendClient;
+  } catch (err) {
+    console.error('❌ Failed to initialize Resend client:', err?.message || err);
+    return null;
+  }
+}
+
+const senderEmail = process.env.EMAIL_SENDER || 'info@primementor.com.au';
 
 /**
  * Sends a course confirmation email using Resend.
- * @param {string} recipientEmail - The email address to send the confirmation to.
- * @param {object} courseDetails - Details of the booked course.
- * @param {object} studentDetails - Details of the student.
- * @param {Array<object>} classRequests - Array of class session requests.
  */
-export const sendCourseConfirmationEmail = async (recipientEmail, courseDetails, studentDetails, classRequests) => {
-    
-    if (!senderEmail) {
-        console.error("FATAL ERROR: EMAIL_SENDER is not defined in .env. Cannot send email.");
-        return;
-    }
-    
-    const isTrial = courseDetails.purchaseType === 'TRIAL';
-    const courseType = isTrial ? 'Trial Session' : 'Starter Pack';
+export const sendCourseConfirmationEmail = async (recipientEmail, courseDetails = {}, studentDetails = {}, classRequests = []) => {
+  if (!senderEmail) {
+    console.error("FATAL ERROR: EMAIL_SENDER is not defined in env. Cannot send email.");
+    return;
+  }
 
-    const sessionsList = classRequests.map((req, index) => {
-        return `<li><strong>Session ${index + 1}:</strong> ${req.courseTitle} on <strong>${req.preferredDate}</strong> at <strong>${req.scheduleTime}</strong> (Timezone: Sydney/NSW Time)</li>`;
-    }).join('');
+  const client = getResendClient();
+  if (!client) {
+    console.error('Skipping sendCourseConfirmationEmail(): Resend client not configured.');
+    return;
+  }
 
-    // HTML Content remains the same (just ensuring we have the correct formatting)
-    const htmlContent = `
+  const isTrial = courseDetails.purchaseType === 'TRIAL';
+  const courseType = isTrial ? 'Trial Session' : 'Starter Pack';
+
+  const sessionsList = (classRequests || []).map((req, index) => {
+    return `<li><strong>Session ${index + 1}:</strong> ${req.courseTitle} on <strong>${req.preferredDate}</strong> at <strong>${req.scheduleTime}</strong> (Timezone: Sydney/NSW Time)</li>`;
+  }).join('');
+
+  const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -47,18 +64,18 @@ export const sendCourseConfirmationEmail = async (recipientEmail, courseDetails,
         <body>
             <div class="container">
                 <div class="header">
-                    <h2>${courseDetails.courseTitle} - ${courseType} Confirmed!</h2>
+                    <h2>${courseDetails.courseTitle || 'Course'} - ${courseType} Confirmed!</h2>
                 </div>
                 <div class="content">
                     <p>Dear <strong>${studentDetails.name || 'Valued Customer'}</strong>,</p>
-                    <p>Thank you for booking with us! We are thrilled to confirm your enrollment in the **${courseDetails.courseTitle}** ${courseType}.</p>
+                    <p>Thank you for booking with us! We are thrilled to confirm your enrollment in the <strong>${courseDetails.courseTitle || 'Course'}</strong> ${courseType}.</p>
 
                     <div class="details-box">
                         <h3>Booking Summary</h3>
                         <ul>
-                            <li><strong>Student Name:</strong> ${studentDetails.name}</li>
+                            <li><strong>Student Name:</strong> ${studentDetails.name || ''}</li>
                             <li><strong>Email:</strong> ${recipientEmail}</li>
-                            <li><strong>Total Amount Paid:</strong> $${courseDetails.amountPaid} ${courseDetails.currency || 'AUD'} (Transaction ID: ${courseDetails.transactionId})</li>
+                            <li><strong>Total Amount Paid:</strong> $${courseDetails.amountPaid || 0} ${courseDetails.currency || 'AUD'} (Transaction ID: ${courseDetails.transactionId || 'N/A'})</li>
                             <li><strong>Teacher Status:</strong> A teacher is being assigned and will contact you shortly.</li>
                         </ul>
                     </div>
@@ -69,31 +86,27 @@ export const sendCourseConfirmationEmail = async (recipientEmail, courseDetails,
                         ${sessionsList}
                     </ul>
 
-                    <p>You can view all your course details and future updates on your **My Courses** dashboard.</p>
+                    <p>You can view all your course details and future updates on your <strong>My Courses</strong> dashboard.</p>
                     <p>If you have any questions, please reply to this email.</p>
-                    <p>Best regards,<br>The ${courseDetails.courseTitle} Team</p>
+                    <p>Best regards,<br>The ${courseDetails.courseTitle || 'Course'} Team</p>
                 </div>
             </div>
         </body>
         </html>
     `;
 
-    try {
-        const { data, error } = await resend.emails.send({
-            from: `Prime Mentor <${senderEmail}>`, // Format: "Name <email@domain.com>"
-            to: [recipientEmail],
-            subject: `✅ Booking Confirmed: ${courseDetails.courseTitle} ${courseType}`,
-            html: htmlContent,
-        });
+  try {
+    const resp = await client.emails.send({
+      from: `Prime Mentor <${senderEmail}>`,
+      to: [recipientEmail],
+      subject: `✅ Booking Confirmed: ${courseDetails.courseTitle || 'Course'} ${courseType}`,
+      html: htmlContent,
+    });
 
-        if (error) {
-            console.error('Error sending course confirmation email via Resend:', error);
-            // Log the error ID for lookup in Resend dashboard
-            console.error('Resend Error ID:', data?.id); 
-        } else {
-            console.log('Course confirmation email sent successfully via Resend. ID:', data.id);
-        }
-    } catch (error) {
-        console.error('Critical error calling Resend API:', error.message);
-    }
+    console.log('Course confirmation email sent. Resend ID:', resp?.id || '[no id]');
+    return resp;
+  } catch (err) {
+    console.error('Critical error calling Resend API:', err?.message || err);
+    throw err;
+  }
 };

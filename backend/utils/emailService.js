@@ -1,9 +1,6 @@
 // backend/utils/emailService.js
 
 import { Resend } from 'resend';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 // Initialize Resend Client using the API Key from .env
 const resend = new Resend(process.env.RESEND_API_KEY);

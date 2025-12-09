@@ -11,7 +11,7 @@ const router = express.Router();
 router.post('/submit', submitAssessmentRequest);
 
 // @route GET /api/assessments
-// @desc Get all assessment requests (Admin dashboard)
+// @desc Get all *free* assessment requests (Admin dashboard)
 // @access Private (Admin Only)
 router.get('/', adminOnlyMiddleware, getAllAssessments); // Protected by middleware
 

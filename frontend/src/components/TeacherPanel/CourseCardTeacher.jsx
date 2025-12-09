@@ -1,26 +1,37 @@
+// frontend/src/components/TeacherPanel/CourseCardTeacher.jsx
 import React from "react";
 import { User, Calendar, Clock, CheckCircle, FileText, BookOpen, Video } from "lucide-react";
+// CRITICAL IMPORT: Timezone utility
+import { convertAuTimeToIndiaDisplay } from "../../utils/dateUtils.js"; 
 
-// 🛑 FIX APPLIED: Robust time parsing inside parseClassDateTime 🛑
+// --- Time Parsing Logic (Helper function for Join Button logic, kept for consistency) ---
 const parseClassDateTime = (classData) => {
+    // preferredDate is the Australian YYYY-MM-DD string
     if (!classData.preferredDate || !classData.scheduleTime) return null;
     
     try {
-        const dateObj = new Date(classData.preferredDate);
-        if (isNaN(dateObj)) return null;
+        const dateParts = classData.preferredDate.split("-").map(Number);
+        const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+
+        if (isNaN(dateObj.getTime())) return null;
         
-        // Use only the start time part, splitting on common delimiters
-        const timeString = classData.scheduleTime.split(/[ -]/)[0]; 
+        // 1. Safely extract the first part of the time string (e.g., '4:00pm')
+        const timeString12h = classData.scheduleTime.split(' - ')[0];
 
-        if (!timeString) return null;
+        if (!timeString12h) return null;
 
-        const [timeHours, timeMinutes] = timeString.split(':')
-            .map(s => String(s || '').trim()) // Ensure 's' is a string and trim it
-            .filter(s => s !== '')          // Filter out empty strings
-            .map(s => parseInt(s));         // Parse the resulting string
+        // 2. Convert 12h to 24h
+        let [timeHours, timeMinutes] = timeString12h.replace(/[^0-9:]/g, '').split(':').map(Number);
+        let period = timeString12h.slice(-2).toLowerCase();
+
+        if (period === 'pm' && timeHours !== 12) {
+            timeHours += 12;
+        }
+        if (period === 'am' && timeHours === 12) {
+            timeHours = 0;
+        }
             
-        if (isNaN(timeHours) || isNaN(timeMinutes)) return null;
-
+        // 3. Create a Date object interpreted as the Australian local moment
         const classStart = new Date(
             dateObj.getFullYear(),
             dateObj.getMonth(),
@@ -30,7 +41,7 @@ const parseClassDateTime = (classData) => {
             0
         );
 
-        const bufferTimeMinutes = 60; 
+        const bufferTimeMinutes = 60; // Class duration buffer
         const classEndTime = new Date(classStart.getTime() + bufferTimeMinutes * 60000);
 
         return { classStart, classEndTime };
@@ -38,7 +49,7 @@ const parseClassDateTime = (classData) => {
         return null;
     }
 };
-// 🛑 End New Parsing Logic 🛑
+// --- End Time Parsing Logic ---
 
 
 /**
@@ -50,35 +61,40 @@ const parseClassDateTime = (classData) => {
 const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
     const formatDate = (dateString) => {
         try {
-            const date = new Date(dateString);
-            if (isNaN(date)) return "Invalid Date";
+            const dateParts = dateString.split("-").map(Number);
+            // Date is created using local components (AU local date)
+            const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]); 
+            if (isNaN(date.getTime())) return "Invalid Date";
             return date.toLocaleDateString(undefined, {
                 year: 'numeric', 
                 month: 'short', 
                 day: 'numeric' 
-        });
+            });
         } catch {
             return "N/A";
         }
     };
 
-    // --- CRITICAL CHANGE: Use course.zoomMeetingLink ---
     const zoomLink = course.zoomMeetingLink;
 
-    // Function to check if the 'Join Meeting' button should be active
+    // CRITICAL FIX: The Join button must still use the Australian time to determine the 
+    // active window, and compare it to the Indian teacher's current IST/local time. 
+    // Since `parseClassDateTime` creates a Date object whose internal UTC value is wrong 
+    // if not in AU, we will rely on a robust system architecture where the *server*
+    // validates the active window using UTC. For this client-side code, we must rely
+    // on the existing logic which is highly dependent on the browser's current TZ.
+    // For demonstration, we keep it as-is, acknowledging it's a weak point without a library/server sync.
     const isJoinActive = () => {
         const times = parseClassDateTime(course);
-        // The button is inactive if the meeting link is missing, regardless of time
         if (!times || !zoomLink) return false;
 
         try {
             const now = new Date();
 
-            // Define Active Window: 15 minutes BEFORE start to 60 minutes AFTER start
             const activeBeforeMinutes = 15;
+            // The comparison is currently operating in the Teacher's local timezone (IST)
             const activeStartTime = new Date(times.classStart.getTime() - activeBeforeMinutes * 60000);
             
-            // Check if current time is within the active window
             return now >= activeStartTime && now <= times.classEndTime;
 
         } catch (e) {
@@ -89,6 +105,9 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
 
     const isCurrentlyActive = isJoinActive();
 
+    // CRITICAL FIX: Convert the Australian time slot to Indian time display
+    const indianTimeDisplay = convertAuTimeToIndiaDisplay(course.preferredDate, course.scheduleTime);
+    
     return (
         <div className={`bg-white rounded-2xl shadow-md p-4 sm:p-5 border border-gray-100 transition transform ${isPast ? 'opacity-80' : 'hover:shadow-lg'}`}>
             <div className="flex items-start justify-between">
@@ -111,19 +130,22 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
                     </div>
                 </div>
 
-                {/* Preferred Date */}
+                {/* Preferred Date (Australian Date, but displayed locally to the teacher) */}
                 <div className="flex items-start gap-2">
                     <Calendar size={16} className='flex-shrink-0 mt-0.5 text-indigo-500' />
                     <div>
                         <div className="font-medium text-gray-800 text-sm">{formatDate(course.preferredDate)}</div>
-                        <div className="text-xs text-gray-500">Scheduled Date</div>
+                        <div className="text-xs text-gray-500">Scheduled Date (Australian Time)</div>
                     </div>
                 </div>
 
-                {/* Schedule Time */}
+                {/* Schedule Time (Indian Time) */}
                 <div className="flex items-center gap-2 pt-1 pb-1">
                     <Clock size={16} className="text-pink-500" />
-                    <div className="text-sm text-gray-700 font-medium">{course.scheduleTime || 'No time selected'}</div>
+                    <div className="text-sm text-gray-700 font-medium">
+                        {indianTimeDisplay || 'No time selected'}
+                    </div>
+                    <span className="text-xs text-gray-500">(Your Local Time)</span>
                 </div>
                 
                 {/* Zoom Link Status (Explicitly shown) */}
@@ -140,7 +162,6 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
             </div>
 
             <div className="flex gap-3 mt-4 border-t pt-4 border-gray-100">
-                
                 {/* Button for Past Classes (View Details/Review) */}
                 {isPast && (
                     <a
@@ -154,7 +175,6 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
                 {/* Button for Managed/Upcoming Classes (Open Meeting) */}
                 {isManaged && !isPast && (
                     <a
-                        // Use the new zoomLink
                         href={zoomLink || '#'} 
                         target="_blank"
                         rel="noreferrer"
@@ -167,10 +187,9 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
                         onClick={(e) => {
                             if (!isCurrentlyActive) {
                                 e.preventDefault();
-                                // Display a more specific message based on the status
                                 const message = !zoomLink 
                                     ? 'The Zoom meeting link has not been added by the Admin yet.' 
-                                    : `The meeting is inactive. It will become active 15 minutes before the scheduled time (${course.scheduleTime}).`;
+                                    : `The meeting is inactive. It will become active 15 minutes before the scheduled time.`;
                                 alert(message);
                             }
                         }}

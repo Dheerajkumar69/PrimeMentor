@@ -11,7 +11,9 @@ import {
     getTeacherDetailsById,
     deleteTeacherById,
     addZoomLink,
-    getAcceptedClassRequests // 🛑 CRITICAL IMPORT
+    getAcceptedClassRequests,
+    getAllPastClassSubmissions, 
+    getAllFeedback // 🛑 NEW IMPORT: getAllFeedback
 } from '../controllers/adminController.js';
 import { adminOnlyMiddleware } from '../middlewares/adminMiddleware.js';
 
@@ -39,5 +41,11 @@ router.put('/add-zoom-link/:requestId', addZoomLink);
 
 // 🛑 NEW ROUTE: Fetch Accepted Classes 🛑
 router.get('/accepted-requests', getAcceptedClassRequests); 
+
+// 🛑 NEW ROUTE: Fetch Past Class Submissions 🛑
+router.get('/past-classes', getAllPastClassSubmissions);
+
+// 🟢 NEW ROUTE: Fetch All Student Feedback 🟢
+router.get('/feedback', getAllFeedback);
 
 export default router;

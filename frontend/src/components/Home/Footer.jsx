@@ -64,9 +64,9 @@ export default function Footer() {
                                 <span>(03) 9069 7512</span>
                             </a>
                             {/* UPDATED: Mail Link */}
-                            <a href="mailto:info.primementor@gmail.com" className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition">
+                            <a href="mailto:info@primementor.com.au" className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition">
                                 <Mail className="w-5 h-5 text-orange-500" />
-                                <span>info.primementor@gmail.com</span>
+                                <span>info@primementor.com.au</span>
                             </a>
                             {/* UPDATED: MapPin Link */}
                             <a 

@@ -1,6 +1,11 @@
 // frontend/src/components/Enrollment/Step2Schedule.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, X, ChevronLeft, ChevronRight, Check, ArrowLeft } from 'lucide-react';
+import { Calendar, X, ChevronLeft, ChevronRight, Check, ArrowLeft, Tag, Loader2, XCircle, CheckCircle } from 'lucide-react'; // 🚨 Added Tag, Loader2, XCircle, CheckCircle
+import axios from 'axios'; // 🚨 Added axios
+import { useAuth } from '@clerk/clerk-react'; // 🚨 Added useAuth
+
+// 🚨 NEW: API Endpoint for Promo Validation 🚨
+const PROMO_VALIDATE_API = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/user/promo/validate`;
 
 // MODIFIED: generateTimeSlots function now takes a dayOfWeek parameter (0=Sun, 6=Sat)
 const generateTimeSlots = (dayOfWeek) => {
@@ -30,8 +35,9 @@ const generateTimeSlots = (dayOfWeek) => {
     return {}; // Sunday or other
 };
 
-// MODIFIED: TimePreferencesModal to handle dual time selection for Starter Pack
+// MODIFIED: TimePreferencesModal (UNCHANGED LOGIC)
 const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarterPack, currentTimes }) => {
+    // ... (TimePreferencesModal logic unchanged)
     if (!isOpen) return null;
 
     const dayOfWeek = selectedDate ? new Date(selectedDate).getDay() : null;
@@ -45,7 +51,7 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
              // For Starter Pack, show both Mon-Fri and Sat slots for preference
              return {
                  ...generateTimeSlots(1), // Mon-Fri slots
-                 ...generateTimeSlots(6)  // Saturday slots
+                 ...generateTimeSlots(6)  // Saturday slots
              };
         }
     }, [dayOfWeek, isStarterPack]);
@@ -153,8 +159,26 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
     );
 };
 
-// Updated Step2Schedule to include a 'purchaseType' prop and logic for Starter Pack
-const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails, guardianDetails, productDetails, enrollmentDataKey }) => {
+// 🚨 UPDATED PROPS for Step2Schedule 🚨
+const Step2Schedule = ({ 
+    quizData, 
+    purchaseType, 
+    onNext, 
+    onBack, 
+    studentDetails, 
+    guardianDetails, 
+    productDetails, 
+    enrollmentDataKey,
+    promoCodeData, // 🚨 NEW PROP 🚨
+    onPromoCodeUpdate, // 🚨 NEW PROP 🚨
+    finalPaymentAmount // 🚨 NEW PROP 🚨
+}) => {
+    // 🚨 PROMO CODE HOOKS 🚨
+    const { getToken } = useAuth();
+    const [promoInput, setPromoInput] = useState(promoCodeData.code || '');
+    const [promoMessage, setPromoMessage] = useState(null);
+    const [isPromoLoading, setIsPromoLoading] = useState(false);
+    // 🚨 END PROMO CODE HOOKS 🚨
     
     // NEW: Postcode state
     const [postcode, setPostcode] = useState('');
@@ -187,7 +211,7 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
     
     const isStarterPack = purchaseType === 'STARTER_PACK';
     
-    // 🛑 NEW: Load state from persistent storage on mount 🛑
+    // 🛑 NEW: Load state from persistent storage on mount (FIXED logic for restoration) 🛑
     useEffect(() => {
         const storedData = localStorage.getItem(enrollmentDataKey);
         if (storedData) {
@@ -206,29 +230,50 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
                     
                     if (restoredPostcode) setPostcode(restoredPostcode);
                     
-                    const dateToRestore = preferredWeekStart || preferredDate;
-                    if (dateToRestore) {
-                        setSelectedDay(new Date(dateToRestore));
+                    const dateToRestoreString = isStarterPack ? preferredDate : preferredDate; // Use preferredDate as the user-selected start date
+                    if (dateToRestoreString) {
+                        // Reconstruct the selected day (the start date)
+                        const dateParts = dateToRestoreString.split('-').map(Number);
+                        const initialDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                        setSelectedDay(initialDate);
                         
                         if (isStarterPack) {
-                            // Recalculate date range for display consistency
-                            const initialDate = new Date(preferredWeekStart);
+                            // Recalculate date range using the core logic for display consistency
                             const sessionsCount = 6;
                             const sessionDates = [];
-                            let currentDate = new Date(initialDate.getTime());
+                            
+                            // CRITICAL FIX: Ensure UTC construction for restoration calculation
+                            const year = initialDate.getFullYear();
+                            const month = initialDate.getMonth();
+                            const date = initialDate.getDate();
+                            let currentDate = new Date(Date.UTC(year, month, date));
                             
                             while (sessionDates.length < sessionsCount) {
-                                if (currentDate.getDay() !== 0) {
-                                    sessionDates.push(new Date(currentDate.getTime()));
+                                // Check if currentDate is not Sunday (0) using UTC day getter
+                                if (currentDate.getUTCDay() !== 0) {
+                                    // Create a local date object for formatting
+                                    const yyyy = currentDate.getUTCFullYear();
+                                    const mm = currentDate.getUTCMonth();
+                                    const dd = currentDate.getUTCDate();
+                                    sessionDates.push(new Date(yyyy, mm, dd));
                                 }
-                                currentDate.setDate(currentDate.getDate() + 1);
+                                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
                             }
+                            
+                            const formatYMDFromUTCDate = (utcDateObj) => {
+                                const y = utcDateObj.getUTCFullYear();
+                                const m = String(utcDateObj.getUTCMonth() + 1).padStart(2, '0');
+                                const d = String(utcDateObj.getUTCDate()).padStart(2, '0');
+                                return `${y}-${m}-${d}`;
+                            };
+
                             setStarterPackDateRange({
-                                start: sessionDates[0].toISOString().split('T')[0],
-                                end: sessionDates[sessionDates.length - 1].toISOString().split('T')[0],
+                                start: formatYMDFromUTCDate(sessionDates[0]),
+                                end: formatYMDFromUTCDate(sessionDates[sessionDates.length - 1]),
                                 sessions: sessionsCount,
-                                sessionDates: sessionDates.map(d => d.toLocaleDateString('en-AU', {day: 'numeric', month: 'long', year: 'numeric'})) 
+                                sessionDates: sessionDates.map(d => d.toLocaleDateString('en-AU', {day: 'numeric', month: 'long', year: 'numeric'}))
                             });
+
                             
                             setSelectedTimes({ 
                                 monFri: preferredTimeMonFri, 
@@ -257,8 +302,9 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
     const daysInMonth = endOfMonth.getDate();
     const firstDayOfWeek = startOfMonth.getDay();
 
-    // MODIFIED: handleDaySelect logic (Corrected end date calculation)
+    // MODIFIED: handleDaySelect logic 
     const handleDaySelect = (day) => {
+        // The initially selected day (e.g., Dec 11)
         const selectedDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
 
         // --- Sunday Check ---
@@ -271,32 +317,55 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
             setSelectedDay(selectedDate);
             setSelectedTimes({ monFri: null, saturday: null }); // Reset times on new date selection
             setShowCalendar(false);
+            console.log('[STEP2 SELECT DEBUG] Selected Date:', selectedDate.toLocaleDateString('en-AU'));
+
 
             if (isStarterPack) {
                 // Build list of session dates (skip Sundays) until we have 6 sessions.
                 const sessionsCount = 6;
                 const sessionDates = [];
-                let currentDate = new Date(selectedDate.getTime());
+                
+                // CRITICAL FIX: Reconstruct selectedDate as UTC midnight for calculation consistency
+                const year = selectedDate.getFullYear();
+                const month = selectedDate.getMonth();
+                const date = selectedDate.getDate();
+
+                // Use UTC construction to ensure day counting is accurate regardless of local timezone offset
+                let currentDate = new Date(Date.UTC(year, month, date));
 
                 // Keep pushing non-Sunday dates until sessionsCount reached
                 while (sessionDates.length < sessionsCount) {
-                    // Check if currentDate is not Sunday (0)
-                    if (currentDate.getDay() !== 0) {
-                        // Clone the date and push to array
-                        sessionDates.push(new Date(currentDate.getTime()));
+                    // Check if currentDate is not Sunday (0) using UTC day getter
+                    if (currentDate.getUTCDay() !== 0) {
+                        // Create a local date object for formatting
+                        const yyyy = currentDate.getUTCFullYear();
+                        const mm = currentDate.getUTCMonth();
+                        const dd = currentDate.getUTCDate();
+                        sessionDates.push(new Date(yyyy, mm, dd));
                     }
-                    // Move to next calendar day
-                    currentDate.setDate(currentDate.getDate() + 1);
+                    // Move to next calendar day using UTC setter
+                    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
                 }
-
+                
                 const endDate = sessionDates[sessionDates.length - 1];
 
+                // Helper to format YYYY-MM-DD string from a Date object created with local components matching the UTC date
+                const formatYMDFromLocalDate = (localDateObj) => {
+                    const y = localDateObj.getFullYear();
+                    const m = String(localDateObj.getMonth() + 1).padStart(2, '0');
+                    const d = String(localDateObj.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                };
+
+                // Convert to a nice display format for the preview box
+                const displayDateOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+                const formattedSessionDates = sessionDates.map(d => d.toLocaleDateString('en-AU', displayDateOptions));
+
                 setStarterPackDateRange({
-                    start: sessionDates[0].toISOString().split('T')[0],
-                    end: endDate.toISOString().split('T')[0],
+                    start: formatYMDFromLocalDate(sessionDates[0]),
+                    end: formatYMDFromLocalDate(endDate),
                     sessions: sessionsCount,
-                    // Format for display
-                    sessionDates: sessionDates.map(d => d.toLocaleDateString('en-AU', {day: 'numeric', month: 'long', year: 'numeric'})) 
+                    sessionDates: formattedSessionDates 
                 });
             }
 
@@ -304,6 +373,7 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
             setIsModalOpen(true);
         }
     };
+
 
     // ✅ CORRECTED: Logic for preventing month change outside the tomorrow-to-maxDate range.
     const handleMonthChange = (direction) => {
@@ -338,6 +408,59 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
 
     const isStarterPackReady = isStarterPack ? selectedTimes.monFri && selectedTimes.saturday : true;
 
+    // 🚨 PROMO CODE HANDLERS 🚨
+    const handleApplyPromoCode = async () => {
+        setPromoMessage(null);
+        setIsPromoLoading(true);
+        setLocalError(null);
+        const codeToValidate = promoInput.toUpperCase().trim();
+        
+        if (!codeToValidate) {
+            setPromoMessage({ text: 'Please enter a code.', type: 'error' });
+            setIsPromoLoading(false);
+            return;
+        }
+        
+        if (codeToValidate === promoCodeData.code) {
+             setPromoMessage({ text: 'Code is already applied.', type: 'success' });
+             setIsPromoLoading(false);
+             return;
+        }
+
+        try {
+            const token = await getToken();
+            const response = await axios.post(
+                PROMO_VALIDATE_API,
+                { code: codeToValidate },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            // Success: Apply discount
+            const discountPercent = response.data.discountPercentage;
+            onPromoCodeUpdate({
+                code: codeToValidate,
+                discountPercentage: discountPercent,
+            });
+            setPromoMessage({ text: response.data.message || 'Promo code applied!', type: 'success' });
+
+        } catch (error) {
+            // Failure: Reset discount and show error
+            onPromoCodeUpdate({ code: null, discountPercentage: 0 });
+            setPromoMessage({
+                text: error.response?.data?.message || 'Error applying code.',
+                type: 'error',
+            });
+        } finally {
+            setIsPromoLoading(false);
+        }
+    };
+    
+    const handleRemovePromoCode = () => {
+        onPromoCodeUpdate({ code: null, discountPercentage: 0, discountAmount: 0 });
+        setPromoInput('');
+        setPromoMessage({ text: 'Promo code removed.', type: 'info' });
+    }
+    // 🚨 END PROMO CODE HANDLERS 🚨
     
     // 🛑 MODIFIED: handleSubmit to go to the next step 🛑
     const handleSubmit = () => {
@@ -358,12 +481,16 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
 
         // Determine scheduling payload based on purchase type
         let scheduleDetails = {};
-        const selectedDayString = selectedDay.toISOString().split('T')[0]; // YYYY-MM-DD
+        // NEW (Fixed): Use local components to build the YYYY-MM-DD string
+        const yyyy = selectedDay.getFullYear();
+        const mm = String(selectedDay.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+        const dd = String(selectedDay.getDate()).padStart(2, '0');
+        const selectedDayString = `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD (Local) // YYYY-MM-DD
         
         if (isStarterPack) {
             // Updated payload for Starter Pack
             scheduleDetails = {
-                preferredDate: selectedDayString, // Use the start date ISO string
+                preferredDate: selectedDayString, // Use the selected start date YYYY-MM-DD string
                 preferredWeekStart: starterPackDateRange.start, // First date of 6-session run
                 preferredWeekEnd: starterPackDateRange.end,
                 preferredTime: null, // Only used for Trial. Send null.
@@ -395,10 +522,13 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
             scheduleDetails: scheduleDetails,
             studentDetails: studentDetails,
             guardianDetails: guardianDetails,
-            paymentAmount: productDetails.price // Pass the final amount to charge
+            // 🚨 CRITICAL: Pass the FINAL discounted amount 🚨
+            paymentAmount: finalPaymentAmount, 
+            // 🚨 PASS PROMO CODE DATA 🚨
+            promoCode: promoCodeData.code,
+            appliedDiscountAmount: promoCodeData.discountAmount,
         };
         
-        // Call onNext to move to Step 3 (Payment) and pass the full data payload
         onNext(payloadForNextStep);
     };
     
@@ -419,7 +549,8 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
     const formattedStartDate = selectedDay ? selectedDay.toLocaleDateString('en-AU', dateOnlyOptions) : 'Click to select a start date';
 
     // NEW: Combined booking ready check
-    const isBookingReady = selectedDay && (isStarterPack ? isStarterPackReady : selectedTimes.monFri) && postcode;
+    const isTimeReady = isStarterPack ? isStarterPackReady : selectedTimes.monFri;
+    const isBookingReady = selectedDay && isTimeReady && postcode;
 
     return (
         <div className="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-lg border border-gray-200">
@@ -532,8 +663,8 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
                             <h4 className="font-bold text-blue-800 mb-1">Your 6-Session Dates:</h4>
                             <p className="text-sm text-blue-700 font-medium">
                                  {starterPackDateRange.sessionDates
-                                     ? starterPackDateRange.sessionDates.join(', ')
-                                     : `${selectedDay.toLocaleDateString('en-AU', dateOnlyOptions)} to ${new Date(starterPackDateRange.end).toLocaleDateString('en-AU', dateOnlyOptions)}`}
+                                    ? starterPackDateRange.sessionDates.join(', ')
+                                    : `${selectedDay.toLocaleDateString('en-AU', dateOnlyOptions)} to ${new Date(starterPackDateRange.end).toLocaleDateString('en-AU', dateOnlyOptions)}`}
                             </p>
                             <p className='text-xs text-blue-600 mt-1'>
                                  *Your sessions will run daily, skipping any Sundays.
@@ -589,6 +720,68 @@ const Step2Schedule = ({ quizData, purchaseType, onNext, onBack, studentDetails,
                     onChange={(e) => setPostcode(e.target.value)}
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                 />
+            </div>
+            
+            {/* 🚨 NEW: PROMO CODE SECTION 🚨 */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center mb-4">
+                    <Tag size={20} className="mr-2 text-orange-500" />
+                    Apply Promo Code
+                </h3>
+
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        placeholder="e.g., PRIMEMENTOR2026"
+                        value={promoInput}
+                        onChange={(e) => {
+                            setPromoInput(e.target.value.toUpperCase());
+                            setPromoMessage(null); // Clear message on change
+                        }}
+                        className="flex-1 border p-3 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        disabled={isPromoLoading || promoCodeData.code}
+                    />
+                    
+                    {promoCodeData.code ? (
+                        <button
+                            type="button"
+                            onClick={handleRemovePromoCode}
+                            disabled={isPromoLoading}
+                            className="flex items-center bg-red-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600 transition"
+                        >
+                            <XCircle size={20} className="mr-1" /> Remove
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleApplyPromoCode}
+                            disabled={isPromoLoading || !promoInput.trim()}
+                            className="flex items-center bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition"
+                        >
+                            {isPromoLoading ? (
+                                <Loader2 size={20} className="animate-spin" />
+                            ) : (
+                                <>Apply</>
+                            )}
+                        </button>
+                    )}
+                </div>
+
+                {promoMessage && (
+                    <p className={`mt-2 text-sm flex items-center ${promoMessage.type === 'success' ? 'text-green-600' : promoMessage.type === 'error' ? 'text-red-600' : 'text-gray-600'}`}>
+                        {(promoMessage.type === 'success' || promoMessage.type === 'error') && (promoMessage.type === 'success' ? <CheckCircle size={16} className="mr-1" /> : <XCircle size={16} className="mr-1" />)}
+                        {promoMessage.text}
+                    </p>
+                )}
+            </div>
+            {/* 🚨 END PROMO CODE SECTION 🚨 */}
+
+            {/* Final Price Display before moving to Payment */}
+            <div className="mt-6 p-4 bg-gray-100 rounded-lg flex justify-between items-center">
+                <span className="font-bold text-lg text-gray-800">Total Amount Due:</span>
+                <span className={`font-extrabold text-xl ${promoCodeData.code ? 'text-red-600' : 'text-gray-800'}`}>
+                    ${finalPaymentAmount.toFixed(2)} AUD
+                </span>
             </div>
 
             <button

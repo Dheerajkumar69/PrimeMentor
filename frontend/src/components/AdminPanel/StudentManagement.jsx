@@ -7,9 +7,25 @@ import Select from 'react-select';
 
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
+// MODIFIED: Use 'en-AU' locale for date display consistent with Australian context
 const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    
+    try {
+        // Assuming dateString is YYYY-MM-DD
+        const parts = dateString.split("-").map(Number);
+        // Construct date using local components
+        const date = new Date(parts[0], parts[1] - 1, parts[2]);
+        if (isNaN(date.getTime())) return "Invalid Date";
+        
+        return date.toLocaleDateString('en-AU', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+    } catch (e) {
+        return "N/A";
+    }
 };
 
 // --- Sub-Component: Student Row (KEEP AS IS) ---
@@ -83,6 +99,7 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
     })), [teachers]);
 
     const handleAssign = async () => {
+        // ... (handleAssign logic remains UNCHANGED)
         if (!selectedTeacherId) {
             setError('Please select a teacher.');
             return;
@@ -116,9 +133,13 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
     };
 
     const isTrial = request.purchaseType === 'TRIAL';
-    const preferredSchedule = isTrial 
-        ? `${formatDate(request.preferredDate)} @ ${request.scheduleTime}` 
-        : `Weekly (M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})`;
+    
+    // 🛑 CRITICAL FIX: Display the specific date and time for all sessions 🛑
+    const preferredSchedule = `${formatDate(request.preferredDate)} @ ${request.scheduleTime}`;
+    
+    // Only show the full Mon-Fri/Sat preference if it's a Starter Pack, for context
+    const weeklyContext = !isTrial && request.preferredTimeMonFri ? `(M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})` : '';
+
 
     return (
         <tr className="border-t hover:bg-yellow-50 transition duration-150 align-top bg-white">
@@ -135,7 +156,11 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
             </td>
             <td className="px-6 py-4 text-sm text-gray-600">
                 <div className='text-xs'>
-                    <p className='font-medium flex items-center'><Clock className='w-3 h-3 mr-1' /> {preferredSchedule}</p>
+                    <p className='font-medium flex items-center'>
+                        <Clock className='w-3 h-3 mr-1' /> 
+                        {preferredSchedule}
+                    </p>
+                    {weeklyContext && <p className='text-gray-500 italic mt-0.5'>{weeklyContext}</p>}
                     <p className='text-gray-500'>Postcode: {request.postcode || 'N/A'}</p>
                     <p className='text-gray-500'>Requested: {formatDate(request.enrollmentDate)}</p>
                 </div>
@@ -173,6 +198,7 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
     const [showInput, setShowInput] = useState(!request.zoomMeetingLink); // Show input if link is missing initially
 
     const handleAddZoomLink = async () => {
+        // ... (handleAddZoomLink logic remains UNCHANGED)
         if (!zoomLink || !zoomLink.startsWith('http')) {
             setError('Please enter a valid Zoom meeting URL (must start with http/https).');
             return;
@@ -207,15 +233,19 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
     };
 
     const isTrial = request.purchaseType === 'TRIAL';
-    const preferredSchedule = isTrial 
-        ? `${formatDate(request.preferredDate)} @ ${request.scheduleTime}` 
-        : `Weekly (M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})`;
+    // 🛑 CRITICAL FIX: Display the specific date and time for all sessions 🛑
+    const preferredSchedule = `${formatDate(request.preferredDate)} @ ${request.scheduleTime}`;
     
-    // 🛑 FIX START: Safely extract teacher name from the populated object 🛑
-    const teacherDisplay = request.teacherId 
-        ? (typeof request.teacherId === 'object' ? request.teacherId.name : request.teacherId)
-        : 'Unassigned';
-    // 🛑 FIX END 🛑
+    // Only show the full Mon-Fri/Sat preference if it's a Starter Pack, for context
+    const weeklyContext = !isTrial && request.preferredTimeMonFri ? `(M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})` : '';
+
+
+    
+    // 🛑 FIX START: Safely extract teacher name from the populated object 🛑
+    const teacherDisplay = request.teacherId 
+        ? (typeof request.teacherId === 'object' ? request.teacherId.name : request.teacherId)
+        : 'Unassigned';
+    // 🛑 FIX END 🛑
 
     return (
         <tr className="border-t hover:bg-green-50 transition duration-150 align-top bg-white">
@@ -230,6 +260,7 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
             <td className="px-6 py-4 text-sm text-gray-700">
                 <span className="font-bold">{request.courseTitle}</span>
                 <span className='block text-xs text-gray-500 mt-1'>Schedule: {preferredSchedule}</span>
+                {weeklyContext && <span className='block text-xs text-gray-500 italic mt-0.5'>{weeklyContext}</span>}
             </td>
             <td className="px-6 py-4 text-sm text-gray-600">
                 {error && <p className="text-red-500 text-xs mb-2">{error}</p>}

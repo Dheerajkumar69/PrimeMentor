@@ -32,7 +32,9 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
             parentFirstName, parentLastName, parentEmail,
             contactNumber,
             subject,
-            class: studentClass, // Use studentClass here
+            class: studentClass,
+            // Explicitly set this field for confirmation
+            isFreeAssessment: true, 
         });
 
         res.status(201).json({ 
@@ -50,11 +52,12 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
     }
 });
 
-// @desc    Get all assessment requests for the admin panel (unchanged)
+// @desc    Get all *free* assessment requests for the admin panel
 // @route   GET /api/assessments
 // @access  Private (Admin Only)
 const getAllAssessments = asyncHandler(async (req, res) => {
-    const assessments = await Assessment.find({}).sort({ createdAt: -1 });
+    // 🛑 FIX: Add query filter to only fetch documents where isFreeAssessment is true
+    const assessments = await Assessment.find({ isFreeAssessment: true }).sort({ createdAt: -1 });
     res.status(200).json(assessments);
 });
 

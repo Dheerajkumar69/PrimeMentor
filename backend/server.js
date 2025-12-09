@@ -9,6 +9,7 @@ import userRoutes from './routes/userRoutes.js';
 import assessmentRoutes from './routes/assessmentRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 import { clerkMiddleware } from '@clerk/express';
 
 dotenv.config();
@@ -84,6 +85,10 @@ app.use('/api/admin', adminRoutes);
 
 console.log('✅ Registering contact routes...');
 app.use('/api/contact', contactRoutes);
+
+console.log('✅ Registering chat routes...');
+app.use('/api/chat', chatRoutes);
+
 
 // Root
 app.get('/', (req, res) => {

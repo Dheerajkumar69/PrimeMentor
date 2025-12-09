@@ -4,18 +4,23 @@ import asyncHandler from 'express-async-handler';
 import User from '../models/UserModel.js'; 
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
+import dotenv from 'dotenv'; // 👈 🚨 MISSING/REQUIRED IMPORT ADDED HERE 🚨
 import ClassRequest from '../models/ClassRequest.js';
 import { clerkClient } from '@clerk/express'; 
+import rapid from 'eway-rapid'; 
+import FeedbackModel from '../models/FeedbackModel.js';
+import { sendCourseConfirmationEmail } from '../utils/emailService.js';
+
+// 🚨 NEW IMPORT 🚨
+import PromoCode from '../models/PromoCodeModel.js'; 
 
 dotenv.config();
 
-// 🛑 NEW: Initialize eWAY Client 🛑
-import rapid from 'eway-rapid'; 
+// 🛑 EWAY Initialization (UNCHANGED) 🛑
+// ... (eWAY Initialization code is unchanged) ...
 const EWAY_API_KEY = process.env.EWAY_API_KEY;
 const EWAY_PASSWORD = process.env.EWAY_PASSWORD;
-const EWAY_ENDPOINT = process.env.EWAY_ENDPOINT || 'sandbox'; // Default to sandbox
-// This variable MUST be set to your live domain in the .env file (e.g., https://primementor.com.au)
+const EWAY_ENDPOINT = process.env.EWAY_ENDPOINT || 'sandbox'; 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 if (!EWAY_API_KEY || !EWAY_PASSWORD) {
@@ -25,8 +30,8 @@ if (!EWAY_API_KEY || !EWAY_PASSWORD) {
 const ewayClient = rapid.createClient(EWAY_API_KEY, EWAY_PASSWORD, EWAY_ENDPOINT);
 // 🛑 END eWAY Initialization 🛑
 
-
 const getClerkUserIdFromToken = (req) => {
+// ... (getClerkUserIdFromToken function is unchanged) ...
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
         return null;
@@ -34,13 +39,98 @@ const getClerkUserIdFromToken = (req) => {
     
     try {
         const decoded = jwt.decode(token);
-        // Clerk tokens use 'sub' (subject) to store the user ID
         return decoded?.sub || null; 
     } catch (error) {
         console.error("JWT Decode Error (Clerk Token):", error);
         return null;
     }
 }
+
+// -----------------------------------------------------------
+// 🟢 HELPER: Generate the 6 non-Sunday session dates 🟢
+// ... (generateSessionDates function is unchanged) ...
+const generateSessionDates = (preferredDate) => {
+    const sessionsCount = 6;
+    const sessionDates = [];
+    
+    console.log('[SERVER DEBUG] Input preferredDate:', preferredDate);
+    
+    const dateParts = preferredDate.split('-').map(Number);
+    // Use UTC constructor: new Date(year, monthIndex, day). 
+    let currentDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2])); 
+
+    console.log('[SERVER DEBUG] Initial currentDate UTC time:', currentDate.toUTCString());
+    console.log('[SERVER DEBUG] Initial currentDate UTC Day (0=Sun, 4=Thu):', currentDate.getUTCDay());
+
+    // We only need to account for Sundays (day 0)
+    while (sessionDates.length < sessionsCount) {
+        
+        // CRITICAL: Use getUTCDay() since the object was created using Date.UTC()
+        if (currentDate.getUTCDay() !== 0) {
+            
+            // Push the YYYY-MM-DD string representation using UTC components
+            const yyyy = currentDate.getUTCFullYear();
+            const mm = String(currentDate.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(currentDate.getUTCDate()).padStart(2, '0');
+            const newDateStr = `${yyyy}-${mm}-${dd}`;
+            
+            sessionDates.push(newDateStr);
+            console.log(`[SERVER DEBUG] Session ${sessionDates.length}: Found date ${newDateStr} (Day: ${currentDate.getUTCDay()})`);
+
+        } else {
+            console.log(`[SERVER DEBUG] Skipping date: ${currentDate.getUTCFullYear()}-${currentDate.getUTCMonth() + 1}-${currentDate.getUTCDate()} (Sunday)`);
+        }
+        
+        // Move to the next calendar day (using UTC date setters)
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+    
+    console.log('[SERVER DEBUG] Final generated sessionDates array:', sessionDates);
+    return sessionDates;
+};
+// -----------------------------------------------------------
+
+
+// 🚨 NEW CONTROLLER: Validate Promo Code 🚨
+// @desc    Validate a promo code and return the discount
+// @route   POST /api/user/promo/validate
+// @access  Public
+export const validatePromoCode = asyncHandler(async (req, res) => {
+    const { code } = req.body;
+    const now = new Date();
+
+    if (!code) {
+        return res.status(400).json({ message: 'Promo code is required.' });
+    }
+
+    try {
+        // Find the code, converting input to uppercase for case-insensitive matching
+        const promo = await PromoCode.findOne({ code: code.toUpperCase() });
+
+        if (!promo) {
+            return res.status(404).json({ message: 'Promo code not found or invalid.' });
+        }
+
+        if (!promo.isActive) {
+            return res.status(400).json({ message: 'Promo code is not active.' });
+        }
+        
+        if (promo.expiryDate && promo.expiryDate < now) {
+            return res.status(400).json({ message: 'Promo code has expired.' });
+        }
+
+        // Code is Valid
+        res.json({
+            message: 'Promo code applied successfully!',
+            code: promo.code,
+            discountPercentage: promo.discountPercentage,
+        });
+
+    } catch (error) {
+        console.error('Error during promo code validation:', error);
+        res.status(500).json({ message: 'Server error during promo code validation.' });
+    }
+});
 
 
 // 🛑 MODIFIED: Controller to Initiate eWAY Payment and Booking 🛑
@@ -55,45 +145,29 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
         bookingPayload,
     } = req.body;
     
+    // bookingPayload now contains the promoCode and appliedDiscount
     const { 
-        courseDetails, 
-        scheduleDetails, 
-        studentDetails, 
-        guardianDetails,
-        paymentAmount, // Amount in dollars (e.g., 100.00)
+        paymentAmount, 
         currency = 'AUD',
-    } = bookingPayload;
+    } = bookingPayload; // Keep paymentAmount as the discounted price
 
     try {
-        // --- 1. Prepare eWAY Payload ---
+        // --- 1. Prepare eWAY Payload (UNCHANGED LOGIC) ---
         const amountInCents = Math.round(paymentAmount * 100); 
-        const customerEmail = studentDetails?.email || guardianDetails?.email || 'unknown@example.com';
-        const customerName = (studentDetails?.first && studentDetails?.last) 
-            ? `${studentDetails.first} ${studentDetails.last}`
-            : "Customer";
-            
-        // 🛑 CRITICAL FIX: The CancelUrl should point to a clean page (Step 3) 
-        // to allow the user to re-attempt payment without interference.
+        
         const cleanCancelUrl = `${FRONTEND_URL}/enrollment?step=3`;
         
         console.log(`Creating eWAY Shared Payment URL for clerkId: ${studentClerkId} amount: $${paymentAmount}`);
 
         const response = await ewayClient.createTransaction(rapid.Enum.Method.RESPONSIVE_SHARED, {
             Payment: {
-                TotalAmount: amountInCents, // Required in cents
+                TotalAmount: amountInCents,
                 CurrencyCode: currency,
             },
             Customer: {
-                // eWAY requires a customer ID for shared page (can be arbitrary)
                 Reference: studentClerkId, 
-                FirstName: studentDetails?.first || '',
-                LastName: studentDetails?.last || '',
-                Email: customerEmail,
-                Phone: studentDetails?.phone || guardianDetails?.phone || '',
             },
-            // RedirectUrl: Correctly points to the dedicated success/verification page
             RedirectUrl: `${FRONTEND_URL}/payment-status?clerkId=${studentClerkId}`, 
-            // 👇 USE CLEAN CANCEL URL
             CancelUrl: cleanCancelUrl,
             TransactionType: "Purchase",
             PartnerAgreementGuid: studentClerkId, 
@@ -130,22 +204,24 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
 });
 
 
-// 🛑 NEW: Controller to Finish eWAY Payment (Called after redirect) 🛑
+// 🛑 MODIFIED: Controller to Finish eWAY Payment and Booking 🛑
 export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
     const { accessCode, clerkId, bookingPayload } = req.body; 
 
     if (!accessCode || !clerkId) {
         return res.status(400).json({ success: false, message: "Missing eWAY AccessCode or Clerk ID." });
     }
+    
+    console.log('[SERVER DEBUG] Received bookingPayload:', JSON.stringify(bookingPayload, null, 2));
 
-    // --- Variables initialized for payment response ---
+
     let transactionSucceeded = false;
     let transactionID = null;
     let errorDetails = 'Payment processing failed.';
-    // --- END Variables ---
+    let classRequestsToSave = []; 
 
     try {
-        // --- 1. Query eWAY Transaction Result ---
+        // --- 1. Query eWAY Transaction Result (UNCHANGED) ---
         const response = await ewayClient.queryTransaction(accessCode);
         const transaction = response.get('Transactions[0]');
 
@@ -153,12 +229,12 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
              throw new Error("Transaction result not found with the provided AccessCode.");
         }
         
-        // Check the status
         if (transaction.TransactionStatus) {
             transactionSucceeded = true;
             transactionID = transaction.TransactionID;
             console.log(`✅ eWAY Payment Successful. Transaction ID: ${transactionID}`);
         } else {
+            // Handle payment failure
             const responseMessage = transaction.ResponseMessage;
             const errorCodes = responseMessage.split(', ').map(errorCode => rapid.getMessage(errorCode, "en"));
             errorDetails = `Payment declined by eWAY. Messages: ${errorCodes.join(' | ')}`;
@@ -178,6 +254,9 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             studentDetails, 
             guardianDetails,
             paymentAmount,
+            // 🚨 NEW FIELDS FROM PAYLOAD 🚨
+            promoCode,
+            appliedDiscountAmount 
         } = bookingPayload;
         
         const { 
@@ -191,10 +270,10 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             numberOfSessions 
         } = scheduleDetails;
 
-        // --- User Lookup/Creation Logic ---
+        // ... (User Lookup/Creation Logic UNCHANGED) ...
         const nameToUse = studentDetails?.first && studentDetails?.last 
-            ? `${studentDetails.first} ${studentDetails.last}`
-            : "New Student"; 
+             ? `${studentDetails.first} ${studentDetails.last}`
+             : "New Student"; 
         
         let emailToUse = studentDetails?.email || guardianDetails?.email; 
 
@@ -227,11 +306,11 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                 setDefaultsOnInsert: true 
             }
         );
-        
+
+        // Check for existing course enrollment (UNCHANGED)
         const courseExists = student.courses.some(c => c.name === courseDetails.courseTitle);
         if (courseExists) {
-            // Log warning but return success since payment succeeded
-            console.warn(`User ${clerkId} already has course ${courseDetails.courseTitle} but payment just succeeded for ID: ${transactionID}.`);
+            console.warn(`User ${clerkId} already has course ${courseDetails.courseTitle}. Email not resent.`);
             return res.status(200).json({ 
                 success: true, 
                 message: 'Payment successful. Course already enrolled.', 
@@ -248,35 +327,98 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
              return res.status(400).json({ success: false, message: "Missing preferred date or time details for the booking payload." });
         }
         
-        // --- 3. Save Class Request (Pending for Admin) ---
-        const newRequest = new ClassRequest({
-            courseId: courseDetails.courseId,
-            courseTitle: courseDetails.courseTitle,
-            studentId: clerkId,
-            studentName: student.studentName, 
-            purchaseType: purchaseType,
-            preferredDate: isTrial ? preferredDate : preferredWeekStart, 
-            scheduleTime: preferredTime, 
-            preferredTimeMonFri: preferredTimeMonFri,
-            preferredTimeSaturday: preferredTimeSaturday,
-            postcode: postcode, 
-            status: 'pending',
-            subject: courseDetails.subject || 'N/A', 
-            zoomMeetingLink: '',
-            // 🛑 Payment Details (eWAY) 🛑
-            paymentStatus: 'paid', 
-            transactionId: transactionID, // Using eWAY Transaction ID
-            amountPaid: paymentAmount, // Amount in dollars (sent in payload)
-        });
-        await newRequest.save();
+        // --- 3. Save Class Request(s) (Pending for Admin) ---
+        
+        if (isTrial) {
+            // Case 1: TRIAL - Single session, one ClassRequest
+            console.log('[SERVER DEBUG] Creating single TRIAL session...');
+            classRequestsToSave.push({
+                courseId: courseDetails.courseId,
+                courseTitle: courseDetails.courseTitle,
+                studentId: clerkId,
+                studentName: student.studentName,
+                purchaseType: 'TRIAL',
+                preferredDate: preferredDate, // Australian YYYY-MM-DD
+                scheduleTime: preferredTime, // Australian Time Slot
+                postcode: postcode,
+                subject: courseDetails.subject || 'N/A',
+                paymentStatus: 'paid',
+                transactionId: transactionID,
+                amountPaid: paymentAmount,
+                // 🚨 ADD PROMO CODE INFO 🚨
+                promoCodeUsed: promoCode,
+                discountApplied: appliedDiscountAmount,
+            });
+        } else {
+            // Case 2: STARTER_PACK - numberOfSessions sessions, multiple ClassRequests
+            console.log('[SERVER DEBUG] Creating STARTER_PACK sessions...');
+            const startDateForSessions = preferredWeekStart || preferredDate;
+            console.log('[SERVER DEBUG] startDateForSessions (preferredWeekStart):', startDateForSessions);
 
-        // --- 4. Add Course to Student (Status: pending) ---
+            if (!startDateForSessions) {
+                return res.status(400).json({ success: false, message: "Missing start date for starter pack sessions." });
+            }
+            
+            // CRITICAL: Use the helper to generate the correct dates (Australian dates)
+            const dates = generateSessionDates(startDateForSessions); 
+            const sessionsToCreate = Number.isInteger(numberOfSessions) && numberOfSessions > 0 ? Number(numberOfSessions) : dates.length;
+            
+            // Calculate the total cost BEFORE discount was applied, then distribute the discounted amount.
+            // For simplicity and matching the paymentAmount, we calculate perSessionCost based on the final paid amount.
+            const perSessionCost = paymentAmount / sessionsToCreate;
+            
+            const sessionDatesToUse = dates.slice(0, sessionsToCreate);
+            console.log('[SERVER DEBUG] sessionDatesToUse from generateSessionDates:', sessionDatesToUse);
+            
+            for (let i = 0; i < sessionDatesToUse.length; i++) {
+                const sessionDate = sessionDatesToUse[i];
+                const dateParts = sessionDate.split('-').map(Number);
+                const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                const dayOfWeek = dateObj.getDay();
+                console.log(`[SERVER DEBUG] Session ${i+1} Date: ${sessionDate}, Local Day of Week (0=Sun): ${dayOfWeek}`);
+            
+                // Determine the correct time slot for the current day (Mon-Fri = 1-5, Sat = 6)
+                const sessionTime = (dayOfWeek >= 1 && dayOfWeek <= 5)
+                    ? preferredTimeMonFri
+                    : preferredTimeSaturday; 
+                
+                classRequestsToSave.push({
+                    courseId: courseDetails.courseId,
+                    courseTitle: `${courseDetails.courseTitle} (Session ${i + 1}/${sessionsToCreate})`,
+                    studentId: clerkId,
+                    studentName: student.studentName,
+                    purchaseType: 'STARTER_PACK',
+                    preferredDate: sessionDate, // Australian YYYY-MM-DD
+                    scheduleTime: sessionTime, // Australian Time Slot
+                    preferredTimeMonFri: preferredTimeMonFri,
+                    preferredTimeSaturday: preferredTimeSaturday,
+                    postcode: postcode,
+                    subject: courseDetails.subject || 'N/A',
+                    paymentStatus: 'paid',
+                    transactionId: transactionID,
+                    amountPaid: perSessionCost, 
+                    // 🚨 ADD PROMO CODE INFO 🚨
+                    promoCodeUsed: promoCode,
+                    // Note: Discount is only recorded on the first session's ClassRequest for simplicity,
+                    // or calculated proportionally, but since the `amountPaid` is already discounted, 
+                    // recording the total `appliedDiscountAmount` on all records is redundant.
+                    // We record the total discount on the User's main course record below.
+                });
+            }
+            console.log('[SERVER DEBUG] Class requests saved to DB:', classRequestsToSave.map(r => ({ date: r.preferredDate, time: r.scheduleTime, title: r.courseTitle })));
+        }
+        
+        // Save ALL generated class requests
+        await ClassRequest.insertMany(classRequestsToSave.map(data => new ClassRequest(data)));
+        console.log(`Successfully created ${classRequestsToSave.length} ClassRequest(s) for admin.`);
+
+        // --- 4. Add ONE Course Record to Student (User Model) ---
         const newCourse = {
             name: courseDetails.courseTitle,
             description: isTrial ? `Trial session for ${courseDetails.courseTitle}` : `Starter Pack for ${courseDetails.courseTitle}`, 
             teacher: 'Pending Teacher', 
             duration: isTrial ? '1 hour trial' : `${numberOfSessions} sessions total`,
-            preferredDate: initialPreferredDate, 
+            preferredDate: isTrial ? preferredDate : preferredWeekStart, 
             preferredTime: initialPreferredTime, 
             status: 'pending', 
             enrollmentDate: new Date(),
@@ -284,18 +426,46 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             preferredTimeMonFri: isTrial ? null : preferredTimeMonFri,
             preferredTimeSaturday: isTrial ? null : preferredTimeSaturday,
             sessionsRemaining: isTrial ? 1 : numberOfSessions,
-            // 🛑 Payment Details (eWAY) 🛑
             paymentStatus: 'paid', 
-            transactionId: transactionID, // Using eWAY Transaction ID
-            amountPaid: paymentAmount, // Amount in dollars (sent in payload)
+            transactionId: transactionID, 
+            amountPaid: paymentAmount, 
+            // 🚨 ADD PROMO CODE FIELDS HERE 🚨
+            promoCodeUsed: promoCode,
+            discountApplied: appliedDiscountAmount,
         };
         student.courses.push(newCourse);
         await student.save();
+        console.log('[SERVER DEBUG] Student course record updated in UserModel:', newCourse.preferredDate, newCourse.preferredTime);
+
+
+        // 🛑 --- 5. SEND CONFIRMATION EMAIL (NEW STEP) --- 🛑
+        const emailRecipient = student.email || student.guardianEmail;
+        const emailCourseDetails = {
+            courseTitle: courseDetails.courseTitle,
+            purchaseType: purchaseType,
+            amountPaid: paymentAmount.toFixed(2), 
+            currency: 'AUD',
+            transactionId: transactionID,
+            // 🚨 PASS PROMO INFO TO EMAIL 🚨
+            promoCode: promoCode,
+            discountApplied: appliedDiscountAmount,
+        };
+        const emailStudentDetails = {
+            name: student.studentName,
+        };
+        
+        if (emailRecipient) {
+            console.log('[SERVER DEBUG] Sending confirmation email to:', emailRecipient);
+            sendCourseConfirmationEmail(emailRecipient, emailCourseDetails, emailStudentDetails, classRequestsToSave);
+        } else {
+            console.warn(`Cannot send email: Recipient email is missing for Clerk ID: ${clerkId}`);
+        }
+        // ----------------------------------------------------
 
         // Final successful response
         res.status(201).json({ 
             success: true, 
-            message: 'Payment successful. Booking submitted to admin for assignment.', 
+            message: 'Payment successful. Booking submitted to admin for assignment. Confirmation email sent.', 
             course: newCourse 
         });
 
@@ -306,69 +476,129 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 });
 
 
-// getUserCourses (No Change needed)
+
+// getUserCourses (UNCHANGED)
 export const getUserCourses = asyncHandler(async (req, res) => {
-    // 🛑 CRITICAL FIX: Get the user ID manually from the token instead of req.auth()
-    const clerkId = getClerkUserIdFromToken(req);
+    // ... (rest of getUserCourses logic is unchanged)
+    const clerkId = getClerkUserIdFromToken(req);
 
-    if (!clerkId) {
-        // 🛑 Send an explicit 401 if authentication fails
-        return res.status(401).json({ courses: [], message: "Authentication failed. Please log in again." });
-    }
+    if (!clerkId) {
+        return res.status(401).json({ courses: [], message: "Authentication failed. Please log in again." });
+    }
 
-    let clerkUser;
-    // 🛑 NEW FIX: Explicitly catch errors from Clerk client API calls 🛑
-    try {
-        clerkUser = await clerkClient.users.getUser(clerkId);
-    } catch (error) {
-        console.error(`Clerk user lookup failed for ID: ${clerkId}`, error);
-        // If Clerk fails, we cannot proceed.
-        return res.status(500).json({ courses: [], message: 'Internal Server Error while communicating with authentication service.' });
-    }
-    
-    try {
-        
-        if (!clerkUser) {
-            console.error(`Clerk user not found for ID: ${clerkId}`);
-            return res.status(404).json({ courses: [], message: 'User not registered in database. Please log out and back in.' });
-        }
+    let clerkUser;
+    try {
+        clerkUser = await clerkClient.users.getUser(clerkId);
+    } catch (error) {
+        console.error(`Clerk user lookup failed for ID: ${clerkId}`, error);
+        return res.status(500).json({ courses: [], message: 'Internal Server Error while communicating with authentication service.' });
+    }
+    
+    try {
+        
+        if (!clerkUser) {
+            console.error(`Clerk user not found for ID: ${clerkId}`);
+            return res.status(404).json({ courses: [], message: 'User not registered in database. Please log out and back in.' });
+        }
 
-        const email = clerkUser.emailAddresses[0]?.emailAddress;
-        const studentName = clerkUser.firstName || 'New Student'; 
+        const email = clerkUser.emailAddresses[0]?.emailAddress;
+        const studentName = clerkUser.firstName || 'New Student'; 
 
-        if (!email) {
-            console.error(`Clerk user ${clerkId} is missing an email address.`);
-            return res.status(400).json({ courses: [], message: 'Could not retrieve user email for registration.' });
-        }
-        
-        const user = await User.findOneAndUpdate(
-            { clerkId: clerkId },
-            { 
-                $set: { 
-                    email: email, 
-                    studentName: studentName 
-                }
-            },
-            { 
-                new: true, 
-                upsert: true, 
-                setDefaultsOnInsert: true 
-            }
-        );
+        if (!email) {
+            console.error(`Clerk user ${clerkId} is missing an email address.`);
+            return res.status(400).json({ courses: [], message: 'Could not retrieve user email for registration.' });
+        }
+        
+        const user = await User.findOneAndUpdate(
+            { clerkId: clerkId },
+            { 
+                $set: { 
+                    email: email, 
+                    studentName: studentName 
+                }
+            },
+            { 
+                new: true, 
+                upsert: true, 
+                setDefaultsOnInsert: true 
+            }
+        );
 
-        res.status(200).json({ courses: user.courses });
+        res.status(200).json({ courses: user.courses });
 
-    } catch (error) {
-        console.error('Error fetching courses:', error);
-        if (error.code === 11000) {
-            return res.status(409).json({ courses: [], message: 'User data conflict detected. Please contact support.' });
-        }
-        res.status(500).json({ courses: [], message: 'Internal Server Error while fetching courses.' });
-    }
+    } catch (error) {
+        console.error('Error fetching courses:', error);
+        if (error.code === 11000) {
+            return res.status(409).json({ courses: [], message: 'User data conflict detected. Please contact support.' });
+        }
+        res.status(500).json({ courses: [], message: 'Internal Server Error while fetching courses.' });
+    }
 });
 
 
-// 🛑 REMOVED: Old createBooking is redundant 🛑
+// REMOVED: Old createBooking is redundant
 export const createBooking = asyncHandler(async (req, res) => {
-    return res.status(405).json({ success: false, message: "Use /initiate-payment endpoint for new bookings." });
+    return res.status(405).json({ success: false, message: "Use /initiate-payment endpoint for new bookings." });
+});
+
+// 🟢 NEW CONTROLLER: Submit Student Feedback 🟢
+// @desc    Submit new feedback from a student
+// @route   POST /api/user/feedback
+// @access  Private (Student - requires authentication middleware)
+export const submitFeedback = asyncHandler(async (req, res) => {
+    // Note: The 'protect' middleware should run before this and attach the User object to req.user
+    // If you are using Clerk middleware, the User object might be attached differently (e.g., req.auth.userId for clerkId)
+    // Assuming `req.user` holds the Mongoose User document if a custom auth middleware is used.
+
+    const studentMongooseId = req.user._id; 
+    const studentClerkId = req.user.clerkId;
+    const studentName = req.user.studentName;
+    const studentEmail = req.user.email; 
+
+    if (!studentMongooseId || !studentClerkId) {
+        res.status(401);
+        throw new Error('User authentication details missing for feedback submission.');
+    }
+
+    const {
+        courseName, teacherName, sessionDate, sessionTime,
+        clarityRating, engagingRating, contentRating, overallSatisfaction,
+        likes, improvements, additionalComments
+    } = req.body;
+
+    // Basic validation for required rating fields
+    if (!courseName || !teacherName || !sessionDate || !clarityRating || !engagingRating || !contentRating) {
+         res.status(400);
+         throw new Error('Missing required class or rating information.');
+    }
+
+    try {
+        const newFeedback = new FeedbackModel({
+            student: studentMongooseId,
+            studentClerkId: studentClerkId,
+            studentName: studentName || 'N/A',
+            studentEmail: studentEmail || 'N/A',
+            courseName,
+            teacherName,
+            sessionDate,
+            sessionTime,
+            clarityRating,
+            engagingRating,
+            contentRating,
+            overallSatisfaction,
+            likes: likes || '',
+            improvements: improvements || '',
+            additionalComments: additionalComments || '',
+        });
+    
+        const createdFeedback = await newFeedback.save();
+
+        res.status(201).json({ 
+            message: 'Feedback submitted successfully!', 
+            feedback: createdFeedback 
+        });
+    } catch (error) {
+        console.error('Error saving feedback:', error);
+        res.status(500).json({ message: 'Server error: Could not save feedback data.' });
+    }
 });

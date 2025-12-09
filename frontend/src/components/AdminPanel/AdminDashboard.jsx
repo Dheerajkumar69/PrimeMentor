@@ -1,25 +1,26 @@
 // frontend/src/components/AdminPanel/AdminDashboard.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutDashboard, LogOut, BookOpen, Users as UsersIcon, Briefcase, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, LogOut, BookOpen, Users as UsersIcon, Briefcase, ClipboardList, History, MessageSquare } from 'lucide-react'; // 🛑 UPDATED ICONS
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 // Import management components
-import StudentManagement from './StudentManagement.jsx'; // Corrected spelling based on file path
+import StudentManagement from './StudentManagement.jsx'; 
 import TeacherManagement from './TeacherManagement.jsx'; 
-import SyllabusManagement from './SyllabusManagement.jsx'; // Corrected spelling based on file path
-// --- NEW IMPORT ---
-import AssessmentBookings from './AssessmentBookings.jsx';
+import SyllabusManagement from './SyllabusManagement.jsx'; 
+import AssessmentBookings from './AssessmentBookings.jsx'; 
+import PastClassSubmissions from './PastClassSubmissions.jsx'; 
+import FeedbackManagement from './FeedbackManagement.jsx'; // 🛑 NEW IMPORT
 
 // Base URL for API calls
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 /**
- * AdminDashboard component displays the administrative interface.
- * @param {object} props
- * @param {function} props.onLogout - Function to log the admin out and reset state.
- */
+ * AdminDashboard component displays the administrative interface.
+ * @param {object} props
+ * @param {function} props.onLogout - Function to log the admin out and reset state.
+ */
 export default function AdminDashboard({ onLogout, assessmentRequests: initialAssessmentRequests }) { 
     const navigate = useNavigate();
     
@@ -28,8 +29,8 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
     );
     
     // --- STATE MODIFICATION ---
-    const [activeTab, setActiveTab] = useState('assessment'); // Default to assessment
-    // Assessment requests will be managed inside the AssessmentBookings component now
+    // 🛑 NEW DEFAULT TAB (You requested to default to 'past-classes', changing to 'feedback' might be more impactful)
+    const [activeTab, setActiveTab] = useState('feedback'); // Default to the new feedback tab
     const [assessmentRequests, setAssessmentRequests] = useState(initialAssessmentRequests || []);
     
     // State for managed data
@@ -85,19 +86,17 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
         }
     };
 
-    // Fetch data based on the active tab change (Modified to only handle external fetches like Student/Syllabus/Requests)
+    // Fetch data based on the active tab change (Modified)
     useEffect(() => {
         if (isAuthenticated) { 
-            // Teacher data fetching is handled internally by TeacherManagement.jsx on mount
-            
             if (activeTab === 'student') {
                 fetchData('students', setStudents);
+            } else if (activeTab === 'teacher') {
+                fetchData('teachers', setTeachers);
             } else if (activeTab === 'syllabus') {
                 fetchData('syllabus', setSyllabus);
-            } else if (activeTab === 'requests') {
-                // Fetch class requests if needed
-            }
-            // 'assessment' data is now handled by AssessmentBookings component
+            } 
+            // 'assessment', 'past-classes', and 'feedback' components handle their own fetching.
         }
     }, [activeTab, isAuthenticated, onLogout]); 
 
@@ -120,29 +119,26 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
              return <div className='text-center p-10 text-red-600 font-medium'>Please log in to access the dashboard.</div>;
         }
         
-        // NOTE: We rely on the child component's internal loading state now, 
-        // especially for TeacherManagement.
-        
         if (fetchError) {
              return <div className='text-center p-10 text-red-600 font-medium'>{fetchError}</div>;
         }
 
         switch (activeTab) {
             case 'student':
-                // ✅ FIX: Added key={activeTab} to force remount
                 return <StudentManagement key={activeTab} students={students} />;
             case 'teacher':
-                // 🚀 CRITICAL FIX: Added key={activeTab} to force the component to remount 
-                // every time the 'teacher' tab is clicked, ensuring its useEffect runs.
                 return <TeacherManagement key={activeTab} teachers={teachers} />;
             case 'syllabus':
-                // ✅ FIX: Added key={activeTab} to force remount
                 return <SyllabusManagement key={activeTab} syllabus={syllabus} />;
             case 'requests':
                 return <div className='p-4 text-gray-600'>Class requests feature coming soon.</div>;
             case 'assessment':
-                // ✅ FIX: Added key={activeTab} to force remount
                 return <AssessmentBookings key={activeTab} />;
+            case 'past-classes':
+                return <PastClassSubmissions key={activeTab} />;
+            // 🟢 NEW CASE 🟢
+            case 'feedback':
+                return <FeedbackManagement key={activeTab} />;
             default:
                 return null;
         }
@@ -171,7 +167,7 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             <div className="bg-white rounded-xl shadow-lg p-6">
                 {/* Tabs Navigation */}
                 <div className="border-b border-gray-200 mb-6 flex space-x-4 overflow-x-auto">
-                    {/* Tabs remain the same */}
+                    
                     <button
                         onClick={() => setActiveTab('student')}
                         className={`${tabClass} ${activeTab === 'student' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
@@ -190,18 +186,28 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
                     >
                         <BookOpen className='inline w-4 h-4 mr-1' /> Syllabus
                     </button>
-                    <button
-                        onClick={() => setActiveTab('requests')}
-                        className={`${tabClass} ${activeTab === 'requests' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-orange-500'}`}
-                    >
-                        Class Requests ({classRequests.length})
-                    </button>
-                    {/* --- NEW TAB: Assessment Enquiries --- */}
+                    {/* --- Assessment Enquiries --- */}
                     <button
                         onClick={() => setActiveTab('assessment')}
                         className={`${tabClass} ${activeTab === 'assessment' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-orange-500'} flex items-center`}
                     >
                         <ClipboardList className='w-4 h-4 mr-1' /> Assessment Enquiries
+                    </button>
+                    
+                    {/* --- Past Class Submissions --- */}
+                    <button
+                        onClick={() => setActiveTab('past-classes')}
+                        className={`${tabClass} ${activeTab === 'past-classes' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 hover:text-red-500'} flex items-center`}
+                    >
+                        <History className='w-4 h-4 mr-1' /> Past Class Submissions
+                    </button>
+
+                    {/* 🟢 NEW TAB: Feedback Management 🟢 */}
+                    <button
+                        onClick={() => setActiveTab('feedback')}
+                        className={`${tabClass} ${activeTab === 'feedback' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:text-purple-500'} flex items-center`}
+                    >
+                        <MessageSquare className='w-4 h-4 mr-1' /> Student Feedback
                     </button>
                 </div>
 

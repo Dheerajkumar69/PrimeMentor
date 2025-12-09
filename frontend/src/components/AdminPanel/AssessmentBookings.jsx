@@ -1,4 +1,4 @@
-// frontend/src/components/AdminPanel/AssessmentBookings.jsx
+// frontend/src/components/AdminPanel/AssessmentBookings.jsx <-- Corrected comment path
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
@@ -26,6 +26,7 @@ const AssessmentBookings = () => {
         setLoading(true);
         setError(null);
         try {
+            // This API call now correctly fetches ONLY free assessments due to the backend change.
             const response = await axios.get(`${BACKEND_URL}/api/assessments`, {
                 headers: {
                     Authorization: `Bearer ${token}`,

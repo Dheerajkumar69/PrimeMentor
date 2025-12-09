@@ -13,7 +13,8 @@ const EWAY_BOOKING_PAYLOAD_KEY = 'eway_booking_payload';
 const EWAY_ACCESS_CODE_KEY = 'eway_access_code';
 const EWAY_PRODUCT_DETAILS_KEY = 'eway_product_details';
 
-const Step3Payment = ({ bookingPayload, productDetails }) => {
+// 🚨 UPDATED PROPS 🚨
+const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, promoCodeData }) => {
     const navigate = useNavigate();
     const { getToken } = useAuth();
     const [searchParams] = useSearchParams();
@@ -38,10 +39,7 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
         } 
         
         // If no accessCode is present, this is a clean step 3 page load.
-        // We rely on the parent (Enrollment.jsx) to handle state restoration.
-        // We only clear the transient EWAY keys here.
         localStorage.removeItem(EWAY_ACCESS_CODE_KEY);
-        // We only need to check/set the persisted payload once on mount.
         setPersistedPayload(bookingPayload);
         setPersistedProductDetails(productDetails);
         
@@ -55,10 +53,17 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
         setIsLoading(true);
         
         // Use current payload from props/parent state
-        const payloadToSend = persistedPayload || bookingPayload;
+        const payloadToSend = {
+             // Spread the original payload
+             ...persistedPayload, 
+             // 🚨 OVERWRITE PAYMENT DATA WITH FINAL CALCULATED VALUES 🚨
+             paymentAmount: finalPaymentAmount,
+             promoCode: promoCodeData.code,
+             appliedDiscountAmount: promoCodeData.discountAmount
+        };
 
         try {
-            // 1. Store booking payload in Local Storage before redirecting
+            // 1. Store FINAL booking payload in Local Storage before redirecting
             localStorage.setItem(EWAY_BOOKING_PAYLOAD_KEY, JSON.stringify(payloadToSend));
             localStorage.setItem(EWAY_PRODUCT_DETAILS_KEY, JSON.stringify(productDetails));
 
@@ -66,7 +71,7 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
             const token = await getToken();
             const response = await axios.post(
                 INITIATE_PAYMENT_API_ENDPOINT,
-                { bookingPayload: payloadToSend },
+                { bookingPayload: payloadToSend }, // Send the updated payload with the final amount
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -116,19 +121,22 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
                 <CreditCard size={24} className="mr-3 text-blue-600" />
                 Step 3: Secure Payment
             </h2>
-            <div className="bg-blue-50 p-4 rounded-lg text-blue-800 mb-6">
-                <p className="font-semibold text-base">Amount Due: <span className='text-lg font-bold'>${currentPayload.paymentAmount} AUD</span></p>
+            <div className={`p-4 rounded-lg mb-6 ${promoCodeData.code ? 'bg-red-100 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
+                <p className="font-semibold text-base">Amount Due: <span className='text-lg font-bold'>${finalPaymentAmount.toFixed(2)} AUD</span></p>
+                {promoCodeData.code && (
+                     <p className="text-sm font-semibold">Discount applied: {promoCodeData.code} (${promoCodeData.discountAmount.toFixed(2)} off)</p>
+                )}
                 <p className="text-sm">You are paying for the <b>{currentProductDetails.name}</b>.</p>
             </div>
 
             <form onSubmit={handleSubmit}>
-                {/* eWAY Shared Page Notice */}
+                {/* eWAY Shared Page Notice (UNCHANGED) */}
                 <div className="mb-6 border-l-4 border-yellow-500 bg-yellow-50 p-4 text-yellow-800">
                     <p className="font-semibold">Payment Method:</p>
                     <p className="text-sm">You will be securely redirected to the <b>eWAY Shared Payment Page</b> to enter your card details and finalize the payment.</p>
                 </div>
 
-                {/* ERROR DISPLAY */}
+                {/* ERROR DISPLAY (UNCHANGED) */}
                 {error && (
                     <div className="flex items-center p-3 mb-4 text-red-700 bg-red-100 rounded-lg" role="alert">
                         <AlertTriangle size={20} className="mr-2 flex-shrink-0" />
@@ -150,7 +158,8 @@ const Step3Payment = ({ bookingPayload, productDetails }) => {
                             <span>Redirecting to Payment...</span>
                         </>
                     ) : (
-                        <span>Pay ${currentPayload.paymentAmount} AUD Now</span>
+                        // 🚨 USE FINAL CALCULATED AMOUNT FOR BUTTON TEXT 🚨
+                        <span>Pay ${finalPaymentAmount.toFixed(2)} AUD Now</span>
                     )}
                 </button>
                 <p className="mt-4 text-xs text-center text-gray-500">

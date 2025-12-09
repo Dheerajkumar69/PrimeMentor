@@ -1,4 +1,4 @@
-// frontend/src/pages/PaymentSuccessRedirect.jsx
+// frontend/src/pages/PaymentSuccessRedirect.jsx (No change needed)
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -38,9 +38,9 @@ const PaymentSuccessRedirect = () => {
         const storedAccessCode = localStorage.getItem(EWAY_ACCESS_CODE_KEY);
         
         if (storedAccessCode !== accessCode) {
-             setStatus('error');
-             setMessage("Payment integrity check failed: Access code mismatch. Please contact support.");
-             return;
+              setStatus('error');
+              setMessage("Payment integrity check failed: Access code mismatch. Please contact support.");
+              return;
         }
         
         if (!storedPayloadJSON) {
@@ -73,7 +73,8 @@ const PaymentSuccessRedirect = () => {
 
                 if (response.data.success) {
                     setStatus('success');
-                    setMessage('Payment verified. Course enrollment confirmed! Redirecting now.');
+                    // Message now includes the confirmation email information
+                    setMessage('Payment verified. Course enrollment confirmed! A confirmation email has been sent. Redirecting now.');
                     
                     // Clean up storage
                     localStorage.removeItem(EWAY_BOOKING_PAYLOAD_KEY);

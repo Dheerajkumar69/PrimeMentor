@@ -4,6 +4,8 @@ import asyncHandler from 'express-async-handler';
 import User from '../models/UserModel.js';
 import TeacherModel from '../models/TeacherModel.js';
 import ClassRequest from '../models/ClassRequest.js'; 
+import PastClassModel from '../models/PastClassModel.js'; 
+import FeedbackModel from '../models/FeedbackModel.js'; // 🛑 NEW IMPORT: FeedbackModel
 import generateToken from '../utils/generateToken.js'; 
 
 // --- Hardcoded Admin Credentials (Matching Frontend) ---
@@ -12,9 +14,6 @@ const HARDCODED_ADMIN_PASSWORD = 'Adminprime@315';
 const DUMMY_ADMIN_ID = 'admin_root_id'; 
 
 // 🛑 NEW FUNCTION: deleteTeacherById 🛑
-// @desc      Delete a teacher by ID
-// @route     DELETE /api/admin/teacher/:id
-// @access    Private (Admin Only)
 export const deleteTeacherById = asyncHandler(async (req, res) => {
     const teacherId = req.params.id;
 
@@ -30,9 +29,9 @@ export const deleteTeacherById = asyncHandler(async (req, res) => {
 });
 
 
-// @desc      Authenticate admin user and get token
-// @route     POST /api/admin/login
-// @access    Public (unprotected)
+// @desc      Authenticate admin user and get token
+// @route     POST /api/admin/login
+// @access    Public (unprotected)
 export const adminLogin = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
@@ -53,9 +52,9 @@ export const adminLogin = asyncHandler(async (req, res) => {
 });
 
 
-// @desc      Get all students with their course details (KEEP AS IS)
-// @route     GET /api/admin/students
-// @access    Private (Admin Only)
+// @desc      Get all students with their course details (KEEP AS IS)
+// @route     GET /api/admin/students
+// @access    Private (Admin Only)
 export const getAllStudents = asyncHandler(async (req, res) => {
     // Retrieve all User records. 
     // Select specific student fields, including embedded courses.
@@ -64,13 +63,11 @@ export const getAllStudents = asyncHandler(async (req, res) => {
     res.json(students);
 });
 
-// @desc      Get all teachers for the Admin Table View
-// @route     GET /api/admin/teachers
-// @access    Private (Admin Only)
+// @desc      Get all teachers for the Admin Table View
+// @route     GET /api/admin/teachers
+// @access    Private (Admin Only)
 export const getAllTeachers = asyncHandler(async (req, res) => {
     // ✅ FIX: Set anti-caching headers to force a full response (200 OK) every time.
-    // This prevents Express/Node from automatically comparing ETag/If-None-Match headers 
-    // and ensures the browser doesn't return stale data.
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0'); 
@@ -81,9 +78,9 @@ export const getAllTeachers = asyncHandler(async (req, res) => {
 });
 
 
-// @desc      Get a single teacher's full details (including sensitive info)
-// @route     GET /api/admin/teacher/:id
-// @access    Private (Admin Only)
+// @desc      Get a single teacher's full details (including sensitive info)
+// @route     GET /api/admin/teacher/:id
+// @access    Private (Admin Only)
 export const getTeacherDetailsById = asyncHandler(async (req, res) => {
     const teacherId = req.params.id;
 
@@ -99,9 +96,9 @@ export const getTeacherDetailsById = asyncHandler(async (req, res) => {
 });
 
 
-// @desc      Get syllabus information (Placeholder) (KEEP AS IS)
-// @route     GET /api/admin/syllabus
-// @access    Private (Admin Only)
+// @desc      Get syllabus information (Placeholder) (KEEP AS IS)
+// @route     GET /api/admin/syllabus
+// @access    Private (Admin Only)
 export const getSyllabus = asyncHandler(async (req, res) => {
     // Placeholder logic for Syllabus Management
     const syllabusData = [
@@ -113,11 +110,11 @@ export const getSyllabus = asyncHandler(async (req, res) => {
     res.json(syllabusData);
 });
 
-// --- NEW FUNCTIONALITY FOR ADMIN CLASS REQUESTS ---
+// --- NEW FUNCTIONALITY FOR ADMIN CLASS REQUESTS (UNCHANGED) ---
 
-// @desc      Get all pending class requests for Admin to review
-// @route     GET /api/admin/pending-requests
-// @access    Private (Admin Only)
+// @desc      Get all pending class requests for Admin to review
+// @route     GET /api/admin/pending-requests
+// @access    Private (Admin Only)
 export const getPendingClassRequests = asyncHandler(async (req, res) => {
     const requests = await ClassRequest.find({ status: 'pending' })
         .sort({ enrollmentDate: 1 })
@@ -126,9 +123,9 @@ export const getPendingClassRequests = asyncHandler(async (req, res) => {
     res.json(requests);
 });
 
-// @desc      Admin approves a request and assigns a teacher
-// @route     PUT /api/admin/assign-teacher/:requestId
-// @access    Private (Admin Only)
+// @desc      Admin approves a request and assigns a teacher
+// @route     PUT /api/admin/assign-teacher/:requestId
+// @access    Private (Admin Only)
 export const assignTeacher = asyncHandler(async (req, res) => {
     const { requestId } = req.params;
     const { teacherId } = req.body; 
@@ -201,9 +198,9 @@ export const assignTeacher = asyncHandler(async (req, res) => {
 
 
 // 🛑 NEW FUNCTION: addZoomLink 🛑
-// @desc      Admin manually adds a Zoom link to an 'accepted' class request
-// @route     PUT /api/admin/add-zoom-link/:requestId
-// @access    Private (Admin Only)
+// @desc      Admin manually adds a Zoom link to an 'accepted' class request
+// @route     PUT /api/admin/add-zoom-link/:requestId
+// @access    Private (Admin Only)
 export const addZoomLink = asyncHandler(async (req, res) => {
     const { requestId } = req.params;
     const { zoomMeetingLink } = req.body;
@@ -262,4 +259,30 @@ export const getAcceptedClassRequests = asyncHandler(async (req, res) => {
         .lean();
 
     res.json(requests);
+});
+
+
+// 🛑 NEW FUNCTIONALITY: Fetch Past Class Submissions for Admin 🛑
+// @desc      Get all submitted past class records
+// @route     GET /api/admin/past-classes
+// @access    Private (Admin Only)
+export const getAllPastClassSubmissions = asyncHandler(async (req, res) => {
+    const pastClasses = await PastClassModel.find({})
+        .sort({ sessionDate: -1, sessionTime: -1 })
+        .lean();
+
+    res.json(pastClasses);
+});
+
+
+// 🟢 NEW FUNCTION: Get All Student Feedback 🟢
+// @desc    Get all submitted student feedback for Admin
+// @route   GET /api/admin/feedback
+// @access  Private (Admin Only)
+export const getAllFeedback = asyncHandler(async (req, res) => {
+    const feedbackList = await FeedbackModel.find({})
+        .sort({ submittedAt: -1 }) // Sort newest first
+        .lean();
+
+    res.json(feedbackList);
 });

@@ -18,6 +18,13 @@ const assessmentSchema = mongoose.Schema(
         subject: { type: String, required: true },
         class: { type: Number, required: true }, 
 
+        // CRITICAL: New Field to confirm it's a free assessment request
+        isFreeAssessment: { 
+            type: Boolean,
+            default: true, // All submissions from the public form are free assessments
+            required: true,
+        },
+
         // Admin Tracking
         status: { 
             type: String, 

@@ -85,7 +85,7 @@ const ChatbotWidget = () => {
         className="fixed bottom-24 right-7 z-50 p-4 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition duration-300 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"
         aria-label={isOpen ? "Close Chatbot" : "Open Chatbot"}
       >
-        <span className="text-2xl">💬</span> 
+        <span className="text-2xl"><img src="https://img.icons8.com/?size=100&id=9inONWn9EvfI&format=png&color=000000" alt="" height={35} width={35}  /></span> 
       </button>
 
       {/* --- Chat Window (Fixed Position: bottom-32, remains same) --- */}

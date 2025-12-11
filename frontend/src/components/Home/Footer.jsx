@@ -58,11 +58,6 @@ export default function Footer() {
                             <span className="font-bold text-gray-900">Prime Mentor</span> provides personalized, face-to-face online tutoring for students in classes 2-12. Our expert tutors bring learning to life with engaging sessions tailored to each student's unique needs.
                         </p>
                         <div className="space-y-3">
-                            {/* UPDATED: Phone Link */}
-                            <a href="tel:0390697512" className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition">
-                                <Phone className="w-5 h-5 text-orange-500" />
-                                <span>(03) 9069 7512</span>
-                            </a>
                             {/* UPDATED: Mail Link */}
                             <a href="mailto:info@primementor.com.au" className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition">
                                 <Mail className="w-5 h-5 text-orange-500" />

@@ -145,10 +145,6 @@ const PrivacyPolicyPage = () => {
                                     <Mail className="w-5 h-5 mr-3 text-teal-600 flex-shrink-0" />
                                     Email: <strong className="ml-2">[info.primementor@gmail.com]</strong>
                                 </li>
-                                <li className="flex items-center text-gray-800">
-                                    <Phone className="w-5 h-5 mr-3 text-teal-600 flex-shrink-0" />
-                                    Phone: <strong className="ml-2">(03) 9069 7512</strong>
-                                </li>
                             </ul>
                         </div>
 

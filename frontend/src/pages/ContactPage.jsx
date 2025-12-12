@@ -217,14 +217,7 @@ const ContactPage = () => {
                                 
                                 <div className="space-y-4">
                                     
-                                    {/* Mobile */}
-                                    <div className="bg-teal-600/90 text-white p-6 rounded-xl flex items-start shadow-xl border-b-4 border-teal-400 transition hover:bg-teal-700/90">
-                                        <Phone className="w-6 h-6 mr-4 mt-1 flex-shrink-0" />
-                                        <div>
-                                            <h3 className="text-sm font-light uppercase opacity-80">Mobile</h3>
-                                            <p className="text-xl font-bold">(03) 9069 7512</p>
-                                        </div>
-                                    </div>
+                                    
                                     
                                     {/* Email */}
                                     <div className="bg-teal-600/90 text-white p-6 rounded-xl flex items-start shadow-xl border-b-4 border-teal-400 transition hover:bg-teal-700/90">

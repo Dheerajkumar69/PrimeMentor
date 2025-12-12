@@ -158,10 +158,6 @@ const SupportPage = () => {
                                             <Mail className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
                                             <strong className="text-gray-900">Email:</strong> <a href="mailto:info.primementor@gmail.com" className="hover:text-orange-500 text-blue-600">info.primementor@gmail.com</a>
                                         </li>
-                                        <li className="flex items-center">
-                                            <Phone className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
-                                            <strong className="text-gray-900">Phone:</strong> <a href="tel:0390697512" className="hover:text-orange-500 text-blue-600">(03) 9069 7512</a>
-                                        </li>
                                     </ul>
                                 }
                             />

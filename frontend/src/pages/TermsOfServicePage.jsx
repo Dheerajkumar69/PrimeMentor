@@ -104,7 +104,6 @@ const tosContent = [
                 <p>For any questions or concerns about our terms, please contact us at:</p>
                 <ul className="list-disc ml-5 space-y-1">
                     <li>Email: <b>info.primementor@gmail.com</b></li>
-                    <li>Phone: <b>(03) 9069 7512</b></li>
                 </ul>
             </div>
         ),

@@ -70,7 +70,6 @@ const faqContent = [
         answer: (
             <ul className="list-disc ml-5 space-y-1">
                 <li>Email: info.primementor@gmail.com</li>
-                <li>Phone: (03) 9069 7512</li>
                 <li>Contact Form: Visit our Contact Us page.</li>
             </ul>
         ),

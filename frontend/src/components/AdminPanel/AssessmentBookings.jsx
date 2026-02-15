@@ -1,10 +1,9 @@
-// frontend/src/components/AdminPanel/AssessmentBookings.jsx <-- Corrected comment path
+// frontend/src/components/AdminPanel/AssessmentBookings.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { ClipboardList, Loader2, RefreshCw, AlertTriangle, CheckCircle, Clock, ChevronDown } from 'lucide-react';
-// 🛑 NEW IMPORT 🛑
-import AssessmentDetailModal from '../Booking/AssessmentDetailModal.jsx'; 
+import { ClipboardList, Loader2, RefreshCw, AlertTriangle, CheckCircle, Clock, ChevronDown, UserPlus } from 'lucide-react';
+import AssessmentDetailModal from '../Booking/AssessmentDetailModal.jsx';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -12,9 +11,9 @@ const AssessmentBookings = () => {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    // 🛑 NEW STATE: To control the modal visibility and content 🛑
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedBooking, setSelectedBooking] = useState(null);
+    const [approvalMode, setApprovalMode] = useState(false);
 
     const fetchBookings = useCallback(async () => {
         const token = localStorage.getItem('adminToken');
@@ -26,7 +25,6 @@ const AssessmentBookings = () => {
         setLoading(true);
         setError(null);
         try {
-            // This API call now correctly fetches ONLY free assessments due to the backend change.
             const response = await axios.get(`${BACKEND_URL}/api/assessments`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -44,19 +42,24 @@ const AssessmentBookings = () => {
     useEffect(() => {
         fetchBookings();
     }, [fetchBookings]);
-    
-    // 🛑 NEW HANDLER: Opens the modal with the specific booking data 🛑
-    const openDetailModal = (booking) => {
+
+    const openDetailModal = (booking, isApproval = false) => {
         setSelectedBooking(booking);
+        setApprovalMode(isApproval);
         setIsDetailModalOpen(true);
     };
 
     const closeDetailModal = () => {
         setIsDetailModalOpen(false);
         setSelectedBooking(null);
+        setApprovalMode(false);
     };
-    
-    // ... (getStatusStyle and formatDate utility functions remain the same)
+
+    const handleApproved = () => {
+        closeDetailModal();
+        fetchBookings();
+    };
+
     const getStatusStyle = (status) => {
         switch (status) {
             case 'New':
@@ -74,15 +77,14 @@ const AssessmentBookings = () => {
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleString('en-AU', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        return new Date(dateString).toLocaleString('en-AU', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
         });
     };
-    // ...
 
     if (loading) {
         return (
@@ -104,7 +106,7 @@ const AssessmentBookings = () => {
             </div>
         );
     }
-    
+
     if (bookings.length === 0) {
         return (
             <div className="text-center p-10 bg-green-50 border-l-4 border-green-500 text-green-700">
@@ -116,10 +118,12 @@ const AssessmentBookings = () => {
 
     return (
         <div className="space-y-6">
-            <AssessmentDetailModal 
+            <AssessmentDetailModal
                 isOpen={isDetailModalOpen}
                 onClose={closeDetailModal}
                 booking={selectedBooking}
+                approvalMode={approvalMode}
+                onApproved={handleApproved}
             />
 
             <h2 className="text-2xl font-bold text-gray-700 flex items-center">
@@ -138,19 +142,17 @@ const AssessmentBookings = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {bookings.map((booking) => (
-                            <tr 
-                                key={booking._id} 
+                            <tr
+                                key={booking._id}
                                 className="hover:bg-orange-50/50 transition-colors duration-150"
                             >
-                                {/* 1. Date */}
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <Clock className="w-4 h-4 inline mr-1 text-gray-400" />
                                     {formatDate(booking.createdAt)}
                                 </td>
-                                
-                                {/* 2. Student/Year/Subject - Clickable Name */}
+
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <button 
+                                    <button
                                         onClick={() => openDetailModal(booking)}
                                         className="text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors duration-100 cursor-pointer text-left"
                                     >
@@ -160,28 +162,35 @@ const AssessmentBookings = () => {
                                         Year {booking.class} / {booking.subject}
                                     </div>
                                 </td>
-                                
-                                {/* 3. Parent/Email - Smaller info bar */}
+
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="text-sm text-gray-900">{booking.parentFirstName} {booking.parentLastName}</div>
                                     <div className="text-xs text-blue-500 truncate">{booking.parentEmail}</div>
                                 </td>
-                                
-                                {/* 4. Status */}
+
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusStyle(booking.status)}`}>
                                         {booking.status}
                                     </span>
                                 </td>
-                                
-                                {/* 5. Actions/View Button */}
+
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <button 
-                                        className="flex items-center px-3 py-1 bg-indigo-500 text-white rounded-md shadow-sm hover:bg-indigo-600 transition"
-                                        onClick={() => openDetailModal(booking)}
-                                    >
-                                        <ChevronDown className='w-4 h-4 mr-1' /> View All
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            className="flex items-center px-3 py-1 bg-indigo-500 text-white rounded-md shadow-sm hover:bg-indigo-600 transition"
+                                            onClick={() => openDetailModal(booking)}
+                                        >
+                                            <ChevronDown className='w-4 h-4 mr-1' /> View All
+                                        </button>
+                                        {(booking.status === 'New' || booking.status === 'Contacted') && (
+                                            <button
+                                                className="flex items-center px-3 py-1 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 transition"
+                                                onClick={() => openDetailModal(booking, true)}
+                                            >
+                                                <UserPlus className='w-4 h-4 mr-1' /> Approve
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}

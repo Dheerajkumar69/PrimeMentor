@@ -1,16 +1,17 @@
 // backend/controllers/assessmentController.js
 import Assessment from '../models/AssessmentModel.js';
 import asyncHandler from 'express-async-handler';
+import { sendAssessmentBookingConfirmation } from '../utils/emailService.js';
 
 // @desc    Submit new free assessment request from the modal
 // @route   POST /api/assessments/submit
 // @access  Public
 const submitAssessmentRequest = asyncHandler(async (req, res) => {
     // Destructure all fields being sent from the AssessmentModal.jsx
-    const { 
+    const {
         studentFirstName, studentLastName, studentEmail,
         parentFirstName, parentLastName, parentEmail,
-        contactNumber, subject, class: studentClass, 
+        contactNumber, subject, class: studentClass,
     } = req.body;
 
     // Comprehensive validation for all required fields
@@ -18,7 +19,7 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
         !parentFirstName || !parentLastName || !parentEmail ||
         !contactNumber || !subject || !studentClass) {
         res.status(400);
-        console.error('Missing fields:', { 
+        console.error('Missing fields:', {
             studentFirstName, studentLastName, studentEmail,
             parentFirstName, parentLastName, parentEmail,
             contactNumber, subject, studentClass
@@ -34,10 +35,32 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
             subject,
             class: studentClass,
             // Explicitly set this field for confirmation
-            isFreeAssessment: true, 
+            isFreeAssessment: true,
         });
 
-        res.status(201).json({ 
+        // Send confirmation email to parent AND student (non-blocking — don't fail the request if email fails)
+        const emailDetails = {
+            studentName: `${studentFirstName} ${studentLastName}`,
+            parentName: `${parentFirstName} ${parentLastName}`,
+            subject,
+            yearLevel: studentClass,
+            studentEmail,
+        };
+
+        // Send only to student email
+        const recipients = [studentEmail].filter(Boolean);
+        console.log('📧 Attempting to send assessment booking confirmation to:', recipients);
+
+        for (const email of recipients) {
+            try {
+                const result = await sendAssessmentBookingConfirmation(email, emailDetails);
+                console.log('✅ Assessment booking confirmation email sent to:', email, '| Result:', JSON.stringify(result));
+            } catch (emailErr) {
+                console.error('⚠️ Failed to send assessment booking confirmation to:', email, '| Error:', emailErr.message, emailErr);
+            }
+        }
+
+        res.status(201).json({
             message: 'Assessment request saved successfully.',
             data: newAssessment
         });
@@ -45,9 +68,9 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
     } catch (error) {
         console.error('Error saving assessment request to database:', error);
         // This will often show Mongoose validation errors if types/requirements are wrong
-        res.status(500).json({ 
+        res.status(500).json({
             message: 'Server error saving request to database.',
-            detail: error.message 
+            detail: error.message
         });
     }
 });

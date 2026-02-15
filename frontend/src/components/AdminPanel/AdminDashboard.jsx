@@ -6,39 +6,38 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 // Import management components
-import StudentManagement from './StudentManagement.jsx'; 
-import TeacherManagement from './TeacherManagement.jsx'; 
-import SyllabusManagement from './SyllabusManagement.jsx'; 
-import AssessmentBookings from './AssessmentBookings.jsx'; 
-import PastClassSubmissions from './PastClassSubmissions.jsx'; 
+import StudentManagement from './StudentManagement.jsx';
+import TeacherManagement from './TeacherManagement.jsx';
+import SyllabusManagement from './SyllabusManagement.jsx';
+import AssessmentBookings from './AssessmentBookings.jsx';
+import PastClassSubmissions from './PastClassSubmissions.jsx';
 import FeedbackManagement from './FeedbackManagement.jsx'; // 🛑 NEW IMPORT
 
 // Base URL for API calls
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 /**
- * AdminDashboard component displays the administrative interface.
- * @param {object} props
- * @param {function} props.onLogout - Function to log the admin out and reset state.
- */
-export default function AdminDashboard({ onLogout, assessmentRequests: initialAssessmentRequests }) { 
+ * AdminDashboard component displays the administrative interface.
+ * @param {object} props
+ * @param {function} props.onLogout - Function to log the admin out and reset state.
+ */
+export default function AdminDashboard({ onLogout, assessmentRequests: initialAssessmentRequests }) {
     const navigate = useNavigate();
-    
+
     const [isAuthenticated, setIsAuthenticated] = useState(
         localStorage.getItem('adminAuthenticated') === 'true'
     );
-    
+
     // --- STATE MODIFICATION ---
     // 🛑 NEW DEFAULT TAB (You requested to default to 'past-classes', changing to 'feedback' might be more impactful)
     const [activeTab, setActiveTab] = useState('feedback'); // Default to the new feedback tab
     const [assessmentRequests, setAssessmentRequests] = useState(initialAssessmentRequests || []);
-    
+
     // State for managed data
     const [students, setStudents] = useState([]);
     const [teachers, setTeachers] = useState([]);
-    const [syllabus, setSyllabus] = useState([]);
-    const [classRequests, setClassRequests] = useState([]); 
-    
+    const [classRequests, setClassRequests] = useState([]);
+
     const [dataLoading, setDataLoading] = useState(false);
     const [fetchError, setFetchError] = useState(null);
 
@@ -52,18 +51,18 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
 
     // Utility function for fetching data (remains the same)
     const fetchData = async (endpoint, setter) => {
-        const token = localStorage.getItem('adminToken'); 
+        const token = localStorage.getItem('adminToken');
 
         if (!token || !isAuthenticated) {
             setFetchError('Authentication token missing. Please log in.');
-            if (onLogout) onLogout(); 
+            if (onLogout) onLogout();
             return;
         }
-        
+
         try {
             setDataLoading(true);
             setFetchError(null);
-            
+
             const response = await axios.get(`${BACKEND_URL}/api/admin/${endpoint}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -72,15 +71,15 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             setter(response.data);
         } catch (error) {
             console.error(`Failed to fetch ${endpoint}:`, error.response?.data || error.message);
-            
+
             let message = error.response?.data?.message || 'A network error occurred.';
             if (error.response?.status === 403 || error.response?.status === 401) {
                 message = "Session expired or unauthorized. Logging out...";
                 if (onLogout) onLogout();
-            } 
+            }
 
             setFetchError(message);
-            setter([]); 
+            setter([]);
         } finally {
             setDataLoading(false);
         }
@@ -88,26 +87,24 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
 
     // Fetch data based on the active tab change (Modified)
     useEffect(() => {
-        if (isAuthenticated) { 
+        if (isAuthenticated) {
             if (activeTab === 'student') {
                 fetchData('students', setStudents);
             } else if (activeTab === 'teacher') {
                 fetchData('teachers', setTeachers);
-            } else if (activeTab === 'syllabus') {
-                fetchData('syllabus', setSyllabus);
-            } 
-            // 'assessment', 'past-classes', and 'feedback' components handle their own fetching.
+            }
+            // 'syllabus', 'assessment', 'past-classes', and 'feedback' components handle their own fetching.
         }
-    }, [activeTab, isAuthenticated, onLogout]); 
+    }, [activeTab, isAuthenticated, onLogout]);
 
     // Logout handler (remains the same)
     const handleLogout = () => {
         if (onLogout) {
             onLogout();
         } else {
-             localStorage.removeItem('adminAuthenticated'); 
-             localStorage.removeItem('adminToken');
-             navigate('/admin/login', { replace: true });
+            localStorage.removeItem('adminAuthenticated');
+            localStorage.removeItem('adminToken');
+            navigate('/admin/login', { replace: true });
         }
     }
 
@@ -116,11 +113,11 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
 
     const renderContent = () => {
         if (!isAuthenticated) {
-             return <div className='text-center p-10 text-red-600 font-medium'>Please log in to access the dashboard.</div>;
+            return <div className='text-center p-10 text-red-600 font-medium'>Please log in to access the dashboard.</div>;
         }
-        
+
         if (fetchError) {
-             return <div className='text-center p-10 text-red-600 font-medium'>{fetchError}</div>;
+            return <div className='text-center p-10 text-red-600 font-medium'>{fetchError}</div>;
         }
 
         switch (activeTab) {
@@ -129,7 +126,7 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             case 'teacher':
                 return <TeacherManagement key={activeTab} teachers={teachers} />;
             case 'syllabus':
-                return <SyllabusManagement key={activeTab} syllabus={syllabus} />;
+                return <SyllabusManagement key={activeTab} />;
             case 'requests':
                 return <div className='p-4 text-gray-600'>Class requests feature coming soon.</div>;
             case 'assessment':
@@ -167,7 +164,7 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             <div className="bg-white rounded-xl shadow-lg p-6">
                 {/* Tabs Navigation */}
                 <div className="border-b border-gray-200 mb-6 flex space-x-4 overflow-x-auto">
-                    
+
                     <button
                         onClick={() => setActiveTab('student')}
                         className={`${tabClass} ${activeTab === 'student' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
@@ -193,7 +190,7 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
                     >
                         <ClipboardList className='w-4 h-4 mr-1' /> Assessment Enquiries
                     </button>
-                    
+
                     {/* --- Past Class Submissions --- */}
                     <button
                         onClick={() => setActiveTab('past-classes')}

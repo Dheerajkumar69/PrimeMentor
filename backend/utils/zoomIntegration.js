@@ -1,25 +1,15 @@
 // backend/utils/zoomIntegration.js
 import axios from 'axios';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: '.env' });
-
-const {
-    ZOOM_CLIENT_ID,
-    ZOOM_CLIENT_SECRET,
-    ZOOM_ACCOUNT_ID,
-    ZOOM_HOST_EMAIL // Assume a licensed host email for Server-to-Server meetings
-} = process.env;
 
 // 1. Function to get the Server-to-Server OAuth Access Token
 const getZoomAccessToken = async () => {
-    const authString = `${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`;
+    const authString = `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`;
     const base64Auth = Buffer.from(authString).toString('base64');
 
     try {
         const response = await axios.post(
             'https://zoom.us/oauth/token',
-            `grant_type=account_credentials&account_id=${ZOOM_ACCOUNT_ID}`,
+            `grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`,
             {
                 headers: {
                     'Authorization': `Basic ${base64Auth}`,
@@ -46,19 +36,19 @@ const getZoomAccessToken = async () => {
 export const createZoomMeeting = async (topic, startTime, duration) => {
     const accessToken = await getZoomAccessToken();
 
-    // Use a fixed host email associated with your licensed Zoom account
-    // This host needs to be defined in your .env or configuration.
-    const hostEmail = 'your.licensed.host@example.com'; 
-    
+    // Use 'me' to default to the OAuth app owner, or a specific email if configured
+    const hostEmail = process.env.ZOOM_HOST_EMAIL || 'me';
+    console.log(`📹 Creating Zoom meeting with host: ${hostEmail}`);
+
     // Zoom time must be in ISO 8601 format
-    const start_time_iso = startTime.toISOString().slice(0, 19) + 'Z'; 
+    const start_time_iso = startTime.toISOString().slice(0, 19) + 'Z';
 
     const meetingDetails = {
         topic: topic,
         type: 2, // Scheduled meeting
         start_time: start_time_iso,
         duration: duration, // in minutes
-        timezone: 'Asia/Kolkata', // Set to your desired timezone (IST)
+        timezone: 'Australia/Sydney', // Australian timezone for PrimeMentor
         password: Math.random().toString(36).substring(2, 8).toUpperCase(), // Random 6-char password
         settings: {
             host_video: true,

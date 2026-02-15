@@ -2,19 +2,19 @@
 import React from "react";
 import { User, Calendar, Clock, CheckCircle, FileText, BookOpen, Video } from "lucide-react";
 // CRITICAL IMPORT: Timezone utility
-import { convertAuTimeToIndiaDisplay } from "../../utils/dateUtils.js"; 
+import { convertAuTimeToIndiaDisplay } from "../../utils/dateUtils.js";
 
 // --- Time Parsing Logic (Helper function for Join Button logic, kept for consistency) ---
 const parseClassDateTime = (classData) => {
     // preferredDate is the Australian YYYY-MM-DD string
     if (!classData.preferredDate || !classData.scheduleTime) return null;
-    
+
     try {
         const dateParts = classData.preferredDate.split("-").map(Number);
         const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
         if (isNaN(dateObj.getTime())) return null;
-        
+
         // 1. Safely extract the first part of the time string (e.g., '4:00pm')
         const timeString12h = classData.scheduleTime.split(' - ')[0];
 
@@ -30,7 +30,7 @@ const parseClassDateTime = (classData) => {
         if (period === 'am' && timeHours === 12) {
             timeHours = 0;
         }
-            
+
         // 3. Create a Date object interpreted as the Australian local moment
         const classStart = new Date(
             dateObj.getFullYear(),
@@ -63,12 +63,12 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
         try {
             const dateParts = dateString.split("-").map(Number);
             // Date is created using local components (AU local date)
-            const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]); 
+            const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
             if (isNaN(date.getTime())) return "Invalid Date";
             return date.toLocaleDateString(undefined, {
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
             });
         } catch {
             return "N/A";
@@ -94,12 +94,12 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
             const activeBeforeMinutes = 15;
             // The comparison is currently operating in the Teacher's local timezone (IST)
             const activeStartTime = new Date(times.classStart.getTime() - activeBeforeMinutes * 60000);
-            
+
             return now >= activeStartTime && now <= times.classEndTime;
 
         } catch (e) {
             console.error("Error checking join activity:", e);
-            return false; 
+            return false;
         }
     };
 
@@ -107,7 +107,7 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
 
     // CRITICAL FIX: Convert the Australian time slot to Indian time display
     const indianTimeDisplay = convertAuTimeToIndiaDisplay(course.preferredDate, course.scheduleTime);
-    
+
     return (
         <div className={`bg-white rounded-2xl shadow-md p-4 sm:p-5 border border-gray-100 transition transform ${isPast ? 'opacity-80' : 'hover:shadow-lg'}`}>
             <div className="flex items-start justify-between">
@@ -147,15 +147,15 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
                     </div>
                     <span className="text-xs text-gray-500">(Your Local Time)</span>
                 </div>
-                
+
                 {/* Zoom Link Status (Explicitly shown) */}
                 {isManaged && !isPast && (
                     <div className="flex items-center gap-2 pt-1 pb-1">
                         <Video size={16} className={`${zoomLink ? 'text-teal-500' : 'text-orange-500'}`} />
                         <div className="text-xs text-gray-700">
-                           Link Status: <span className={`font-semibold ${zoomLink ? 'text-teal-600' : 'text-orange-600'}`}>
+                            Link Status: <span className={`font-semibold ${zoomLink ? 'text-teal-600' : 'text-orange-600'}`}>
                                 {zoomLink ? 'Ready' : 'Pending Admin Setup'}
-                           </span>
+                            </span>
                         </div>
                     </div>
                 )}
@@ -171,24 +171,24 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
                         <BookOpen size={16} /> View Summary
                     </a>
                 )}
-                
+
                 {/* Button for Managed/Upcoming Classes (Open Meeting) */}
                 {isManaged && !isPast && (
                     <a
-                        href={zoomLink || '#'} 
+                        href={zoomLink || '#'}
                         target="_blank"
                         rel="noreferrer"
                         className={`flex-1 text-white font-medium py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm
-                            ${isCurrentlyActive 
-                                ? 'bg-green-600 hover:bg-green-700 shadow-md shadow-green-300/50' 
+                            ${isCurrentlyActive
+                                ? 'bg-green-600 hover:bg-green-700 shadow-md shadow-green-300/50'
                                 : 'bg-gray-400 cursor-not-allowed'
                             }
                         `}
                         onClick={(e) => {
                             if (!isCurrentlyActive) {
                                 e.preventDefault();
-                                const message = !zoomLink 
-                                    ? 'The Zoom meeting link has not been added by the Admin yet.' 
+                                const message = !zoomLink
+                                    ? 'The Zoom meeting link has not been added by the Admin yet.'
                                     : `The meeting is inactive. It will become active 15 minutes before the scheduled time.`;
                                 alert(message);
                             }

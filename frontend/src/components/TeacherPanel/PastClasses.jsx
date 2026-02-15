@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
-import CourseCardTeacher from "./CourseCardTeacher.jsx"; 
+import CourseCardTeacher from "./CourseCardTeacher.jsx";
 import { History, Send, X, CheckCircle } from "lucide-react"; // Added Send, X, CheckCircle
 
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
@@ -8,22 +8,22 @@ const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhos
 // Utility functions (UNCHANGED)
 const parseClassDateTime = (classData) => {
     if (!classData.preferredDate || !classData.scheduleTime) return null;
-    
+
     try {
         const dateObj = new Date(classData.preferredDate);
         if (isNaN(dateObj)) {
             console.error("Invalid Date String:", classData.preferredDate);
-            return null; 
+            return null;
         }
 
-        const timeString = classData.scheduleTime.split(/[ -]/)[0]; 
+        const timeString = classData.scheduleTime.split(/[ -]/)[0];
 
         if (!timeString) return null;
 
         const [timeHours, timeMinutes] = timeString.split(':')
-            .filter(s => s.trim() !== '') 
+            .filter(s => s.trim() !== '')
             .map(s => parseInt(s.trim()));
-            
+
         if (isNaN(timeHours) || isNaN(timeMinutes)) return null;
 
         const classStart = new Date(
@@ -32,10 +32,10 @@ const parseClassDateTime = (classData) => {
             dateObj.getDate(),
             timeHours,
             timeMinutes,
-            0 
+            0
         );
 
-        const bufferTimeMinutes = 60; 
+        const bufferTimeMinutes = 60;
         const classEndTime = new Date(classStart.getTime() + bufferTimeMinutes * 60000);
 
         return { classStart, classEndTime };
@@ -71,7 +71,7 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
         '09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00', '12:00 - 13:00',
         '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00', '16:00 - 17:00',
     ];
-    
+
     const durationOptions = ['30 minutes', '45 minutes', '60 minutes', '90 minutes', '120 minutes'];
 
     const handleChange = (e) => {
@@ -79,7 +79,7 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
         setFormData(prev => ({ ...prev, [name]: value }));
         setSubmissionStatus(null);
     };
-    
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -119,7 +119,7 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
             setIsSubmitting(false);
         }
     };
-    
+
     const handleClose = () => {
         setIsFormOpen(false);
         setSubmissionStatus(null);
@@ -144,14 +144,14 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
             </div>
         );
     }
-    
+
     return (
         <div className="mb-8 p-6 bg-white border border-gray-200 rounded-xl shadow-lg relative">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
                 <Send className="w-5 h-5 mr-2 text-blue-600" />
                 Past Class Submission Form
             </h3>
-            
+
             <button
                 onClick={handleClose}
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
@@ -208,7 +208,7 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
                         ))}
                     </select>
                 </div>
-                
+
                 {/* Student Name */}
                 <div>
                     <label htmlFor="studentName" className="block text-sm font-medium text-gray-700">STUDENT NAME <span className="text-red-500">*</span></label>
@@ -267,15 +267,14 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
                             Submission failed. Please try again.
                         </p>
                     )}
-                    
+
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className={`flex items-center px-6 py-3 font-bold rounded-lg transition ${
-                            isSubmitting 
-                                ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
+                        className={`flex items-center px-6 py-3 font-bold rounded-lg transition ${isSubmitting
+                                ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
                                 : 'bg-green-600 text-white hover:bg-green-700 shadow-lg'
-                        } ml-auto`}
+                            } ml-auto`}
                     >
                         {isSubmitting ? 'Submitting...' : 'Submit Class Details'}
                         {!isSubmitting && <Send className="w-5 h-5 ml-2" />}
@@ -298,7 +297,7 @@ const PastClasses = () => {
         // For now, we'll just log it and potentially force a re-render of the past classes list below.
         console.log("Past Class submission successful from form.");
         // Increment key to trigger a re-render/re-fetch in the next component if needed
-        setSubmissionKey(prev => prev + 1); 
+        setSubmissionKey(prev => prev + 1);
     };
 
     const fetchAllAssignedClasses = useCallback(async () => {
@@ -306,15 +305,15 @@ const PastClasses = () => {
             setLoading(true);
             setError(null);
             const token = localStorage.getItem('teacherToken');
-            
+
             const res = await axios.get(`${getBackendUrl()}/api/teacher/class-requests`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {}
             });
-            
+
             if (res.data.success) {
                 // Sort classes by preferredDate (oldest first)
                 const sortedClasses = res.data.requests.sort((a, b) => new Date(b.preferredDate) - new Date(a.preferredDate));
-                setAssignedClasses(sortedClasses); 
+                setAssignedClasses(sortedClasses);
             }
             else setError(res.data.message || 'Failed to fetch assigned classes.');
         } catch (err) {
@@ -334,7 +333,7 @@ const PastClasses = () => {
 
 
     // --- UI START ---
-    
+
     return (
         <div>
             {/* 🛑 PAST CLASS SUBMISSION FORM 🛑 */}
@@ -355,7 +354,7 @@ const PastClasses = () => {
                     <p className="text-sm text-gray-600">This box represents a visual placeholder for a completed class entry.</p>
                 </div>
             </div>
-            
+
             {/* Responsive Grid for Course Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {loading ? (
@@ -366,8 +365,8 @@ const PastClasses = () => {
                     <CourseCardTeacher
                         key={c._id}
                         course={c}
-                        isManaged={true} 
-                        isPast={true} 
+                        isManaged={true}
+                        isPast={true}
                     />
                 )) : (
                     <div className="col-span-full text-center py-12 sm:py-16 text-gray-500 bg-white border-2 border-dashed border-gray-200 rounded-xl shadow-inner">

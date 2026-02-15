@@ -1,19 +1,26 @@
 // backend/routes/adminRoutes.js
 
 import express from 'express';
-import { 
-    getAllStudents, 
-    getAllTeachers, 
+import upload from '../config/multer.js';
+import {
+    getAllStudents,
+    getAllTeachers,
     getSyllabus,
-    getPendingClassRequests, 
+    addSyllabus,
+    deleteSyllabus,
+    getPendingClassRequests,
     assignTeacher,
     adminLogin,
     getTeacherDetailsById,
     deleteTeacherById,
+    addTeacher,
+    updateTeacher,
+    replaceTeacher,
     addZoomLink,
     getAcceptedClassRequests,
-    getAllPastClassSubmissions, 
-    getAllFeedback // 🛑 NEW IMPORT: getAllFeedback
+    getAllPastClassSubmissions,
+    getAllFeedback,
+    approveAssessment
 } from '../controllers/adminController.js';
 import { adminOnlyMiddleware } from '../middlewares/adminMiddleware.js';
 
@@ -28,24 +35,36 @@ router.use(adminOnlyMiddleware);
 router.get('/students', getAllStudents);
 
 // Teacher routes
+const teacherUpload = upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'cvFile', maxCount: 1 }
+]);
 router.get('/teachers', getAllTeachers);
 router.get('/teacher/:id', getTeacherDetailsById);
+router.post('/teacher', teacherUpload, addTeacher);
+router.put('/teacher/:id', teacherUpload, updateTeacher);
 router.delete('/teacher/:id', deleteTeacherById);
+router.put('/replace-teacher/:oldTeacherId', replaceTeacher);
 
 router.get('/syllabus', getSyllabus);
+router.post('/syllabus', upload.single('pdfFile'), addSyllabus);
+router.delete('/syllabus/:id', deleteSyllabus);
 
 // --- Class Request Routes (Protected) ---
-router.get('/pending-requests', getPendingClassRequests); 
-router.put('/assign-teacher/:requestId', assignTeacher); 
-router.put('/add-zoom-link/:requestId', addZoomLink); 
+router.get('/pending-requests', getPendingClassRequests);
+router.put('/assign-teacher/:requestId', assignTeacher);
+router.put('/add-zoom-link/:requestId', addZoomLink);
 
-// 🛑 NEW ROUTE: Fetch Accepted Classes 🛑
-router.get('/accepted-requests', getAcceptedClassRequests); 
+// Fetch Accepted Classes
+router.get('/accepted-requests', getAcceptedClassRequests);
 
-// 🛑 NEW ROUTE: Fetch Past Class Submissions 🛑
+// Fetch Past Class Submissions
 router.get('/past-classes', getAllPastClassSubmissions);
 
-// 🟢 NEW ROUTE: Fetch All Student Feedback 🟢
+// Fetch All Student Feedback
 router.get('/feedback', getAllFeedback);
+
+// Approve a free assessment (assign teacher + create Zoom + send emails)
+router.put('/assessment/:assessmentId/approve', approveAssessment);
 
 export default router;

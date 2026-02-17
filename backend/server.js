@@ -34,6 +34,7 @@ const allowedOrigins = [
   'https://primementor.com.au',
   'https://www.primementor.com.au',
   'http://localhost:5173',
+  'http://localhost:4173',
 ];
 
 app.use(
@@ -97,7 +98,7 @@ app.get('/', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('💥 Error middleware caught:', err);
+  console.error('💥 Error middleware caught:', err.message || err);
 
   if (err?.clerkError || err?.httpStatus) {
     const status = err.httpStatus || err.statusCode || 401;
@@ -106,7 +107,10 @@ app.use((err, req, res, next) => {
       .json({ message: err.message || 'Unauthorized' });
   }
 
-  res.status(500).json({ message: 'Internal Server Error' });
+  // Respect the status code set by controllers (e.g., res.status(400) before throw)
+  // If res.statusCode was already set to a 4xx/5xx, use it; otherwise default to 500
+  const statusCode = res.statusCode && res.statusCode >= 400 ? res.statusCode : 500;
+  res.status(statusCode).json({ message: err.message || 'Internal Server Error' });
 });
 
 // Start server

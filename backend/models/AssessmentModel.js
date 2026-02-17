@@ -4,19 +4,38 @@ import mongoose from 'mongoose';
 const assessmentSchema = mongoose.Schema(
     {
         // Student Details (Required by the form)
-        studentFirstName: { type: String, required: true },
-        studentLastName: { type: String, required: true },
-        studentEmail: { type: String, required: true },
+        studentFirstName: { type: String, required: true, trim: true, maxlength: 100 },
+        studentLastName: { type: String, required: true, trim: true, maxlength: 100 },
+        studentEmail: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+        studentPhone: {
+            type: String,
+            default: null,
+            trim: true,
+            maxlength: 20,
+            validate: {
+                validator: (v) => v === null || /^[\d+\s()-]*$/.test(v),
+                message: 'Student phone must contain only digits, +, spaces, hyphens, and parentheses.',
+            },
+        },
 
         // Parent/Contact Details (Required by the form)
-        parentFirstName: { type: String, required: true },
-        parentLastName: { type: String, required: true },
-        parentEmail: { type: String, required: true },
-        contactNumber: { type: String, required: true },
+        parentFirstName: { type: String, required: true, trim: true, maxlength: 100 },
+        parentLastName: { type: String, required: true, trim: true, maxlength: 100 },
+        parentEmail: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+        contactNumber: {
+            type: String,
+            required: true,
+            trim: true,
+            maxlength: 20,
+            validate: {
+                validator: (v) => /^[\d+\s()-]+$/.test(v),
+                message: 'Contact number must contain only digits, +, spaces, hyphens, and parentheses.',
+            },
+        },
 
         // Assessment Focus (Required by the form)
-        subject: { type: String, required: true },
-        class: { type: Number, required: true },
+        subject: { type: String, required: true, trim: true, maxlength: 100 },
+        class: { type: Number, required: true, min: 2, max: 12 },
 
         // CRITICAL: New Field to confirm it's a free assessment request
         isFreeAssessment: {
@@ -37,6 +56,11 @@ const assessmentSchema = mongoose.Schema(
         teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', default: null },
         teacherName: { type: String, default: null },
         teacherEmail: { type: String, default: null },
+
+        // Multiple teachers assigned (all receive the Zoom host link)
+        teacherIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Teacher' }],
+        teacherNames: [{ type: String }],
+        teacherEmails: [{ type: String }],
 
         // Scheduling (populated when admin approves)
         scheduledDate: { type: Date, default: null },

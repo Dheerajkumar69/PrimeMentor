@@ -30,6 +30,7 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
         studentFirstName: '',
         studentLastName: '',
         studentEmail: '',
+        studentPhone: '',
         parentFirstName: '',
         parentLastName: '',
         parentEmail: '',
@@ -45,29 +46,40 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ 
-            ...prev, 
+        setFormData(prev => ({
+            ...prev,
             [name]: name === 'class' ? parseInt(value) : value // Ensure class is a number for DB
         }));
         if (validationError) setValidationError('');
     };
 
     const validateForm = () => {
-        // ... (validation logic remains the same, only removed the check for 'class' because it has a default value) ...
         const requiredFields = [
             'studentFirstName', 'studentLastName', 'studentEmail',
             'parentFirstName', 'parentLastName', 'parentEmail',
-            'contactNumber', 'subject' // 'class' is not added as it defaults to classes[0]
+            'contactNumber', 'subject'
         ];
 
         for (const field of requiredFields) {
-            if (!formData[field]) {
+            if (!formData[field] || !formData[field].trim()) {
                 return `Please fill in the required field: ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`;
             }
         }
 
-        if (!/\S+@\S+\.\S+/.test(formData.studentEmail) || !/\S+@\S+\.\S+/.test(formData.parentEmail)) {
-            return 'Please enter valid email addresses.';
+        if (!/\S+@\S+\.\S+/.test(formData.studentEmail.trim())) {
+            return 'Please enter a valid student email address.';
+        }
+        if (!/\S+@\S+\.\S+/.test(formData.parentEmail.trim())) {
+            return 'Please enter a valid parent email address.';
+        }
+
+        // Validate phone numbers — only allow digits, +, spaces, hyphens, parentheses
+        const phoneRegex = /^[\d+\s()-]+$/;
+        if (!phoneRegex.test(formData.contactNumber.trim())) {
+            return 'Contact number can only contain digits, +, spaces, hyphens, and parentheses.';
+        }
+        if (formData.studentPhone && formData.studentPhone.trim() && !phoneRegex.test(formData.studentPhone.trim())) {
+            return 'Student phone number can only contain digits, +, spaces, hyphens, and parentheses.';
         }
 
         return null;
@@ -90,21 +102,25 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
         setIsSubmitting(true);
         let dbSuccess = false;
 
-        // Data for both local DB and email
+        // Trim data before submission
         const submissionData = {
-            ...formData,
+            ...Object.fromEntries(
+                Object.entries(formData).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+            ),
+            // Send null instead of empty string for optional studentPhone
+            studentPhone: formData.studentPhone?.trim() || null,
             timestamp: new Date().toISOString(),
             // Web3Forms specific fields for routing the email
             access_key: WEB3FORMS_ACCESS_KEY,
-            subject: `NEW ASSESSMENT REQUEST: ${formData.studentFirstName} (${formData.subject})`,
-            from_name: `Prime Mentor Assessment - ${formData.parentFirstName} ${formData.parentLastName}`,
+            subject: `NEW ASSESSMENT REQUEST: ${formData.studentFirstName.trim()} (${formData.subject.trim()})`,
+            from_name: `Prime Mentor Assessment - ${formData.parentFirstName.trim()} ${formData.parentLastName.trim()}`,
         };
 
         try {
             // 1. Send data to the local backend API for storage
             // --- MODIFICATION: Corrected API endpoint for submission ---
             const dbResponse = await axios.post(`${API_BASE_URL}/api/assessments/submit`, submissionData);
-            
+
             // Call the parent submission handler with the full data from the DB
             onSubmissionComplete(dbResponse.data.data);
             dbSuccess = true;
@@ -135,14 +151,14 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
                 setValidationError('A network error occurred during submission.');
             }
             setIsSubmitted(dbSuccess);
-            
+
         } finally {
             setIsSubmitting(false);
 
             if (isSubmitted || dbSuccess) {
                 setTimeout(() => {
                     setFormData({
-                        studentFirstName: '', studentLastName: '', studentEmail: '',
+                        studentFirstName: '', studentLastName: '', studentEmail: '', studentPhone: '',
                         parentFirstName: '', parentLastName: '', parentEmail: '',
                         contactNumber: '', subject: subjects[0], class: classes[0],
                     });
@@ -160,9 +176,10 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
             </h3>
             {/* Form layout changes to single column on mobile */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" name="studentFirstName" placeholder="Student First Name (Required)" value={formData.studentFirstName} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
-                <input type="text" name="studentLastName" placeholder="Student Last Name (Required)" value={formData.studentLastName} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
-                <input type="email" name="studentEmail" placeholder="Student Email Address (Required)" value={formData.studentEmail} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 md:col-span-2 text-sm" required />
+                <input type="text" name="studentFirstName" placeholder="Student First Name (Required)" value={formData.studentFirstName} onChange={handleChange} maxLength={100} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="text" name="studentLastName" placeholder="Student Last Name (Required)" value={formData.studentLastName} onChange={handleChange} maxLength={100} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="email" name="studentEmail" placeholder="Student Email Address (Required)" value={formData.studentEmail} onChange={handleChange} maxLength={254} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="tel" name="studentPhone" placeholder="Student Phone Number (Optional)" value={formData.studentPhone} onChange={handleChange} maxLength={20} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" />
             </div>
 
             <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center mb-3 border-b pb-2 pt-2 sm:pt-4">
@@ -170,10 +187,10 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
             </h3>
             {/* Form layout changes to single column on mobile */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" name="parentFirstName" placeholder="Parent First Name (Required)" value={formData.parentFirstName} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
-                <input type="text" name="parentLastName" placeholder="Parent Last Name (Required)" value={formData.parentLastName} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
-                <input type="email" name="parentEmail" placeholder="Parent Email Address (Required)" value={formData.parentEmail} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
-                <input type="tel" name="contactNumber" placeholder="Contact Number (Required)" value={formData.contactNumber} onChange={handleChange} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="text" name="parentFirstName" placeholder="Parent First Name (Required)" value={formData.parentFirstName} onChange={handleChange} maxLength={100} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="text" name="parentLastName" placeholder="Parent Last Name (Required)" value={formData.parentLastName} onChange={handleChange} maxLength={100} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="email" name="parentEmail" placeholder="Parent Email Address (Required)" value={formData.parentEmail} onChange={handleChange} maxLength={254} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
+                <input type="tel" name="contactNumber" placeholder="Contact Number (Required)" value={formData.contactNumber} onChange={handleChange} maxLength={20} className="p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
             </div>
 
             <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center mb-3 border-b pb-2 pt-2 sm:pt-4">
@@ -257,7 +274,7 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
                     scrollbar-color: #f97316 white;
                 }
             `}</style>
-            
+
             {/* Modal Content container - responsive max-height retained */}
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg lg:max-w-xl p-4 sm:p-6 relative transform transition-all duration-300 scale-100 opacity-100 max-h-[80vh] sm:max-h-[75vh] overflow-y-auto custom-scroll">
                 <button

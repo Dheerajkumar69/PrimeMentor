@@ -20,7 +20,8 @@ import {
     getAcceptedClassRequests,
     getAllPastClassSubmissions,
     getAllFeedback,
-    approveAssessment
+    approveAssessment,
+    updateAssessmentTeachers
 } from '../controllers/adminController.js';
 import { adminOnlyMiddleware } from '../middlewares/adminMiddleware.js';
 
@@ -66,5 +67,8 @@ router.get('/feedback', getAllFeedback);
 
 // Approve a free assessment (assign teacher + create Zoom + send emails)
 router.put('/assessment/:assessmentId/approve', approveAssessment);
+
+// Update teachers on an already-scheduled assessment
+router.put('/assessment/:assessmentId/update-teachers', updateAssessmentTeachers);
 
 export default router;

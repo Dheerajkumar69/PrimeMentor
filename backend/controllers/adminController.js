@@ -1,6 +1,7 @@
 // backend/controllers/adminController.js
 
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
@@ -513,17 +514,46 @@ export const getAllFeedback = asyncHandler(async (req, res) => {
     res.json(feedbackList);
 });
 
-// @desc    Admin approves a free assessment: assigns teacher, creates Zoom meeting, sends emails
+// @desc    Admin approves a free assessment: assigns multiple teachers, creates Zoom meeting, sends emails
 // @route   PUT /api/admin/assessment/:assessmentId/approve
 // @access  Private (Admin Only)
 export const approveAssessment = asyncHandler(async (req, res) => {
     const { assessmentId } = req.params;
-    const { teacherId, scheduledDate, scheduledTime } = req.body;
+    // Accept teacherIds (array) — also support legacy teacherId (string) for backward compat
+    const { teacherIds, teacherId, scheduledDate, scheduledTime } = req.body;
+
+    // Validate assessmentId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(assessmentId)) {
+        res.status(400);
+        throw new Error('Invalid assessment ID format.');
+    }
+
+    // Normalise to an array
+    let resolvedTeacherIds = teacherIds && teacherIds.length > 0
+        ? teacherIds
+        : (teacherId ? [teacherId] : []);
 
     // 1. Validate required fields
-    if (!teacherId || !scheduledDate || !scheduledTime) {
+    if (resolvedTeacherIds.length === 0 || !scheduledDate || !scheduledTime) {
         res.status(400);
-        throw new Error('teacherId, scheduledDate, and scheduledTime are all required.');
+        throw new Error('At least one teacher, scheduledDate, and scheduledTime are all required.');
+    }
+
+    // Validate all teacher IDs are valid ObjectIds
+    for (const id of resolvedTeacherIds) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            res.status(400);
+            throw new Error(`Invalid teacher ID format: ${id}`);
+        }
+    }
+
+    // Deduplicate teacher IDs
+    resolvedTeacherIds = [...new Set(resolvedTeacherIds)];
+
+    // Validate scheduledTime format (HH:MM)
+    if (!/^\d{2}:\d{2}$/.test(scheduledTime)) {
+        res.status(400);
+        throw new Error('Invalid time format. Use HH:MM (e.g., 14:30).');
     }
 
     // 2. Find the assessment
@@ -538,15 +568,21 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         throw new Error(`Assessment is already ${assessment.status}. Cannot approve again.`);
     }
 
-    // 3. Find the teacher
-    const teacher = await TeacherModel.findById(teacherId);
-    if (!teacher) {
+    // 3. Find all selected teachers
+    const teachers = await TeacherModel.find({ _id: { $in: resolvedTeacherIds } });
+    if (teachers.length === 0) {
         res.status(404);
-        throw new Error('Teacher not found.');
+        throw new Error('No valid teachers found for the given IDs.');
+    }
+
+    // Warn if some teacher IDs didn't match (but don't block)
+    if (teachers.length < resolvedTeacherIds.length) {
+        console.warn(`⚠️ ${resolvedTeacherIds.length - teachers.length} teacher ID(s) did not match any records.`);
     }
 
     // 4. Create Zoom meeting
     const studentName = `${assessment.studentFirstName} ${assessment.studentLastName}`;
+    const teacherNamesStr = teachers.map(t => t.name).join(', ');
     const meetingTopic = `Free Assessment: ${assessment.subject} — ${studentName} (Year ${assessment.class})`;
 
     // Build the start time from date + time
@@ -554,6 +590,12 @@ export const approveAssessment = asyncHandler(async (req, res) => {
     if (isNaN(meetingStartTime.getTime())) {
         res.status(400);
         throw new Error('Invalid date/time format. Use YYYY-MM-DD for date and HH:MM for time.');
+    }
+
+    // Guard against scheduling in the past
+    if (meetingStartTime < new Date()) {
+        res.status(400);
+        throw new Error('Cannot schedule an assessment in the past. Please choose a future date and time.');
     }
 
     let zoomData;
@@ -567,9 +609,17 @@ export const approveAssessment = asyncHandler(async (req, res) => {
     }
 
     // 5. Update the assessment record
-    assessment.teacherId = teacher._id;
-    assessment.teacherName = teacher.name;
-    assessment.teacherEmail = teacher.email;
+    // Legacy single-teacher fields (first teacher for backward compat)
+    const primaryTeacher = teachers[0];
+    assessment.teacherId = primaryTeacher._id;
+    assessment.teacherName = primaryTeacher.name;
+    assessment.teacherEmail = primaryTeacher.email;
+
+    // New multi-teacher array fields
+    assessment.teacherIds = teachers.map(t => t._id);
+    assessment.teacherNames = teachers.map(t => t.name);
+    assessment.teacherEmails = teachers.map(t => t.email);
+
     assessment.scheduledDate = meetingStartTime;
     assessment.scheduledTime = scheduledTime;
     assessment.zoomMeetingLink = zoomData.joinUrl;
@@ -585,26 +635,26 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    const emailDetails = {
+    // 7. Send emails (non-blocking — don't fail the request if email fails)
+    // Send to student email
+    const studentEmailDetails = {
         studentName,
-        teacherName: teacher.name,
+        teacherName: teacherNamesStr,
         subject: assessment.subject,
         yearLevel: assessment.class,
         scheduledDate: formattedDate,
         scheduledTime: scheduledTime,
         zoomLink: zoomData.joinUrl,       // For students/parents (join as participant)
-        zoomStartLink: zoomData.startUrl, // For teacher (start as host)
+        zoomStartLink: zoomData.startUrl,
     };
 
-    // 7. Send emails (non-blocking — don't fail the request if email fails)
-    // Send to student email
     if (assessment.studentEmail) {
         try {
             await sendAssessmentApprovalEmail(
                 assessment.studentEmail,
                 studentName,
                 'student',
-                emailDetails
+                studentEmailDetails
             );
             console.log('✅ Student email sent to:', assessment.studentEmail);
         } catch (emailErr) {
@@ -619,7 +669,7 @@ export const approveAssessment = asyncHandler(async (req, res) => {
                 assessment.parentEmail,
                 studentName,
                 'student',
-                emailDetails
+                studentEmailDetails
             );
             console.log('✅ Parent email sent to:', assessment.parentEmail);
         } catch (emailErr) {
@@ -627,26 +677,152 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         }
     }
 
-    try {
-        // Email to teacher
-        await sendAssessmentApprovalEmail(
-            teacher.email,
-            teacher.name,
-            'teacher',
-            emailDetails
-        );
-        console.log('✅ Teacher email sent to:', teacher.email);
-    } catch (emailErr) {
-        console.error('⚠️ Failed to send teacher email:', emailErr.message);
+    // Send to ALL selected teachers (each gets the Zoom host start link)
+    for (const teacher of teachers) {
+        const teacherEmailDetails = {
+            studentName,
+            teacherName: teacher.name,
+            subject: assessment.subject,
+            yearLevel: assessment.class,
+            scheduledDate: formattedDate,
+            scheduledTime: scheduledTime,
+            zoomLink: zoomData.joinUrl,
+            zoomStartLink: zoomData.startUrl, // Each teacher gets the host link
+        };
+
+        try {
+            await sendAssessmentApprovalEmail(
+                teacher.email,
+                teacher.name,
+                'teacher',
+                teacherEmailDetails
+            );
+            console.log('✅ Teacher email sent to:', teacher.email);
+        } catch (emailErr) {
+            console.error(`⚠️ Failed to send teacher email to ${teacher.email}:`, emailErr.message);
+        }
     }
 
     // 8. Return success response
     res.json({
-        message: 'Assessment approved! Zoom meeting created and emails sent.',
+        message: `Assessment approved! Zoom meeting created and emails sent to ${teachers.length} teacher(s).`,
         assessment: updatedAssessment,
         zoom: {
             meetingId: zoomData.meetingId,
             joinUrl: zoomData.joinUrl,
         },
+    });
+});
+
+
+// @desc    Admin updates teachers on an already-scheduled assessment
+// @route   PUT /api/admin/assessment/:assessmentId/update-teachers
+// @access  Private (Admin Only)
+export const updateAssessmentTeachers = asyncHandler(async (req, res) => {
+    const { assessmentId } = req.params;
+    let { teacherIds } = req.body;
+
+    // Validate assessmentId
+    if (!mongoose.Types.ObjectId.isValid(assessmentId)) {
+        res.status(400);
+        throw new Error('Invalid assessment ID format.');
+    }
+
+    // Validate teacherIds is a non-empty array
+    if (!Array.isArray(teacherIds) || teacherIds.length === 0) {
+        res.status(400);
+        throw new Error('teacherIds must be a non-empty array.');
+    }
+
+    // Cap maximum teachers to prevent abuse
+    if (teacherIds.length > 50) {
+        res.status(400);
+        throw new Error('Cannot assign more than 50 teachers to a single assessment.');
+    }
+
+    // Validate each teacherId is a valid ObjectId
+    for (const id of teacherIds) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            res.status(400);
+            throw new Error(`Invalid teacher ID format: ${id}`);
+        }
+    }
+
+    // Deduplicate
+    teacherIds = [...new Set(teacherIds)];
+
+    // 1. Find the assessment
+    const assessment = await Assessment.findById(assessmentId);
+    if (!assessment) {
+        res.status(404);
+        throw new Error('Assessment not found.');
+    }
+
+    if (assessment.status !== 'Scheduled') {
+        res.status(400);
+        throw new Error('Can only update teachers on a Scheduled assessment.');
+    }
+
+    // 2. Find all selected teachers
+    const teachers = await TeacherModel.find({ _id: { $in: teacherIds } });
+    if (teachers.length === 0) {
+        res.status(404);
+        throw new Error('No valid teachers found for the given IDs.');
+    }
+
+    // Warn if some teacher IDs didn't match
+    if (teachers.length < teacherIds.length) {
+        console.warn(`⚠️ ${teacherIds.length - teachers.length} teacher ID(s) did not match any records.`);
+    }
+
+    // 3. Update teacher fields
+    const primaryTeacher = teachers[0];
+    assessment.teacherId = primaryTeacher._id;
+    assessment.teacherName = primaryTeacher.name;
+    assessment.teacherEmail = primaryTeacher.email;
+
+    assessment.teacherIds = teachers.map(t => t._id);
+    assessment.teacherNames = teachers.map(t => t.name);
+    assessment.teacherEmails = teachers.map(t => t.email);
+
+    const updatedAssessment = await assessment.save();
+    console.log('✅ Assessment teachers updated:', updatedAssessment._id);
+
+    // 4. Re-send Zoom host email to all teachers
+    const studentName = `${assessment.studentFirstName} ${assessment.studentLastName}`;
+    const formattedDate = assessment.scheduledDate
+        ? assessment.scheduledDate.toLocaleDateString('en-AU', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        })
+        : 'TBD';
+
+    for (const teacher of teachers) {
+        const emailDetails = {
+            studentName,
+            teacherName: teacher.name,
+            subject: assessment.subject,
+            yearLevel: assessment.class,
+            scheduledDate: formattedDate,
+            scheduledTime: assessment.scheduledTime,
+            zoomLink: assessment.zoomMeetingLink,
+            zoomStartLink: assessment.zoomStartLink,
+        };
+
+        try {
+            await sendAssessmentApprovalEmail(
+                teacher.email,
+                teacher.name,
+                'teacher',
+                emailDetails
+            );
+            console.log('✅ Teacher re-assignment email sent to:', teacher.email);
+        } catch (emailErr) {
+            console.error(`⚠️ Failed to send teacher email to ${teacher.email}:`, emailErr.message);
+        }
+    }
+
+    res.json({
+        message: `Teachers updated! Emails sent to ${teachers.length} teacher(s).`,
+        assessment: updatedAssessment,
     });
 });

@@ -9,7 +9,7 @@ import { sendAssessmentBookingConfirmation } from '../utils/emailService.js';
 const submitAssessmentRequest = asyncHandler(async (req, res) => {
     // Destructure all fields being sent from the AssessmentModal.jsx
     const {
-        studentFirstName, studentLastName, studentEmail,
+        studentFirstName, studentLastName, studentEmail, studentPhone,
         parentFirstName, parentLastName, parentEmail,
         contactNumber, subject, class: studentClass,
     } = req.body;
@@ -27,28 +27,71 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
         throw new Error('Missing one or more required fields for assessment submission.');
     }
 
+    // Trim all string inputs to prevent whitespace-only submissions
+    const trimmed = {
+        studentFirstName: String(studentFirstName).trim(),
+        studentLastName: String(studentLastName).trim(),
+        studentEmail: String(studentEmail).trim().toLowerCase(),
+        studentPhone: studentPhone ? String(studentPhone).trim() : null,
+        parentFirstName: String(parentFirstName).trim(),
+        parentLastName: String(parentLastName).trim(),
+        parentEmail: String(parentEmail).trim().toLowerCase(),
+        contactNumber: String(contactNumber).trim(),
+        subject: String(subject).trim(),
+    };
+
+    // Validate trimmed required fields aren't empty
+    const requiredTrimmed = ['studentFirstName', 'studentLastName', 'studentEmail',
+        'parentFirstName', 'parentLastName', 'parentEmail', 'contactNumber', 'subject'];
+    for (const key of requiredTrimmed) {
+        if (!trimmed[key]) {
+            res.status(400);
+            throw new Error(`Field "${key}" cannot be empty or whitespace-only.`);
+        }
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed.studentEmail)) {
+        res.status(400);
+        throw new Error('Invalid student email address format.');
+    }
+    if (!emailRegex.test(trimmed.parentEmail)) {
+        res.status(400);
+        throw new Error('Invalid parent email address format.');
+    }
+
+    // Validate class/year range (2-12)
+    const classNum = parseInt(studentClass, 10);
+    if (isNaN(classNum) || classNum < 2 || classNum > 12) {
+        res.status(400);
+        throw new Error('Class/Year level must be between 2 and 12.');
+    }
+
+    // Sanitize phone numbers — strip everything except digits, +, and spaces
+    const sanitizePhone = (ph) => ph ? ph.replace(/[^\d+\s()-]/g, '').trim() : null;
+    trimmed.contactNumber = sanitizePhone(trimmed.contactNumber);
+    trimmed.studentPhone = sanitizePhone(trimmed.studentPhone);
+
     try {
         const newAssessment = await Assessment.create({
-            studentFirstName, studentLastName, studentEmail,
-            parentFirstName, parentLastName, parentEmail,
-            contactNumber,
-            subject,
-            class: studentClass,
+            ...trimmed,
+            class: classNum,
             // Explicitly set this field for confirmation
             isFreeAssessment: true,
         });
 
         // Send confirmation email to parent AND student (non-blocking — don't fail the request if email fails)
         const emailDetails = {
-            studentName: `${studentFirstName} ${studentLastName}`,
-            parentName: `${parentFirstName} ${parentLastName}`,
-            subject,
-            yearLevel: studentClass,
-            studentEmail,
+            studentName: `${trimmed.studentFirstName} ${trimmed.studentLastName}`,
+            parentName: `${trimmed.parentFirstName} ${trimmed.parentLastName}`,
+            subject: trimmed.subject,
+            yearLevel: classNum,
+            studentEmail: trimmed.studentEmail,
         };
 
         // Send only to student email
-        const recipients = [studentEmail].filter(Boolean);
+        const recipients = [trimmed.studentEmail].filter(Boolean);
         console.log('📧 Attempting to send assessment booking confirmation to:', recipients);
 
         for (const email of recipients) {

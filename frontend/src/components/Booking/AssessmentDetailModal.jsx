@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     X, User, Phone, Clock, Tag, Zap, BookOpen, Mail,
-    UserPlus, Calendar, Loader2, CheckCircle, Video, ExternalLink
+    UserPlus, Calendar, Loader2, CheckCircle, Video, ExternalLink, Search, Edit3
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -12,47 +12,129 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false, onApproved }) => {
     const [teachers, setTeachers] = useState([]);
-    const [selectedTeacherId, setSelectedTeacherId] = useState('');
+    const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
     const [scheduledDate, setScheduledDate] = useState('');
     const [scheduledTime, setScheduledTime] = useState('');
     const [approving, setApproving] = useState(false);
     const [loadingTeachers, setLoadingTeachers] = useState(false);
+    const [teacherSearch, setTeacherSearch] = useState('');
+    const [editingTeachers, setEditingTeachers] = useState(false);
+    const [updatingTeachers, setUpdatingTeachers] = useState(false);
 
-    // Fetch teachers when modal opens in approval mode
+    // Fetch teachers when modal opens in approval mode OR when editing teachers
+    const fetchTeachers = async () => {
+        setLoadingTeachers(true);
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await axios.get(`${BACKEND_URL}/api/admin/teachers`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setTeachers(response.data || []);
+        } catch (err) {
+            console.error('Failed to fetch teachers:', err);
+            toast.error('Failed to load teachers list.');
+        } finally {
+            setLoadingTeachers(false);
+        }
+    };
+
     useEffect(() => {
         if (isOpen && approvalMode) {
-            const fetchTeachers = async () => {
-                setLoadingTeachers(true);
-                try {
-                    const token = localStorage.getItem('adminToken');
-                    const response = await axios.get(`${BACKEND_URL}/api/admin/teachers`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-                    setTeachers(response.data || []);
-                } catch (err) {
-                    console.error('Failed to fetch teachers:', err);
-                    toast.error('Failed to load teachers list.');
-                } finally {
-                    setLoadingTeachers(false);
-                }
-            };
             fetchTeachers();
         }
 
         // Reset form when modal closes
         if (!isOpen) {
-            setSelectedTeacherId('');
+            setSelectedTeacherIds([]);
             setScheduledDate('');
             setScheduledTime('');
             setApproving(false);
+            setTeacherSearch('');
+            setEditingTeachers(false);
+            setUpdatingTeachers(false);
         }
     }, [isOpen, approvalMode]);
 
-    if (!isOpen || !booking) return null;
+    if (!isOpen || !booking || !booking._id) return null;
+
+    const toggleTeacher = (teacherId) => {
+        setSelectedTeacherIds(prev =>
+            prev.includes(teacherId)
+                ? prev.filter(id => id !== teacherId)
+                : [...prev, teacherId]
+        );
+    };
+
+    const selectAllTeachers = () => {
+        if (!teachers || teachers.length === 0) return;
+        if (selectedTeacherIds.length === teachers.length) {
+            setSelectedTeacherIds([]);
+        } else {
+            setSelectedTeacherIds(teachers.map(t => t._id));
+        }
+    };
+
+    const filteredTeachers = teachers.filter(t => {
+        const query = teacherSearch.toLowerCase();
+        return (
+            t.name?.toLowerCase().includes(query) ||
+            t.email?.toLowerCase().includes(query) ||
+            t.subject?.toLowerCase().includes(query)
+        );
+    });
+
+    const handleStartEditTeachers = () => {
+        if (editingTeachers || updatingTeachers) return; // Prevent double-click
+        setEditingTeachers(true);
+        // Pre-select currently assigned teachers (safe access)
+        const currentIds = Array.isArray(booking.teacherIds) && booking.teacherIds.length > 0
+            ? booking.teacherIds
+            : (booking.teacherId ? [booking.teacherId] : []);
+        setSelectedTeacherIds(currentIds);
+        fetchTeachers();
+    };
+
+    const handleCancelEditTeachers = () => {
+        setEditingTeachers(false);
+        setSelectedTeacherIds([]);
+        setTeacherSearch('');
+    };
+
+    const handleUpdateTeachers = async () => {
+        if (updatingTeachers) return; // Prevent double-click
+        if (selectedTeacherIds.length === 0) {
+            toast.error('Please select at least one teacher.');
+            return;
+        }
+
+        setUpdatingTeachers(true);
+        try {
+            const token = localStorage.getItem('adminToken');
+            await axios.put(
+                `${BACKEND_URL}/api/admin/assessment/${booking._id}/update-teachers`,
+                { teacherIds: selectedTeacherIds },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            toast.success(`Teachers updated! Emails sent to ${selectedTeacherIds.length} teacher(s). 🎉`, {
+                duration: 5000,
+            });
+
+            setEditingTeachers(false);
+            if (onApproved) onApproved(); // Refresh the list
+        } catch (err) {
+            console.error('Update teachers failed:', err.response?.data || err.message);
+            const errorMsg = err.response?.data?.message || 'Failed to update teachers.';
+            toast.error(errorMsg, { duration: 6000 });
+        } finally {
+            setUpdatingTeachers(false);
+        }
+    };
 
     const handleApprove = async () => {
-        if (!selectedTeacherId) {
-            toast.error('Please select a teacher.');
+        if (approving) return; // Prevent double-click
+        if (selectedTeacherIds.length === 0) {
+            toast.error('Please select at least one teacher.');
             return;
         }
         if (!scheduledDate) {
@@ -67,10 +149,10 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
         setApproving(true);
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await axios.put(
+            await axios.put(
                 `${BACKEND_URL}/api/admin/assessment/${booking._id}/approve`,
                 {
-                    teacherId: selectedTeacherId,
+                    teacherIds: selectedTeacherIds,
                     scheduledDate,
                     scheduledTime,
                 },
@@ -79,7 +161,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                 }
             );
 
-            toast.success('Assessment approved! Zoom meeting created & emails sent. 🎉', {
+            toast.success(`Assessment approved! Zoom meeting created & emails sent to ${selectedTeacherIds.length} teacher(s). 🎉`, {
                 duration: 5000,
             });
 
@@ -154,7 +236,73 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
         );
     };
 
+    // Reusable teacher multi-select checkbox list component
+    const TeacherCheckboxList = () => (
+        <div className="border border-gray-300 rounded-lg bg-white shadow-sm overflow-hidden">
+            {/* Search + Select All Bar */}
+            <div className="flex items-center gap-2 p-2 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center flex-1 gap-2 px-2">
+                    <Search className="w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Search teachers..."
+                        value={teacherSearch}
+                        onChange={(e) => setTeacherSearch(e.target.value)}
+                        className="w-full text-sm py-1 bg-transparent outline-none placeholder-gray-400"
+                    />
+                </div>
+                <button
+                    type="button"
+                    onClick={selectAllTeachers}
+                    className="text-xs px-3 py-1 rounded-md bg-green-100 text-green-700 hover:bg-green-200 font-medium transition whitespace-nowrap"
+                >
+                    {selectedTeacherIds.length === teachers.length ? 'Deselect All' : 'Select All'}
+                </button>
+            </div>
+
+            {/* Teacher Checkbox List */}
+            <div className="max-h-48 overflow-y-auto">
+                {filteredTeachers.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">No teachers found.</p>
+                ) : (
+                    filteredTeachers.map((t) => {
+                        const isSelected = selectedTeacherIds.includes(t._id);
+                        return (
+                            <label
+                                key={t._id}
+                                className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-green-50 transition-colors border-b border-gray-100 last:border-b-0 ${isSelected ? 'bg-green-50' : ''}`}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleTeacher(t._id)}
+                                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-gray-800 truncate">
+                                        {t.name}
+                                    </p>
+                                    <p className="text-xs text-gray-500 truncate">
+                                        {t.email} {t.subject ? `• ${t.subject}` : ''}
+                                    </p>
+                                </div>
+                                {isSelected && (
+                                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                )}
+                            </label>
+                        );
+                    })
+                )}
+            </div>
+        </div>
+    );
+
     const isAlreadyScheduled = booking.status === 'Scheduled' || booking.status === 'Completed';
+
+    // Resolve assigned teacher names for display (null-safe)
+    const assignedTeacherNames = Array.isArray(booking.teacherNames) && booking.teacherNames.length > 0
+        ? booking.teacherNames.join(', ')
+        : booking.teacherName || 'N/A';
 
     return (
         <div className="fixed inset-0 z-50 h-full w-full backdrop-blur-md bg-black/70 flex items-center justify-center p-4">
@@ -214,6 +362,9 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                         <div className='space-y-4'>
                             <ContactItem icon={User} title="Student Name" value={`${booking.studentFirstName} ${booking.studentLastName}`} />
                             <ContactItem icon={Mail} title="Student Email" value={booking.studentEmail} type="email" />
+                            {booking.studentPhone && (
+                                <ContactItem icon={Phone} title="Student Phone" value={booking.studentPhone} type="tel" />
+                            )}
                         </div>
                     </div>
                     <div className="p-4 bg-orange-50/10 rounded-xl">
@@ -237,8 +388,8 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                         <div className="space-y-3 text-sm">
                             <div className="flex items-center gap-2">
                                 <User className="w-4 h-4 text-blue-500" />
-                                <span className="font-medium text-gray-700">Assigned Teacher:</span>
-                                <span className="font-semibold text-gray-900">{booking.teacherName}</span>
+                                <span className="font-medium text-gray-700">Assigned Teacher(s):</span>
+                                <span className="font-semibold text-gray-900">{assignedTeacherNames}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-blue-500" />
@@ -259,7 +410,67 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                                     Join Meeting <ExternalLink className="w-3 h-3" />
                                 </a>
                             </div>
+
+                            {/* Edit Teachers Button */}
+                            {booking.status === 'Scheduled' && !editingTeachers && (
+                                <button
+                                    onClick={handleStartEditTeachers}
+                                    className="mt-3 flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg shadow hover:bg-orange-600 transition font-medium text-sm"
+                                >
+                                    <Edit3 className="w-4 h-4" />
+                                    Change Teacher(s)
+                                </button>
+                            )}
                         </div>
+
+                        {/* ====== EDIT TEACHERS FORM (inline, shown when editing) ====== */}
+                        {editingTeachers && (
+                            <div className="mt-4 p-4 bg-white border-2 border-orange-300 rounded-xl">
+                                <h4 className="font-bold text-sm text-orange-700 flex items-center mb-3">
+                                    <Edit3 className="w-4 h-4 mr-2" /> Update Assigned Teacher(s)
+                                    {selectedTeacherIds.length > 0 && (
+                                        <span className="ml-2 text-green-600 font-bold">
+                                            ({selectedTeacherIds.length} selected)
+                                        </span>
+                                    )}
+                                </h4>
+
+                                {loadingTeachers ? (
+                                    <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+                                        <Loader2 className="w-4 h-4 animate-spin" /> Loading teachers...
+                                    </div>
+                                ) : (
+                                    <TeacherCheckboxList />
+                                )}
+
+                                <div className="flex gap-3 mt-4">
+                                    <button
+                                        onClick={handleUpdateTeachers}
+                                        disabled={updatingTeachers || selectedTeacherIds.length === 0}
+                                        className="flex-1 flex justify-center items-center py-2.5 px-4 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {updatingTeachers ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="w-4 h-4 mr-2" />
+                                                Save & Send Emails
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={handleCancelEditTeachers}
+                                        disabled={updatingTeachers}
+                                        className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium text-sm"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -267,33 +478,26 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                 {approvalMode && !isAlreadyScheduled && (
                     <div className="mt-6 p-5 bg-green-50 border-2 border-green-200 rounded-xl">
                         <h3 className="font-bold text-lg text-green-800 flex items-center mb-4 pb-2 border-b border-green-300">
-                            <UserPlus className="w-5 h-5 mr-2" /> Assign Teacher & Schedule
+                            <UserPlus className="w-5 h-5 mr-2" /> Assign Teacher(s) & Schedule
                         </h3>
 
                         <div className="space-y-4">
-                            {/* Teacher Dropdown */}
+                            {/* Teacher Multi-Select */}
                             <div>
-                                <label htmlFor="teacher-select" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Select Teacher *
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Select Teacher(s) *
+                                    {selectedTeacherIds.length > 0 && (
+                                        <span className="ml-2 text-green-600 font-bold">
+                                            ({selectedTeacherIds.length} selected)
+                                        </span>
+                                    )}
                                 </label>
                                 {loadingTeachers ? (
                                     <div className="flex items-center gap-2 text-sm text-gray-500">
                                         <Loader2 className="w-4 h-4 animate-spin" /> Loading teachers...
                                     </div>
                                 ) : (
-                                    <select
-                                        id="teacher-select"
-                                        value={selectedTeacherId}
-                                        onChange={(e) => setSelectedTeacherId(e.target.value)}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm text-gray-800"
-                                    >
-                                        <option value="">— Choose a teacher —</option>
-                                        {teachers.map((t) => (
-                                            <option key={t._id} value={t._id}>
-                                                {t.name} ({t.email}) {t.subject ? `— ${t.subject}` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <TeacherCheckboxList />
                                 )}
                             </div>
 
@@ -329,7 +533,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                             {/* Approve Button */}
                             <button
                                 onClick={handleApprove}
-                                disabled={approving || !selectedTeacherId || !scheduledDate || !scheduledTime}
+                                disabled={approving || selectedTeacherIds.length === 0 || !scheduledDate || !scheduledTime}
                                 className="w-full flex justify-center items-center py-3 px-6 bg-green-600 text-white rounded-xl shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed font-bold text-lg"
                             >
                                 {approving ? (
@@ -341,6 +545,11 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                                     <>
                                         <CheckCircle className="w-5 h-5 mr-2" />
                                         Approve & Create Zoom Meeting
+                                        {selectedTeacherIds.length > 0 && (
+                                            <span className="ml-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                                {selectedTeacherIds.length} teacher{selectedTeacherIds.length > 1 ? 's' : ''}
+                                            </span>
+                                        )}
                                     </>
                                 )}
                             </button>

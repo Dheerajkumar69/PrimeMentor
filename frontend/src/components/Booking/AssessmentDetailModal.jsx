@@ -149,6 +149,36 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
         setApproving(true);
         try {
             const token = localStorage.getItem('adminToken');
+
+            // ⛔ PRE-CHECK: Verify teacher availability before approving
+            try {
+                const availRes = await axios.post(
+                    `${BACKEND_URL}/api/admin/check-teacher-availability`,
+                    {
+                        teacherIds: selectedTeacherIds,
+                        scheduledDate,
+                        scheduledTime,
+                        durationMinutes: 30,
+                        excludeAssessmentId: booking._id,
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                if (!availRes.data.allAvailable) {
+                    const busy = availRes.data.teachers
+                        .filter(t => !t.available)
+                        .map(t => `${t.teacherName} (${t.conflicts.map(c => c.title + ' at ' + c.time).join(', ')})`)
+                        .join('; ');
+                    toast.error(`⚠️ Scheduling conflict: ${busy}. Choose a different time.`, { duration: 8000 });
+                    setApproving(false);
+                    return;
+                }
+            } catch (checkErr) {
+                // If the availability check itself fails, log it but still attempt the approval
+                // (the backend approve endpoint has its own conflict guard as a second layer)
+                console.warn('Availability pre-check failed, proceeding with approval:', checkErr.message);
+            }
+
             await axios.put(
                 `${BACKEND_URL}/api/admin/assessment/${booking._id}/approve`,
                 {
@@ -365,6 +395,21 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                             {booking.studentPhone && (
                                 <ContactItem icon={Phone} title="Student Phone" value={booking.studentPhone} type="tel" />
                             )}
+                            {booking.country && (
+                                <ContactItem icon={User} title="Country" value={booking.country} />
+                            )}
+                            {booking.postalCode && (
+                                <ContactItem icon={User} title="Postal Code" value={booking.postalCode} />
+                            )}
+                            {booking.studentTimezone && booking.studentTimezone !== 'UTC' && (
+                                <div className="flex items-start gap-2">
+                                    <Clock className="w-4 h-4 text-indigo-400 mt-0.5" />
+                                    <div>
+                                        <p className="text-xs uppercase tracking-wider text-gray-500">Student Timezone</p>
+                                        <p className="font-semibold text-gray-800 text-sm">{booking.studentTimezone}</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="p-4 bg-orange-50/10 rounded-xl">
@@ -395,7 +440,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                                 <Calendar className="w-4 h-4 text-blue-500" />
                                 <span className="font-medium text-gray-700">Date & Time:</span>
                                 <span className="font-semibold text-gray-900">
-                                    {formatDate(booking.scheduledDate)} at {booking.scheduledTime}
+                                    {formatDate(booking.scheduledDate)} at {booking.scheduledTime} (IST)
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -504,7 +549,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                             {/* Date Picker */}
                             <div>
                                 <label htmlFor="schedule-date" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Assessment Date *
+                                    Assessment Date (IST) *
                                 </label>
                                 <input
                                     id="schedule-date"
@@ -519,7 +564,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                             {/* Time Picker */}
                             <div>
                                 <label htmlFor="schedule-time" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Assessment Time (Sydney/NSW) *
+                                    Assessment Time (IST — Indian Standard Time) *
                                 </label>
                                 <input
                                     id="schedule-time"

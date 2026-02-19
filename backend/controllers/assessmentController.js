@@ -2,6 +2,7 @@
 import Assessment from '../models/AssessmentModel.js';
 import asyncHandler from 'express-async-handler';
 import { sendAssessmentBookingConfirmation } from '../utils/emailService.js';
+import { resolveTimezone } from '../utils/timezoneHelper.js';
 
 // @desc    Submit new free assessment request from the modal
 // @route   POST /api/assessments/submit
@@ -12,6 +13,7 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
         studentFirstName, studentLastName, studentEmail, studentPhone,
         parentFirstName, parentLastName, parentEmail,
         contactNumber, subject, class: studentClass,
+        postalCode, country,
     } = req.body;
 
     // Comprehensive validation for all required fields
@@ -38,6 +40,8 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
         parentEmail: String(parentEmail).trim().toLowerCase(),
         contactNumber: String(contactNumber).trim(),
         subject: String(subject).trim(),
+        postalCode: postalCode ? String(postalCode).trim() : null,
+        country: country ? String(country).trim() : null,
     };
 
     // Validate trimmed required fields aren't empty
@@ -73,11 +77,21 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
     trimmed.contactNumber = sanitizePhone(trimmed.contactNumber);
     trimmed.studentPhone = sanitizePhone(trimmed.studentPhone);
 
+    // Resolve student timezone from postal code + country
+    let studentTimezone = 'UTC';
+    if (trimmed.postalCode && trimmed.country) {
+        try {
+            studentTimezone = await resolveTimezone(trimmed.postalCode, trimmed.country);
+        } catch (tzErr) {
+            console.warn('⚠️ Timezone resolution failed:', tzErr.message, '— defaulting to UTC');
+        }
+    }
+
     try {
         const newAssessment = await Assessment.create({
             ...trimmed,
             class: classNum,
-            // Explicitly set this field for confirmation
+            studentTimezone,
             isFreeAssessment: true,
         });
 

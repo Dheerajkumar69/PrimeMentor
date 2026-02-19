@@ -13,13 +13,130 @@ import FeedbackModel from '../models/FeedbackModel.js';
 import Assessment from '../models/AssessmentModel.js';
 import Syllabus from '../models/SyllabusModel.js';
 import generateToken from '../utils/generateToken.js';
-import { createZoomMeeting } from '../utils/zoomIntegration.js';
+import { createZoomMeeting, getAvailableHost } from '../utils/zoomIntegration.js';
 import { sendAssessmentApprovalEmail, sendClassAssignmentEmail } from '../utils/emailService.js';
 
 // --- Hardcoded Admin Credentials (Matching Frontend) ---
 const HARDCODED_ADMIN_EMAIL = 'admin@primementor.com.au';
 const HARDCODED_ADMIN_PASSWORD = 'Adminprime@315';
 const DUMMY_ADMIN_ID = 'admin_root_id';
+
+// ======================== INTERNAL HELPER: Time-conflict detection ========================
+
+/**
+ * Parse a time string like "14:30" or "2:30 PM" into { hours, minutes } in 24h format.
+ */
+const parseTime24 = (timeStr) => {
+    if (!timeStr) return null;
+    const trimmed = timeStr.trim();
+
+    // HH:MM (24h format)
+    const match24 = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) return { hours: parseInt(match24[1], 10), minutes: parseInt(match24[2], 10) };
+
+    // h:mm AM/PM
+    const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match12) {
+        let h = parseInt(match12[1], 10);
+        const m = parseInt(match12[2], 10);
+        const period = match12[3].toUpperCase();
+        if (period === 'PM' && h !== 12) h += 12;
+        if (period === 'AM' && h === 12) h = 0;
+        return { hours: h, minutes: m };
+    }
+    return null;
+};
+
+/**
+ * Build a Date object from a date string (YYYY-MM-DD or ISO) and a time object { hours, minutes }.
+ */
+const buildDateTime = (dateStr, timeParsed) => {
+    if (!dateStr || !timeParsed) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    d.setHours(timeParsed.hours, timeParsed.minutes, 0, 0);
+    return d;
+};
+
+/**
+ * Extract the first time from a schedule-time string that may be a range
+ * like "3:00 PM - 4:00 PM" or a simple "15:00".
+ */
+const extractStartTime = (scheduleTimeStr) => {
+    if (!scheduleTimeStr) return null;
+    // Try splitting on " - " to get the start portion
+    const parts = scheduleTimeStr.split(/\s*-\s*/);
+    return parseTime24(parts[0]);
+};
+
+/**
+ * Given a teacher ID and a proposed slot { date (Date), durationMin },
+ * find all conflicting ClassRequests and Assessments.
+ * Returns an array of conflict objects.
+ */
+const _findConflicts = async (teacherId, proposedStart, durationMin = 60, excludeAssessmentId = null) => {
+    const proposedEnd = new Date(proposedStart.getTime() + durationMin * 60 * 1000);
+    const conflicts = [];
+
+    // 1. Check ClassRequests (accepted classes)
+    const classRequests = await ClassRequest.find({
+        teacherId,
+        status: 'accepted',
+    }).lean();
+
+    for (const cr of classRequests) {
+        const startTime = extractStartTime(cr.scheduleTime);
+        if (!startTime || !cr.preferredDate) continue;
+
+        const crStart = buildDateTime(cr.preferredDate, startTime);
+        if (!crStart) continue;
+        const crEnd = new Date(crStart.getTime() + 60 * 60 * 1000); // assume 1hr classes
+
+        // Overlap check: two intervals overlap if start1 < end2 AND start2 < end1
+        if (proposedStart < crEnd && crStart < proposedEnd) {
+            conflicts.push({
+                type: 'class',
+                title: cr.courseTitle,
+                studentName: cr.studentName,
+                date: cr.preferredDate,
+                time: cr.scheduleTime,
+                id: cr._id,
+            });
+        }
+    }
+
+    // 2. Check Assessments (scheduled free assessments)
+    const assessmentQuery = {
+        teacherIds: teacherId,
+        status: 'Scheduled',
+    };
+    if (excludeAssessmentId) {
+        assessmentQuery._id = { $ne: excludeAssessmentId };
+    }
+    const assessments = await Assessment.find(assessmentQuery).lean();
+
+    for (const a of assessments) {
+        const startTime = parseTime24(a.scheduledTime);
+        if (!startTime || !a.scheduledDate) continue;
+
+        const aStart = buildDateTime(a.scheduledDate, startTime);
+        if (!aStart) continue;
+        const aEnd = new Date(aStart.getTime() + 30 * 60 * 1000); // assessments are 30min
+
+        if (proposedStart < aEnd && aStart < proposedEnd) {
+            conflicts.push({
+                type: 'assessment',
+                title: `Free Assessment: ${a.subject}`,
+                studentName: `${a.studentFirstName} ${a.studentLastName}`,
+                date: a.scheduledDate,
+                time: a.scheduledTime,
+                id: a._id,
+            });
+        }
+    }
+
+    return conflicts;
+};
 
 // 🛑 NEW FUNCTION: deleteTeacherById 🛑
 export const deleteTeacherById = asyncHandler(async (req, res) => {
@@ -580,28 +697,76 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         console.warn(`⚠️ ${resolvedTeacherIds.length - teachers.length} teacher ID(s) did not match any records.`);
     }
 
-    // 4. Create Zoom meeting
-    const studentName = `${assessment.studentFirstName} ${assessment.studentLastName}`;
-    const teacherNamesStr = teachers.map(t => t.name).join(', ');
-    const meetingTopic = `Free Assessment: ${assessment.subject} — ${studentName} (Year ${assessment.class})`;
-
-    // Build the start time from date + time
-    const meetingStartTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
-    if (isNaN(meetingStartTime.getTime())) {
+    // 4. ⛔ CONFLICT CHECK — Prevent double-booking
+    const proposedStart = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    if (isNaN(proposedStart.getTime())) {
         res.status(400);
         throw new Error('Invalid date/time format. Use YYYY-MM-DD for date and HH:MM for time.');
     }
 
-    // Guard against scheduling in the past
-    if (meetingStartTime < new Date()) {
-        res.status(400);
-        throw new Error('Cannot schedule an assessment in the past. Please choose a future date and time.');
+    const allConflicts = [];
+    for (const teacher of teachers) {
+        const teacherConflicts = await _findConflicts(teacher._id, proposedStart, 30, assessment._id);
+        if (teacherConflicts.length > 0) {
+            allConflicts.push({ teacherName: teacher.name, teacherId: teacher._id, conflicts: teacherConflicts });
+        }
     }
 
+    if (allConflicts.length > 0) {
+        res.status(409);
+        throw new Error(
+            `Scheduling conflict! ${allConflicts.map(c => `${c.teacherName} is busy (${c.conflicts.map(x => x.title + ' at ' + x.time).join(', ')})`).join('; ')}. Please choose a different time.`
+        );
+    }
+
+    // 5. Create Zoom meeting
+    const studentName = `${assessment.studentFirstName} ${assessment.studentLastName}`;
+    const teacherNamesStr = teachers.map(t => t.name).join(', ');
+    const meetingTopic = `Free Assessment: ${assessment.subject} — ${studentName} (Year ${assessment.class})`;
+
+    // ==================== IST-BASED SCHEDULING ====================
+    // Admin enters date & time in IST (Asia/Kolkata).
+    // The `proposedStart` Date was parsed from the raw strings above (e.g. "2026-02-20T14:30:00")
+    // and represents the SERVER's local interpretation. We need the IST interpretation.
+
+    // Build an IST-anchored UTC time: parse the admin's input as IST
+    // IST = UTC+5:30, so we construct the ISO string with +05:30 offset
+    const istDateTimeISO = `${scheduledDate}T${scheduledTime}:00+05:30`;
+    const meetingStartUTC = new Date(istDateTimeISO); // Correct UTC instant
+
+    if (isNaN(meetingStartUTC.getTime())) {
+        res.status(400);
+        throw new Error('Invalid date/time format. Use YYYY-MM-DD for date and HH:MM for time.');
+    }
+
+    // Guard against scheduling in the past (compare in IST)
+    const nowIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const istNow = new Date(nowIST);
+    // proposedStart was built without TZ info, so compare using the same "naive" approach
+    if (proposedStart < istNow) {
+        res.status(400);
+        throw new Error('Cannot schedule an assessment in the past (IST). Please choose a future date and time.');
+    }
+
+    // Determine the student's timezone (stored at registration) or fallback to UTC
+    const studentTz = assessment.studentTimezone || 'UTC';
+    console.log(`🌍 Student timezone: ${studentTz} | Admin scheduled (IST): ${scheduledDate} ${scheduledTime}`);
+
+    // Auto-select an available Zoom host (supports 2 simultaneous meetings)
+    let selectedHost;
+    try {
+        selectedHost = await getAvailableHost(meetingStartUTC, 30);
+        console.log(`🎯 Selected Zoom host: ${selectedHost}`);
+    } catch (hostErr) {
+        console.error('❌ Failed to determine available Zoom host:', hostErr.message);
+        selectedHost = process.env.ZOOM_HOST_EMAIL || 'me';
+    }
+
+    // Create Zoom meeting — pass the student's IANA timezone so Zoom shows correct local time
     let zoomData;
     try {
-        zoomData = await createZoomMeeting(meetingTopic, meetingStartTime, 30); // 30 min duration
-        console.log('✅ Zoom meeting created:', zoomData.meetingId);
+        zoomData = await createZoomMeeting(meetingTopic, meetingStartUTC, 30, studentTz, selectedHost);
+        console.log('✅ Zoom meeting created:', zoomData.meetingId, '| Host:', zoomData.hostEmail);
     } catch (zoomError) {
         console.error('❌ Zoom meeting creation failed:', zoomError.message);
         res.status(502);
@@ -620,31 +785,48 @@ export const approveAssessment = asyncHandler(async (req, res) => {
     assessment.teacherNames = teachers.map(t => t.name);
     assessment.teacherEmails = teachers.map(t => t.email);
 
-    assessment.scheduledDate = meetingStartTime;
-    assessment.scheduledTime = scheduledTime;
+    assessment.scheduledDate = meetingStartUTC; // Store as UTC
+    assessment.scheduledTime = scheduledTime;   // Store the raw IST time string for admin reference
     assessment.zoomMeetingLink = zoomData.joinUrl;
     assessment.zoomStartLink = zoomData.startUrl;
     assessment.zoomMeetingId = String(zoomData.meetingId);
+    assessment.zoomHostEmail = zoomData.hostEmail || selectedHost;
     assessment.status = 'Scheduled';
 
     const updatedAssessment = await assessment.save();
     console.log('✅ Assessment updated to Scheduled:', updatedAssessment._id);
 
-    // 6. Format date for emails
-    const formattedDate = meetingStartTime.toLocaleDateString('en-AU', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    // 6. Format dates/times for emails
+    // IST for teacher emails
+    const istDateFormatted = meetingStartUTC.toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const istTimeFormatted = meetingStartUTC.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true
     });
 
+    // Student's local timezone for student/parent emails
+    const studentDateFormatted = meetingStartUTC.toLocaleDateString('en-AU', {
+        timeZone: studentTz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const studentTimeFormatted = meetingStartUTC.toLocaleTimeString('en-AU', {
+        timeZone: studentTz, hour: '2-digit', minute: '2-digit', hour12: true
+    });
+    // Get a short timezone label for the student (e.g. "AEDT", "EST", "IST")
+    const studentTzLabel = meetingStartUTC.toLocaleTimeString('en-AU', {
+        timeZone: studentTz, timeZoneName: 'short'
+    }).split(' ').pop(); // Extract just the timezone abbreviation
+
     // 7. Send emails (non-blocking — don't fail the request if email fails)
-    // Send to student email
+    // Student email — shows time in STUDENT's local timezone
     const studentEmailDetails = {
         studentName,
         teacherName: teacherNamesStr,
         subject: assessment.subject,
         yearLevel: assessment.class,
-        scheduledDate: formattedDate,
-        scheduledTime: scheduledTime,
-        zoomLink: zoomData.joinUrl,       // For students/parents (join as participant)
+        scheduledDate: studentDateFormatted,
+        scheduledTime: `${studentTimeFormatted} ${studentTzLabel}`,
+        zoomLink: zoomData.joinUrl,
         zoomStartLink: zoomData.startUrl,
     };
 
@@ -677,17 +859,17 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         }
     }
 
-    // Send to ALL selected teachers (each gets the Zoom host start link)
+    // Send to ALL selected teachers — shows time in IST
     for (const teacher of teachers) {
         const teacherEmailDetails = {
             studentName,
             teacherName: teacher.name,
             subject: assessment.subject,
             yearLevel: assessment.class,
-            scheduledDate: formattedDate,
-            scheduledTime: scheduledTime,
+            scheduledDate: istDateFormatted,
+            scheduledTime: `${istTimeFormatted} IST`,
             zoomLink: zoomData.joinUrl,
-            zoomStartLink: zoomData.startUrl, // Each teacher gets the host link
+            zoomStartLink: zoomData.startUrl,
         };
 
         try {
@@ -825,4 +1007,108 @@ export const updateAssessmentTeachers = asyncHandler(async (req, res) => {
         message: `Teachers updated! Emails sent to ${teachers.length} teacher(s).`,
         assessment: updatedAssessment,
     });
+});
+
+
+// ======================== TEACHER SCHEDULE & AVAILABILITY ========================
+
+// @desc    Get a teacher's full schedule (all accepted classes + scheduled assessments)
+// @route   GET /api/admin/teacher/:id/schedule
+// @access  Private (Admin Only)
+export const getTeacherSchedule = asyncHandler(async (req, res) => {
+    const teacherId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+        res.status(400);
+        throw new Error('Invalid teacher ID format.');
+    }
+
+    const teacher = await TeacherModel.findById(teacherId).select('name email subject');
+    if (!teacher) {
+        res.status(404);
+        throw new Error('Teacher not found.');
+    }
+
+    // 1. Get accepted class requests
+    const classRequests = await ClassRequest.find({
+        teacherId,
+        status: 'accepted',
+    }).lean();
+
+    const classSlots = classRequests.map(cr => ({
+        type: 'class',
+        title: cr.courseTitle || 'Class',
+        studentName: cr.studentName,
+        date: cr.preferredDate || null,
+        time: cr.scheduleTime || cr.preferredTimeMonFri || null,
+        subject: cr.subject || 'N/A',
+        id: cr._id,
+    }));
+
+    // 2. Get scheduled assessments where this teacher is assigned
+    const assessments = await Assessment.find({
+        teacherIds: teacherId,
+        status: 'Scheduled',
+    }).lean();
+
+    const assessmentSlots = assessments.map(a => ({
+        type: 'assessment',
+        title: `Free Assessment: ${a.subject}`,
+        studentName: `${a.studentFirstName} ${a.studentLastName}`,
+        date: a.scheduledDate ? a.scheduledDate.toISOString().split('T')[0] : null,
+        time: a.scheduledTime || null,
+        subject: a.subject,
+        id: a._id,
+        zoomLink: a.zoomMeetingLink || null,
+    }));
+
+    res.json({
+        teacher: { _id: teacher._id, name: teacher.name, email: teacher.email, subject: teacher.subject },
+        schedule: [...classSlots, ...assessmentSlots],
+    });
+});
+
+
+// @desc    Check if teacher(s) are available at a proposed date/time
+// @route   POST /api/admin/check-teacher-availability
+// @access  Private (Admin Only)
+export const checkTeacherAvailability = asyncHandler(async (req, res) => {
+    const { teacherIds, scheduledDate, scheduledTime, durationMinutes = 30, excludeAssessmentId } = req.body;
+
+    if (!teacherIds || !Array.isArray(teacherIds) || teacherIds.length === 0) {
+        res.status(400);
+        throw new Error('teacherIds (array) is required.');
+    }
+    if (!scheduledDate || !scheduledTime) {
+        res.status(400);
+        throw new Error('scheduledDate and scheduledTime are required.');
+    }
+
+    const timeParsed = parseTime24(scheduledTime);
+    if (!timeParsed) {
+        res.status(400);
+        throw new Error('Invalid scheduledTime format. Use HH:MM (e.g., 14:30).');
+    }
+
+    const proposedStart = buildDateTime(scheduledDate, timeParsed);
+    if (!proposedStart) {
+        res.status(400);
+        throw new Error('Invalid scheduledDate format.');
+    }
+
+    const results = [];
+    for (const tId of teacherIds) {
+        if (!mongoose.Types.ObjectId.isValid(tId)) continue;
+        const teacher = await TeacherModel.findById(tId).select('name');
+        const conflicts = await _findConflicts(tId, proposedStart, durationMinutes, excludeAssessmentId || null);
+        results.push({
+            teacherId: tId,
+            teacherName: teacher?.name || 'Unknown',
+            available: conflicts.length === 0,
+            conflicts,
+        });
+    }
+
+    const allAvailable = results.every(r => r.available);
+    res.json({ allAvailable, teachers: results });
 });

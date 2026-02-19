@@ -21,7 +21,9 @@ import {
     getAllPastClassSubmissions,
     getAllFeedback,
     approveAssessment,
-    updateAssessmentTeachers
+    updateAssessmentTeachers,
+    getTeacherSchedule,
+    checkTeacherAvailability,
 } from '../controllers/adminController.js';
 import { adminOnlyMiddleware } from '../middlewares/adminMiddleware.js';
 
@@ -70,5 +72,9 @@ router.put('/assessment/:assessmentId/approve', approveAssessment);
 
 // Update teachers on an already-scheduled assessment
 router.put('/assessment/:assessmentId/update-teachers', updateAssessmentTeachers);
+
+// Teacher Schedule & Availability
+router.get('/teacher/:id/schedule', getTeacherSchedule);
+router.post('/check-teacher-availability', checkTeacherAvailability);
 
 export default router;

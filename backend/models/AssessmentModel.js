@@ -37,6 +37,11 @@ const assessmentSchema = mongoose.Schema(
         subject: { type: String, required: true, trim: true, maxlength: 100 },
         class: { type: Number, required: true, min: 2, max: 12 },
 
+        // Student location & timezone
+        postalCode: { type: String, default: null },
+        country: { type: String, default: null },
+        studentTimezone: { type: String, default: 'UTC' },
+
         // CRITICAL: New Field to confirm it's a free assessment request
         isFreeAssessment: {
             type: Boolean,
@@ -70,6 +75,7 @@ const assessmentSchema = mongoose.Schema(
         zoomMeetingLink: { type: String, default: null },
         zoomStartLink: { type: String, default: null },
         zoomMeetingId: { type: String, default: null },
+        zoomHostEmail: { type: String, default: null },
     },
     {
         timestamps: true,

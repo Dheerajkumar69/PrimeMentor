@@ -5,11 +5,12 @@ import {
     Briefcase, Mail, Trash2, Edit2, User, Phone, Clock, MapPin,
     DollarSign, CreditCard, IdCard, FileText, X, BookOpen,
     AlertCircle, Plus, Save, RefreshCw, Shield, Eye, EyeOff,
-    Upload, UserPlus, Replace, ChevronDown, AlertTriangle
+    Upload, UserPlus, Replace, ChevronDown, AlertTriangle, Calendar
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { AppContext } from '../../context/AppContext.jsx';
+import TeacherTimetableModal from './TeacherTimetableModal.jsx';
 
 // ======================== CONSTANTS ========================
 const SUBJECTS = [
@@ -145,7 +146,7 @@ const ConfirmModal = ({ open, title, message, confirmLabel, confirmColor, icon: 
 };
 
 // ======================== DETAILS MODAL ========================
-const TeacherDetailsModal = ({ teacher, onClose, backendUrl, onEdit, onReplace, allTeachers }) => {
+const TeacherDetailsModal = ({ teacher, onClose, backendUrl, onEdit, onReplace, allTeachers, onViewTimetable }) => {
     const [showReplace, setShowReplace] = useState(false);
     const [replaceTarget, setReplaceTarget] = useState('');
     const [replacing, setReplacing] = useState(false);
@@ -238,6 +239,12 @@ const TeacherDetailsModal = ({ teacher, onClose, backendUrl, onEdit, onReplace, 
                         className='flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition shadow'
                     >
                         <Replace className='w-4 h-4' /> Replace Teacher
+                    </button>
+                    <button
+                        onClick={onViewTimetable}
+                        className='flex items-center gap-2 px-5 py-2.5 bg-purple-500 text-white text-sm font-semibold rounded-lg hover:bg-purple-600 transition shadow'
+                    >
+                        <Calendar className='w-4 h-4' /> View Timetable
                     </button>
                 </div>
 
@@ -466,7 +473,7 @@ const TeacherFormModal = ({ mode, initialData, onClose, onSave, backendUrl }) =>
 };
 
 // ======================== TABLE ROW ========================
-const TeacherRow = ({ teacher, onTeacherClick, onDelete, onEdit, backendUrl }) => {
+const TeacherRow = ({ teacher, onTeacherClick, onDelete, onEdit, onViewTimetable, backendUrl }) => {
     const loadClass = teacher.subject ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
     const getImage = (filename) => filename ? `${backendUrl}/images/${filename}` : 'https://placehold.co/40x40/cccccc/000000?text=👤';
     const profileImageUrl = getImage(teacher.image);
@@ -504,6 +511,9 @@ const TeacherRow = ({ teacher, onTeacherClick, onDelete, onEdit, backendUrl }) =
             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <div className="flex space-x-3" onClick={(e) => e.stopPropagation()}>
                     <a href={`mailto:${teacher.email}`} className="text-indigo-600 hover:text-indigo-900 transition" title="Email"><Mail className="w-5 h-5" /></a>
+                    <button className="text-purple-600 hover:text-purple-900 transition" title="View Timetable" onClick={() => onViewTimetable(teacher._id, teacher.name)}>
+                        <Calendar className="w-5 h-5" />
+                    </button>
                     <button className="text-orange-600 hover:text-orange-900 transition" title="Edit" onClick={() => onEdit(teacher._id)}>
                         <Edit2 className="w-5 h-5" />
                     </button>
@@ -527,6 +537,7 @@ export default function TeacherManagement() {
     // Modal states
     const [formModal, setFormModal] = useState({ open: false, mode: 'add', data: null });
     const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', confirmLabel: '', confirmColor: 'red', icon: null, onConfirm: null });
+    const [timetable, setTimetable] = useState({ open: false, teacherId: null, teacherName: '' });
 
     const showConfirm = (opts) => setConfirmDialog({ ...opts, open: true });
     const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false, onConfirm: null }));
@@ -718,6 +729,7 @@ export default function TeacherManagement() {
                                         onTeacherClick={(id) => fetchTeacherDetails(id)}
                                         onDelete={handleDeleteTeacher}
                                         onEdit={handleEditClick}
+                                        onViewTimetable={(id, name) => setTimetable({ open: true, teacherId: id, teacherName: name })}
                                         backendUrl={backendUrl}
                                     />
                                 ))
@@ -741,6 +753,12 @@ export default function TeacherManagement() {
                 onEdit={handleEditClick}
                 onReplace={handleReplaceTeacher}
                 allTeachers={teachers}
+                onViewTimetable={() => {
+                    if (selectedTeacher) {
+                        setTimetable({ open: true, teacherId: selectedTeacher._id, teacherName: selectedTeacher.name });
+                        setSelectedTeacher(null);
+                    }
+                }}
             />
 
             {/* --- Add / Edit Form Modal --- */}
@@ -765,6 +783,15 @@ export default function TeacherManagement() {
                 onConfirm={confirmDialog.onConfirm}
                 onCancel={closeConfirm}
             />
+
+            {/* --- Timetable Modal --- */}
+            {timetable.open && (
+                <TeacherTimetableModal
+                    teacherId={timetable.teacherId}
+                    teacherName={timetable.teacherName}
+                    onClose={() => setTimetable({ open: false, teacherId: null, teacherName: '' })}
+                />
+            )}
         </>
     );
 }

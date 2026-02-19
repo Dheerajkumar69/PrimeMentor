@@ -1,6 +1,6 @@
 // frontend/src/components/Booking/AssessmentModal.jsx
 import React, { useState } from 'react';
-import { X, CheckCircle, Send, Users, Mail, Phone, BookOpen } from 'lucide-react';
+import { X, CheckCircle, Send, Users, Mail, Phone, BookOpen, Globe } from 'lucide-react';
 import axios from 'axios';
 
 // Configuration
@@ -16,6 +16,41 @@ const API_BASE_URL = typeof import.meta.env.VITE_BACKEND_URL !== 'undefined'
 
 const subjects = ['All subjects', 'English', 'Mathematics', 'Science'];
 const classes = Array.from({ length: 11 }, (_, i) => i + 2); // 2 to 12
+
+// Countries list for the dropdown
+const countries = [
+    { code: 'AU', name: 'Australia' },
+    { code: 'IN', name: 'India' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'US', name: 'United States' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'NZ', name: 'New Zealand' },
+    { code: 'SG', name: 'Singapore' },
+    { code: 'MY', name: 'Malaysia' },
+    { code: 'AE', name: 'United Arab Emirates' },
+    { code: 'SA', name: 'Saudi Arabia' },
+    { code: 'PK', name: 'Pakistan' },
+    { code: 'BD', name: 'Bangladesh' },
+    { code: 'LK', name: 'Sri Lanka' },
+    { code: 'NP', name: 'Nepal' },
+    { code: 'PH', name: 'Philippines' },
+    { code: 'HK', name: 'Hong Kong' },
+    { code: 'JP', name: 'Japan' },
+    { code: 'KR', name: 'South Korea' },
+    { code: 'CN', name: 'China' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'FR', name: 'France' },
+    { code: 'IT', name: 'Italy' },
+    { code: 'ES', name: 'Spain' },
+    { code: 'ZA', name: 'South Africa' },
+    { code: 'KE', name: 'Kenya' },
+    { code: 'NG', name: 'Nigeria' },
+    { code: 'BR', name: 'Brazil' },
+    { code: 'MX', name: 'Mexico' },
+    { code: 'AR', name: 'Argentina' },
+    { code: 'CL', name: 'Chile' },
+    { code: 'FJ', name: 'Fiji' },
+];
 
 /**
  * Modal form for users to book a free assessment enquiry.
@@ -36,7 +71,9 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
         parentEmail: '',
         contactNumber: '',
         subject: subjects[0],
-        class: classes[0], // IMPORTANT: Stored as number/string based on select
+        class: classes[0],
+        country: '',
+        postalCode: '',
     });
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [validationError, setValidationError] = useState('');
@@ -57,7 +94,7 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
         const requiredFields = [
             'studentFirstName', 'studentLastName', 'studentEmail',
             'parentFirstName', 'parentLastName', 'parentEmail',
-            'contactNumber', 'subject'
+            'contactNumber', 'subject', 'country', 'postalCode'
         ];
 
         for (const field of requiredFields) {
@@ -161,6 +198,7 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
                         studentFirstName: '', studentLastName: '', studentEmail: '', studentPhone: '',
                         parentFirstName: '', parentLastName: '', parentEmail: '',
                         contactNumber: '', subject: subjects[0], class: classes[0],
+                        country: '', postalCode: '',
                     });
                     setIsSubmitted(false);
                     onClose();
@@ -209,6 +247,24 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
                     <select name="class" value={formData.class} onChange={handleChange} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required>
                         {classes.map(c => <option key={c} value={c}>Year {c}</option>)}
                     </select>
+                </div>
+            </div>
+
+            <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center mb-3 border-b pb-2 pt-2 sm:pt-4">
+                <Globe className="w-5 h-5 mr-2 text-orange-500" /> Your Location
+            </h3>
+            <p className="text-xs text-gray-500 -mt-2 mb-3">We use this to show meeting times in your local timezone.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country (Required)</label>
+                    <select name="country" value={formData.country} onChange={handleChange} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required>
+                        <option value="">Select your country...</option>
+                        {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Postal / ZIP Code (Required)</label>
+                    <input type="text" name="postalCode" placeholder="e.g. 3000, 10001, 110001" value={formData.postalCode} onChange={handleChange} maxLength={10} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm" required />
                 </div>
             </div>
 

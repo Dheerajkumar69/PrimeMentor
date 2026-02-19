@@ -14,6 +14,17 @@ import { clerkMiddleware } from '@clerk/express';
 
 dotenv.config();
 
+// ======================== STARTUP VALIDATION ========================
+// Validate critical Zoom env variables before the server starts.
+// This prevents silent failures when approving assessments in production.
+import { validateZoomConfig } from './utils/zoomIntegration.js';
+try {
+  validateZoomConfig();
+} catch (err) {
+  console.error(err.message);
+  console.error('⚠️ Server will continue but Zoom meeting creation will fail.');
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 

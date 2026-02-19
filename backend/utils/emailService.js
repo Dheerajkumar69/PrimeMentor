@@ -42,7 +42,7 @@ export const sendCourseConfirmationEmail = async (recipientEmail, courseDetails 
   const courseType = isTrial ? 'Trial Session' : 'Starter Pack';
 
   const sessionsList = (classRequests || []).map((req, index) => {
-    return `<li><strong>Session ${index + 1}:</strong> ${req.courseTitle} on <strong>${req.preferredDate}</strong> at <strong>${req.scheduleTime}</strong> (Timezone: Sydney/NSW Time)</li>`;
+    return `<li><strong>Session ${index + 1}:</strong> ${req.courseTitle} on <strong>${req.preferredDate}</strong> at <strong>${req.scheduleTime}</strong></li>`;
   }).join('');
 
   const htmlContent = `
@@ -181,7 +181,7 @@ export const sendAssessmentApprovalEmail = async (recipientEmail, recipientName,
                         <li><strong>Subject:</strong> ${details.subject}</li>
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Date:</strong> ${details.scheduledDate}</li>
-                        <li><strong>Time:</strong> ${details.scheduledTime} (Sydney/NSW Time)</li>
+                        <li><strong>Time:</strong> ${details.scheduledTime}</li>
                     </ul>
                 </div>
 

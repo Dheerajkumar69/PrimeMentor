@@ -667,6 +667,12 @@ export const approveAssessment = asyncHandler(async (req, res) => {
     // Deduplicate teacher IDs
     resolvedTeacherIds = [...new Set(resolvedTeacherIds)];
 
+    // Validate scheduledDate format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+        res.status(400);
+        throw new Error('Invalid date format. Use YYYY-MM-DD (e.g., 2026-03-15).');
+    }
+
     // Validate scheduledTime format (HH:MM)
     if (!/^\d{2}:\d{2}$/.test(scheduledTime)) {
         res.status(400);
@@ -680,9 +686,21 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         throw new Error('Assessment not found.');
     }
 
-    if (assessment.status === 'Scheduled' || assessment.status === 'Completed') {
+    if (assessment.status === 'Completed') {
         res.status(400);
-        throw new Error(`Assessment is already ${assessment.status}. Cannot approve again.`);
+        throw new Error('Assessment is already Completed. Cannot add more meetings.');
+    }
+    if (assessment.status === 'Canceled') {
+        res.status(400);
+        throw new Error('Assessment is Canceled. Cannot add meetings to a canceled assessment.');
+    }
+
+    // Cap meetings to prevent unbounded growth
+    const MAX_MEETINGS = 10;
+    const existingMeetingCount = Array.isArray(assessment.meetings) ? assessment.meetings.length : 0;
+    if (existingMeetingCount >= MAX_MEETINGS) {
+        res.status(400);
+        throw new Error(`Maximum of ${MAX_MEETINGS} meetings per assessment reached.`);
     }
 
     // 3. Find all selected teachers
@@ -773,20 +791,34 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         throw new Error(`Failed to create Zoom meeting: ${zoomError.message}`);
     }
 
-    // 5. Update the assessment record
-    // Legacy single-teacher fields (first teacher for backward compat)
+    // 5. Build meeting object and push into meetings[]
+    const meetingObj = {
+        teacherIds: teachers.map(t => t._id),
+        teacherNames: teachers.map(t => t.name),
+        teacherEmails: teachers.map(t => t.email),
+        scheduledDate: meetingStartUTC,
+        scheduledTime,
+        zoomMeetingLink: zoomData.joinUrl,
+        zoomStartLink: zoomData.startUrl,
+        zoomMeetingId: String(zoomData.meetingId),
+        zoomHostEmail: zoomData.hostEmail || selectedHost,
+    };
+
+    if (!Array.isArray(assessment.meetings)) {
+        assessment.meetings = [];
+    }
+    assessment.meetings.push(meetingObj);
+
+    // Legacy flat fields — always reflect the LATEST meeting for backward compat
     const primaryTeacher = teachers[0];
     assessment.teacherId = primaryTeacher._id;
     assessment.teacherName = primaryTeacher.name;
     assessment.teacherEmail = primaryTeacher.email;
-
-    // New multi-teacher array fields
     assessment.teacherIds = teachers.map(t => t._id);
     assessment.teacherNames = teachers.map(t => t.name);
     assessment.teacherEmails = teachers.map(t => t.email);
-
-    assessment.scheduledDate = meetingStartUTC; // Store as UTC
-    assessment.scheduledTime = scheduledTime;   // Store the raw IST time string for admin reference
+    assessment.scheduledDate = meetingStartUTC;
+    assessment.scheduledTime = scheduledTime;
     assessment.zoomMeetingLink = zoomData.joinUrl;
     assessment.zoomStartLink = zoomData.startUrl;
     assessment.zoomMeetingId = String(zoomData.meetingId);
@@ -795,6 +827,7 @@ export const approveAssessment = asyncHandler(async (req, res) => {
 
     const updatedAssessment = await assessment.save();
     console.log('✅ Assessment updated to Scheduled:', updatedAssessment._id);
+    const meetingNumber = assessment.meetings.length;
 
     // 6. Format dates/times for emails
     // IST for teacher emails
@@ -887,7 +920,7 @@ export const approveAssessment = asyncHandler(async (req, res) => {
 
     // 8. Return success response
     res.json({
-        message: `Assessment approved! Zoom meeting created and emails sent to ${teachers.length} teacher(s).`,
+        message: `Meeting #${meetingNumber} created! Zoom meeting created and emails sent to ${teachers.length} teacher(s).`,
         assessment: updatedAssessment,
         zoom: {
             meetingId: zoomData.meetingId,
@@ -895,6 +928,13 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         },
     });
 });
+
+
+// @desc    Admin adds a follow-up meeting to an already-scheduled assessment
+// @route   PUT /api/admin/assessment/:assessmentId/add-meeting
+// @access  Private (Admin Only)
+// Re-uses approveAssessment — the guard now allows Scheduled assessments.
+export const addMeeting = approveAssessment;
 
 
 // @desc    Admin updates teachers on an already-scheduled assessment

@@ -76,6 +76,27 @@ const assessmentSchema = mongoose.Schema(
         zoomStartLink: { type: String, default: null },
         zoomMeetingId: { type: String, default: null },
         zoomHostEmail: { type: String, default: null },
+
+        // Multiple meetings per assessment
+        meetings: {
+            type: [{
+                teacherIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Teacher' }],
+                teacherNames: [{ type: String, trim: true }],
+                teacherEmails: [{ type: String, trim: true, lowercase: true }],
+                scheduledDate: { type: Date, required: true },
+                scheduledTime: { type: String, required: true, trim: true },
+                zoomMeetingLink: { type: String, default: null, trim: true },
+                zoomStartLink: { type: String, default: null, trim: true },
+                zoomMeetingId: { type: String, default: null, trim: true },
+                zoomHostEmail: { type: String, default: null, trim: true, lowercase: true },
+                createdAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+            validate: {
+                validator: (arr) => !arr || arr.length <= 10,
+                message: 'Maximum of 10 meetings per assessment.',
+            },
+        },
     },
     {
         timestamps: true,

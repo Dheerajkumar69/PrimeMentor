@@ -20,6 +20,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
     const [teacherSearch, setTeacherSearch] = useState('');
     const [editingTeachers, setEditingTeachers] = useState(false);
     const [updatingTeachers, setUpdatingTeachers] = useState(false);
+    const [addingNewMeeting, setAddingNewMeeting] = useState(false);
 
     // Fetch teachers when modal opens in approval mode OR when editing teachers
     const fetchTeachers = async () => {
@@ -52,6 +53,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
             setTeacherSearch('');
             setEditingTeachers(false);
             setUpdatingTeachers(false);
+            setAddingNewMeeting(false);
         }
     }, [isOpen, approvalMode]);
 
@@ -85,12 +87,14 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
 
     const handleStartEditTeachers = () => {
         if (editingTeachers || updatingTeachers) return; // Prevent double-click
+        setAddingNewMeeting(false); // Mutually exclusive — close add-meeting form
         setEditingTeachers(true);
         // Pre-select currently assigned teachers (safe access)
         const currentIds = Array.isArray(booking.teacherIds) && booking.teacherIds.length > 0
             ? booking.teacherIds
             : (booking.teacherId ? [booking.teacherId] : []);
         setSelectedTeacherIds(currentIds);
+        setTeacherSearch('');
         fetchTeachers();
     };
 
@@ -131,7 +135,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
         }
     };
 
-    const handleApprove = async () => {
+    const handleApprove = async (isFollowUp = false) => {
         if (approving) return; // Prevent double-click
         if (selectedTeacherIds.length === 0) {
             toast.error('Please select at least one teacher.');
@@ -174,13 +178,15 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                     return;
                 }
             } catch (checkErr) {
-                // If the availability check itself fails, log it but still attempt the approval
-                // (the backend approve endpoint has its own conflict guard as a second layer)
                 console.warn('Availability pre-check failed, proceeding with approval:', checkErr.message);
             }
 
+            const endpoint = isFollowUp
+                ? `${BACKEND_URL}/api/admin/assessment/${booking._id}/add-meeting`
+                : `${BACKEND_URL}/api/admin/assessment/${booking._id}/approve`;
+
             await axios.put(
-                `${BACKEND_URL}/api/admin/assessment/${booking._id}/approve`,
+                endpoint,
                 {
                     teacherIds: selectedTeacherIds,
                     scheduledDate,
@@ -191,10 +197,17 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                 }
             );
 
-            toast.success(`Assessment approved! Zoom meeting created & emails sent to ${selectedTeacherIds.length} teacher(s). 🎉`, {
-                duration: 5000,
-            });
+            toast.success(
+                isFollowUp
+                    ? `New meeting added! Zoom created & emails sent. 🎉`
+                    : `Assessment approved! Zoom meeting created & emails sent to ${selectedTeacherIds.length} teacher(s). 🎉`,
+                { duration: 5000 }
+            );
 
+            setAddingNewMeeting(false);
+            setSelectedTeacherIds([]);
+            setScheduledDate('');
+            setScheduledTime('');
             if (onApproved) onApproved();
         } catch (err) {
             console.error('Approval failed:', err.response?.data || err.message);
@@ -203,6 +216,25 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
         } finally {
             setApproving(false);
         }
+    };
+
+    const handleStartAddMeeting = () => {
+        if (approving) return; // Don't open while approving
+        setEditingTeachers(false); // Mutually exclusive — close edit-teachers form
+        setAddingNewMeeting(true);
+        setSelectedTeacherIds([]);
+        setScheduledDate('');
+        setScheduledTime('');
+        setTeacherSearch('');
+        fetchTeachers();
+    };
+
+    const handleCancelAddMeeting = () => {
+        setAddingNewMeeting(false);
+        setSelectedTeacherIds([]);
+        setScheduledDate('');
+        setScheduledTime('');
+        setTeacherSearch('');
     };
 
     const formatDate = (dateString) => {
@@ -329,10 +361,25 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
 
     const isAlreadyScheduled = booking.status === 'Scheduled' || booking.status === 'Completed';
 
-    // Resolve assigned teacher names for display (null-safe)
-    const assignedTeacherNames = Array.isArray(booking.teacherNames) && booking.teacherNames.length > 0
-        ? booking.teacherNames.join(', ')
-        : booking.teacherName || 'N/A';
+    // Build a unified meetings list — use meetings[] if present, fallback to flat fields for legacy data
+    const resolvedMeetings = (() => {
+        if (Array.isArray(booking.meetings) && booking.meetings.length > 0) {
+            return booking.meetings;
+        }
+        // Legacy: single meeting from flat fields
+        if (booking.zoomMeetingLink) {
+            return [{
+                teacherNames: Array.isArray(booking.teacherNames) && booking.teacherNames.length > 0
+                    ? booking.teacherNames : (booking.teacherName ? [booking.teacherName] : []),
+                scheduledDate: booking.scheduledDate,
+                scheduledTime: booking.scheduledTime,
+                zoomMeetingLink: booking.zoomMeetingLink,
+                zoomStartLink: booking.zoomStartLink,
+                createdAt: booking.updatedAt,
+            }];
+        }
+        return [];
+    })();
 
     return (
         <div className="fixed inset-0 z-50 h-full w-full backdrop-blur-md bg-black/70 flex items-center justify-center p-4">
@@ -367,6 +414,11 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                                 <span className={`px-3 py-1 text-sm font-extrabold rounded-full ${getStatusStyle(booking.status)} shadow-md`}>
                                     {booking.status}
                                 </span>
+                                {resolvedMeetings.length > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-700">
+                                        {resolvedMeetings.length} meeting{resolvedMeetings.length > 1 ? 's' : ''}
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <PrimaryInfoItem icon={BookOpen} title="Subject Interest" value={booking.subject} />
@@ -424,49 +476,166 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                     </div>
                 </div>
 
-                {/* ===================== SCHEDULED INFO (when already approved) ===================== */}
-                {isAlreadyScheduled && booking.zoomMeetingLink && (
+                {/* ===================== ALL MEETINGS (when already approved) ===================== */}
+                {isAlreadyScheduled && resolvedMeetings.length > 0 && (
                     <div className="mt-6 p-5 bg-blue-50 border-2 border-blue-200 rounded-xl">
                         <h3 className="font-bold text-base text-blue-800 flex items-center mb-4 pb-2 border-b border-blue-200">
-                            <Video className="w-5 h-5 mr-2" /> Scheduled Session Details
+                            <Video className="w-5 h-5 mr-2" /> Scheduled Meetings ({resolvedMeetings.length})
                         </h3>
-                        <div className="space-y-3 text-sm">
-                            <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 text-blue-500" />
-                                <span className="font-medium text-gray-700">Assigned Teacher(s):</span>
-                                <span className="font-semibold text-gray-900">{assignedTeacherNames}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-blue-500" />
-                                <span className="font-medium text-gray-700">Date & Time:</span>
-                                <span className="font-semibold text-gray-900">
-                                    {formatDate(booking.scheduledDate)} at {booking.scheduledTime} (IST)
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Video className="w-4 h-4 text-blue-500" />
-                                <span className="font-medium text-gray-700">Zoom Link:</span>
-                                <a
-                                    href={booking.zoomMeetingLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 font-semibold hover:text-blue-800 flex items-center gap-1"
-                                >
-                                    Join Meeting <ExternalLink className="w-3 h-3" />
-                                </a>
-                            </div>
 
-                            {/* Edit Teachers Button */}
-                            {booking.status === 'Scheduled' && !editingTeachers && (
+                        <div className="space-y-4">
+                            {resolvedMeetings.map((meeting, idx) => (
+                                <div key={meeting._id || idx} className="p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+                                            Meeting #{idx + 1}
+                                        </span>
+                                        {meeting.createdAt && (
+                                            <span className="text-xs text-gray-400">
+                                                Created: {new Date(meeting.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-blue-500" />
+                                            <span className="font-medium text-gray-700">Teacher(s):</span>
+                                            <span className="font-semibold text-gray-900">
+                                                {Array.isArray(meeting.teacherNames) && meeting.teacherNames.length > 0
+                                                    ? meeting.teacherNames.join(', ')
+                                                    : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="w-4 h-4 text-blue-500" />
+                                            <span className="font-medium text-gray-700">Date & Time:</span>
+                                            <span className="font-semibold text-gray-900">
+                                                {formatDate(meeting.scheduledDate)} at {meeting.scheduledTime} (IST)
+                                            </span>
+                                        </div>
+                                        {meeting.zoomMeetingLink && (
+                                            <div className="flex items-center gap-2">
+                                                <Video className="w-4 h-4 text-blue-500" />
+                                                <span className="font-medium text-gray-700">Zoom:</span>
+                                                <a
+                                                    href={meeting.zoomMeetingLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 font-semibold hover:text-blue-800 flex items-center gap-1"
+                                                >
+                                                    Join Meeting <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Action buttons row */}
+                        {booking.status === 'Scheduled' && !editingTeachers && !addingNewMeeting && (
+                            <div className="flex gap-3 mt-4">
+                                <button
+                                    onClick={handleStartAddMeeting}
+                                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition font-medium text-sm"
+                                >
+                                    <Calendar className="w-4 h-4" />
+                                    Add Another Meeting
+                                </button>
                                 <button
                                     onClick={handleStartEditTeachers}
-                                    className="mt-3 flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg shadow hover:bg-orange-600 transition font-medium text-sm"
+                                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg shadow hover:bg-orange-600 transition font-medium text-sm"
                                 >
                                     <Edit3 className="w-4 h-4" />
                                     Change Teacher(s)
                                 </button>
-                            )}
-                        </div>
+                            </div>
+                        )}
+
+                        {/* ====== ADD ANOTHER MEETING FORM ====== */}
+                        {addingNewMeeting && (
+                            <div className="mt-4 p-4 bg-white border-2 border-green-300 rounded-xl">
+                                <h4 className="font-bold text-sm text-green-700 flex items-center mb-3">
+                                    <Calendar className="w-4 h-4 mr-2" /> Schedule New Meeting
+                                    {selectedTeacherIds.length > 0 && (
+                                        <span className="ml-2 text-green-600 font-bold">
+                                            ({selectedTeacherIds.length} teacher{selectedTeacherIds.length > 1 ? 's' : ''} selected)
+                                        </span>
+                                    )}
+                                </h4>
+
+                                <div className="space-y-4">
+                                    {/* Teacher Select */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Teacher(s) *</label>
+                                        {loadingTeachers ? (
+                                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                                                <Loader2 className="w-4 h-4 animate-spin" /> Loading teachers...
+                                            </div>
+                                        ) : (
+                                            <TeacherCheckboxList />
+                                        )}
+                                    </div>
+
+                                    {/* Date */}
+                                    <div>
+                                        <label htmlFor="new-meeting-date" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Meeting Date (IST) *
+                                        </label>
+                                        <input
+                                            id="new-meeting-date"
+                                            type="date"
+                                            value={scheduledDate}
+                                            onChange={(e) => setScheduledDate(e.target.value)}
+                                            min={new Date().toISOString().split('T')[0]}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm text-gray-800"
+                                        />
+                                    </div>
+
+                                    {/* Time */}
+                                    <div>
+                                        <label htmlFor="new-meeting-time" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Meeting Time (IST) *
+                                        </label>
+                                        <input
+                                            id="new-meeting-time"
+                                            type="time"
+                                            value={scheduledTime}
+                                            onChange={(e) => setScheduledTime(e.target.value)}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm text-gray-800"
+                                        />
+                                    </div>
+
+                                    {/* Submit / Cancel */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => handleApprove(true)}
+                                            disabled={approving || selectedTeacherIds.length === 0 || !scheduledDate || !scheduledTime}
+                                            className="flex-1 flex justify-center items-center py-2.5 px-4 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                        >
+                                            {approving ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    Creating Zoom Meeting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                                    Create Meeting & Send Emails
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={handleCancelAddMeeting}
+                                            disabled={approving}
+                                            className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium text-sm"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* ====== EDIT TEACHERS FORM (inline, shown when editing) ====== */}
                         {editingTeachers && (
@@ -577,7 +746,7 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
 
                             {/* Approve Button */}
                             <button
-                                onClick={handleApprove}
+                                onClick={() => handleApprove(false)}
                                 disabled={approving || selectedTeacherIds.length === 0 || !scheduledDate || !scheduledTime}
                                 className="w-full flex justify-center items-center py-3 px-6 bg-green-600 text-white rounded-xl shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed font-bold text-lg"
                             >

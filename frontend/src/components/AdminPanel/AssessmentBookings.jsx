@@ -172,6 +172,11 @@ const AssessmentBookings = () => {
                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusStyle(booking.status)}`}>
                                         {booking.status}
                                     </span>
+                                    {Array.isArray(booking.meetings) && booking.meetings.length > 0 && (
+                                        <span className="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-700">
+                                            {booking.meetings.length} mtg{booking.meetings.length > 1 ? 's' : ''}
+                                        </span>
+                                    )}
                                 </td>
 
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

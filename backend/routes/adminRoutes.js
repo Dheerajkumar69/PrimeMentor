@@ -21,6 +21,7 @@ import {
     getAllPastClassSubmissions,
     getAllFeedback,
     approveAssessment,
+    addMeeting,
     updateAssessmentTeachers,
     getTeacherSchedule,
     checkTeacherAvailability,
@@ -69,6 +70,9 @@ router.get('/feedback', getAllFeedback);
 
 // Approve a free assessment (assign teacher + create Zoom + send emails)
 router.put('/assessment/:assessmentId/approve', approveAssessment);
+
+// Add a follow-up meeting to an already-scheduled assessment
+router.put('/assessment/:assessmentId/add-meeting', addMeeting);
 
 // Update teachers on an already-scheduled assessment
 router.put('/assessment/:assessmentId/update-teachers', updateAssessmentTeachers);

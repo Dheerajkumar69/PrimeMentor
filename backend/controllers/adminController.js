@@ -875,6 +875,8 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         } catch (emailErr) {
             console.error('⚠️ Failed to send student email:', emailErr.message);
         }
+        // Rate-limit buffer: Resend allows max 2 req/s
+        await new Promise(r => setTimeout(r, 600));
     }
 
     // Also send to parent email if it's different from student email
@@ -890,6 +892,8 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         } catch (emailErr) {
             console.error('⚠️ Failed to send parent email:', emailErr.message);
         }
+        // Rate-limit buffer
+        await new Promise(r => setTimeout(r, 600));
     }
 
     // Send to ALL selected teachers — shows time in IST
@@ -915,6 +919,10 @@ export const approveAssessment = asyncHandler(async (req, res) => {
             console.log('✅ Teacher email sent to:', teacher.email);
         } catch (emailErr) {
             console.error(`⚠️ Failed to send teacher email to ${teacher.email}:`, emailErr.message);
+        }
+        // Rate-limit buffer between teacher emails
+        if (teachers.indexOf(teacher) < teachers.length - 1) {
+            await new Promise(r => setTimeout(r, 600));
         }
     }
 
@@ -1040,6 +1048,10 @@ export const updateAssessmentTeachers = asyncHandler(async (req, res) => {
             console.log('✅ Teacher re-assignment email sent to:', teacher.email);
         } catch (emailErr) {
             console.error(`⚠️ Failed to send teacher email to ${teacher.email}:`, emailErr.message);
+        }
+        // Rate-limit buffer between teacher emails
+        if (teachers.indexOf(teacher) < teachers.length - 1) {
+            await new Promise(r => setTimeout(r, 600));
         }
     }
 

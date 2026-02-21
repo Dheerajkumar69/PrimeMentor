@@ -23,6 +23,45 @@ function getResendClient() {
 
 const senderEmail = process.env.EMAIL_SENDER || 'info@primementor.com.au';
 
+// ======================== RATE-LIMIT RETRY HELPER ========================
+const RETRY_MAX = 3;
+const RETRY_BASE_MS = 1000; // 1 second, doubles each retry
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Send an email via Resend with automatic retry on 429 (rate-limit) errors.
+ * Uses exponential backoff: 1s → 2s → 4s.
+ */
+const sendWithRetry = async (client, emailPayload) => {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= RETRY_MAX; attempt++) {
+    try {
+      const resp = await client.emails.send(emailPayload);
+      return resp;
+    } catch (err) {
+      lastError = err;
+      const status = err?.statusCode || err?.status || err?.response?.status;
+
+      // Only retry on 429 (rate limit) or 5xx (transient server errors)
+      if (status === 429 || (status >= 500 && status < 600)) {
+        const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+        console.warn(`⚠️ Resend API rate limited (${status}), retrying in ${delay}ms (attempt ${attempt}/${RETRY_MAX})...`);
+        await sleep(delay);
+        continue;
+      }
+
+      // Non-retryable error — throw immediately
+      throw err;
+    }
+  }
+
+  // All retries exhausted
+  console.error(`❌ Resend API failed after ${RETRY_MAX} retries.`);
+  throw lastError;
+};
+
 /**
  * Sends a course confirmation email using Resend.
  */
@@ -96,7 +135,7 @@ export const sendCourseConfirmationEmail = async (recipientEmail, courseDetails 
     `;
 
   try {
-    const resp = await client.emails.send({
+    const resp = await sendWithRetry(client, {
       from: `Prime Mentor <${senderEmail}>`,
       to: [recipientEmail],
       subject: `✅ Booking Confirmed: ${courseDetails.courseTitle || 'Course'} ${courseType}`,
@@ -210,7 +249,7 @@ export const sendAssessmentApprovalEmail = async (recipientEmail, recipientName,
       ? `✅ Free Assessment Scheduled: ${details.subject} on ${details.scheduledDate}`
       : `📋 New Assessment Assignment: ${details.studentName} — ${details.subject}`;
 
-    const resp = await client.emails.send({
+    const resp = await sendWithRetry(client, {
       from: `Prime Mentor <${senderEmail}>`,
       to: [recipientEmail],
       subject: subjectLine,
@@ -319,7 +358,7 @@ export const sendClassAssignmentEmail = async (recipientEmail, recipientName, ro
       ? `✅ Class Approved: ${details.courseTitle} — Teacher Assigned`
       : `📋 New Class Assignment: ${details.studentName} — ${details.courseTitle}`;
 
-    const resp = await client.emails.send({
+    const resp = await sendWithRetry(client, {
       from: `Prime Mentor <${senderEmail}>`,
       to: [recipientEmail],
       subject: subjectLine,
@@ -409,7 +448,7 @@ export const sendAssessmentBookingConfirmation = async (recipientEmail, details)
   `;
 
   try {
-    const resp = await client.emails.send({
+    const resp = await sendWithRetry(client, {
       from: `Prime Mentor <${senderEmail}>`,
       to: [recipientEmail],
       subject: `📚 Free Assessment Booked — ${details.subject} (Year ${details.yearLevel})`,

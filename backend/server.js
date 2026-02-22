@@ -45,6 +45,7 @@ const allowedOrigins = [
   'https://primementor.com.au',
   'https://www.primementor.com.au',
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:4173',
 ];
 

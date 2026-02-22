@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
+import { parse as csvParse } from 'csv-parse/sync';
 import User from '../models/UserModel.js';
 import TeacherModel from '../models/TeacherModel.js';
 import ClassRequest from '../models/ClassRequest.js';
@@ -12,6 +13,7 @@ import PastClassModel from '../models/PastClassModel.js';
 import FeedbackModel from '../models/FeedbackModel.js';
 import Assessment from '../models/AssessmentModel.js';
 import Syllabus from '../models/SyllabusModel.js';
+import TeacherAvailability from '../models/TeacherAvailabilityModel.js';
 import generateToken from '../utils/generateToken.js';
 import { createZoomMeeting, getAvailableHost } from '../utils/zoomIntegration.js';
 import { sendAssessmentApprovalEmail, sendClassAssignmentEmail } from '../utils/emailService.js';
@@ -448,7 +450,27 @@ export const assignTeacher = asyncHandler(async (req, res) => {
         throw new Error('Class Request, Teacher not found, or Request already processed.');
     }
 
-    // 2. Update the ClassRequest with the assigned teacher and status
+    // 2. ⛔ CONFLICT CHECK — Prevent double-booking for paid classes
+    let conflictCheckSkipped = false;
+    const startTime = extractStartTime(request.scheduleTime);
+    if (startTime && request.preferredDate) {
+        const proposedStart = buildDateTime(request.preferredDate, startTime);
+        if (proposedStart) {
+            const conflicts = await _findConflicts(teacherId, proposedStart, 60); // 1 hour classes
+            if (conflicts.length > 0) {
+                res.status(409);
+                throw new Error(
+                    `Scheduling conflict! ${teacher.name} is already booked at that time: ${conflicts.map(c => `${c.title} (${c.time})`).join(', ')}. Please choose a different teacher or time.`
+                );
+            }
+        } else {
+            conflictCheckSkipped = true;
+        }
+    } else {
+        conflictCheckSkipped = true;
+    }
+
+    // 3. Update the ClassRequest with the assigned teacher and status
     // Note: The status is changed to 'accepted' which means it's ready for the zoom link.
     const updatedRequest = await ClassRequest.findByIdAndUpdate(
         requestId,
@@ -536,7 +558,10 @@ export const assignTeacher = asyncHandler(async (req, res) => {
     res.json({
         message: 'Teacher assigned and class request approved successfully. Notification emails sent.',
         request: updatedRequest,
-        assignedTeacherName: teacher.name
+        assignedTeacherName: teacher.name,
+        ...(conflictCheckSkipped && {
+            warning: 'Conflict check was skipped because the class request is missing a preferred date or schedule time. Please verify manually that there is no scheduling overlap.',
+        }),
     });
 });
 
@@ -1114,9 +1139,21 @@ export const getTeacherSchedule = asyncHandler(async (req, res) => {
         zoomLink: a.zoomMeetingLink || null,
     }));
 
+    // 3. Get teacher availability from CSV uploads
+    const availabilitySlots = await TeacherAvailability.find({ teacherId }).lean();
+    const availability = availabilitySlots.map(slot => ({
+        type: 'availability',
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        subject: slot.subject || '',
+        lastUpdatedFromCSV: slot.lastUpdatedFromCSV,
+    }));
+
     res.json({
         teacher: { _id: teacher._id, name: teacher.name, email: teacher.email, subject: teacher.subject },
         schedule: [...classSlots, ...assessmentSlots],
+        availability,
     });
 });
 
@@ -1163,4 +1200,306 @@ export const checkTeacherAvailability = asyncHandler(async (req, res) => {
 
     const allAvailable = results.every(r => r.available);
     res.json({ allAvailable, teachers: results });
+});
+
+
+// =====================================================================
+//  CSV TIMETABLE UPLOAD
+// =====================================================================
+
+// Helper: Map day name strings to numbers (0=Sun, 1=Mon, ..., 6=Sat)
+const DAY_NAME_TO_NUM = {
+    sunday: 0, sun: 0,
+    monday: 1, mon: 1,
+    tuesday: 2, tue: 2,
+    wednesday: 3, wed: 3,
+    thursday: 4, thu: 4,
+    friday: 5, fri: 5,
+    saturday: 6, sat: 6,
+};
+
+// @desc    Upload a CSV file to set teacher availability/timetable
+// @route   POST /api/admin/upload-timetable
+// @access  Private (Admin Only)
+export const uploadTimetableCSV = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        res.status(400);
+        throw new Error('No CSV file uploaded. Please upload a .csv file.');
+    }
+
+    let csvContent;
+    try {
+        csvContent = fs.readFileSync(req.file.path, 'utf-8');
+    } catch (readErr) {
+        // File read failed — clean up and bail
+        try { fs.unlinkSync(req.file.path); } catch (_) { /* ignore */ }
+        res.status(500);
+        throw new Error('Failed to read the uploaded file.');
+    } finally {
+        // Always clean up the temp file
+        try { if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); } catch (_) { /* ignore */ }
+    }
+
+    let records;
+    try {
+        records = csvParse(csvContent, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true,
+            relax_column_count: true,
+        });
+    } catch (parseErr) {
+        res.status(400);
+        throw new Error(`CSV parsing error: ${parseErr.message}`);
+    }
+
+    if (!records || records.length === 0) {
+        res.status(400);
+        throw new Error('CSV file is empty or has no data rows.');
+    }
+
+    // Validate required columns (flexible naming)
+    const firstRow = records[0];
+    const colKeys = Object.keys(firstRow).map(k => k.toLowerCase().trim());
+
+    const findCol = (names) => {
+        for (const name of names) {
+            const idx = colKeys.findIndex(k => k.includes(name));
+            if (idx !== -1) return Object.keys(firstRow)[idx];
+        }
+        return null;
+    };
+
+    const emailCol = findCol(['email', 'teacher_email', 'teacher email']);
+    const dayCol = findCol(['day', 'day_of_week', 'dayofweek']);
+    const startCol = findCol(['start', 'start_time', 'from']);
+    const endCol = findCol(['end', 'end_time', 'to']);
+    const subjectCol = findCol(['subject', 'course']);
+
+    if (!emailCol || !dayCol || !startCol || !endCol) {
+        res.status(400);
+        throw new Error(
+            `CSV must have columns for: email, day, start_time, end_time. ` +
+            `Found columns: ${Object.keys(firstRow).join(', ')}. ` +
+            `(Optional: subject)`
+        );
+    }
+
+    // Build a map of teacher emails → teacher IDs for quick lookup
+    const allTeachers = await TeacherModel.find({}).select('email name').lean();
+    const emailToTeacher = {};
+    for (const t of allTeachers) {
+        if (t.email) emailToTeacher[t.email.toLowerCase().trim()] = t;
+    }
+
+    const results = { created: 0, skippedNoTeacher: 0, skippedInvalid: 0, errors: [] };
+    const teacherIdsToReplace = new Set();
+    const newSlots = [];
+
+    for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        const rowNum = i + 2; // +2 because 1-indexed + header row
+
+        const email = (row[emailCol] || '').toLowerCase().trim();
+        const dayStr = (row[dayCol] || '').toLowerCase().trim();
+        const start = (row[startCol] || '').trim();
+        const end = (row[endCol] || '').trim();
+        const subject = subjectCol ? (row[subjectCol] || '').trim() : '';
+
+        // Validate email → teacher
+        const teacher = emailToTeacher[email];
+        if (!teacher) {
+            results.skippedNoTeacher++;
+            results.errors.push(`Row ${rowNum}: No teacher found for email "${email}"`);
+            continue;
+        }
+
+        // Parse day
+        const dayNum = DAY_NAME_TO_NUM[dayStr];
+        if (dayNum === undefined) {
+            results.skippedInvalid++;
+            results.errors.push(`Row ${rowNum}: Invalid day "${row[dayCol]}"`);
+            continue;
+        }
+
+        // Validate time format (HH:MM)
+        const timeRegex = /^\d{1,2}:\d{2}$/;
+        if (!timeRegex.test(start) || !timeRegex.test(end)) {
+            results.skippedInvalid++;
+            results.errors.push(`Row ${rowNum}: Invalid time format "${start}" / "${end}". Use HH:MM (e.g., 09:00)`);
+            continue;
+        }
+
+        // Validate time semantics: start must be before end
+        const [sH, sM] = start.split(':').map(Number);
+        const [eH, eM] = end.split(':').map(Number);
+        if (isNaN(sH) || isNaN(sM) || isNaN(eH) || isNaN(eM)) {
+            results.skippedInvalid++;
+            results.errors.push(`Row ${rowNum}: Non-numeric time values.`);
+            continue;
+        }
+        if (sH > 23 || eH > 23 || sM > 59 || eM > 59) {
+            results.skippedInvalid++;
+            results.errors.push(`Row ${rowNum}: Time out of range (hours 0-23, minutes 0-59).`);
+            continue;
+        }
+        if (sH * 60 + sM >= eH * 60 + eM) {
+            results.skippedInvalid++;
+            results.errors.push(`Row ${rowNum}: start_time (${start}) must be before end_time (${end}).`);
+            continue;
+        }
+
+        teacherIdsToReplace.add(teacher._id.toString());
+        newSlots.push({
+            teacherId: teacher._id,
+            teacherEmail: email,
+            dayOfWeek: dayNum,
+            startTime: start,
+            endTime: end,
+            subject,
+            lastUpdatedFromCSV: new Date(),
+        });
+    }
+
+    // Replace old availability for affected teachers, then insert new
+    if (teacherIdsToReplace.size > 0) {
+        const idsArray = Array.from(teacherIdsToReplace).map(id => new mongoose.Types.ObjectId(id));
+        await TeacherAvailability.deleteMany({ teacherId: { $in: idsArray } });
+    }
+
+    if (newSlots.length > 0) {
+        try {
+            await TeacherAvailability.insertMany(newSlots, { ordered: false });
+        } catch (insertErr) {
+            // With ordered:false, partial inserts may succeed — count what made it
+            if (insertErr.insertedDocs) {
+                results.created = insertErr.insertedDocs.length;
+            }
+            const validationErrors = insertErr.writeErrors || [];
+            for (const we of validationErrors) {
+                results.errors.push(`DB validation error on row: ${we.errmsg || we.message}`);
+            }
+        }
+        // Count what actually got inserted
+        if (results.created === 0) {
+            results.created = await TeacherAvailability.countDocuments({
+                teacherId: { $in: Array.from(teacherIdsToReplace).map(id => new mongoose.Types.ObjectId(id)) },
+                lastUpdatedFromCSV: { $gte: new Date(Date.now() - 60000) }, // inserted within last minute
+            });
+        }
+    }
+
+    res.json({
+        message: `CSV processed. ${results.created} availability slots created for ${teacherIdsToReplace.size} teacher(s).`,
+        details: results,
+    });
+});
+
+
+// =====================================================================
+//  NEXT AVAILABLE SLOT
+// =====================================================================
+
+// @desc    Get next available slot for a teacher based on their availability vs bookings
+// @route   GET /api/admin/teacher/:id/next-available-slot
+// @access  Private (Admin Only)
+export const getNextAvailableSlot = asyncHandler(async (req, res) => {
+    const teacherId = req.params.id;
+    const rawDuration = parseInt(req.query.duration);
+    const durationMin = (!isNaN(rawDuration) && rawDuration >= 15 && rawDuration <= 480) ? rawDuration : 60;
+
+    if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+        res.status(400);
+        throw new Error('Invalid teacher ID format.');
+    }
+
+    const teacher = await TeacherModel.findById(teacherId).select('name email');
+    if (!teacher) {
+        res.status(404);
+        throw new Error('Teacher not found.');
+    }
+
+    // Get teacher's availability slots (from CSV)
+    const availabilitySlots = await TeacherAvailability.find({ teacherId }).lean();
+    if (availabilitySlots.length === 0) {
+        res.json({
+            teacherName: teacher.name,
+            nextSlot: null,
+            message: 'No availability data found for this teacher. Please upload a timetable CSV first.',
+        });
+        return;
+    }
+
+    // Group availability by dayOfWeek
+    const availByDay = {};
+    for (const slot of availabilitySlots) {
+        if (!availByDay[slot.dayOfWeek]) availByDay[slot.dayOfWeek] = [];
+        availByDay[slot.dayOfWeek].push(slot);
+    }
+
+    // Search the next 14 days for a free slot
+    const now = new Date();
+    for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
+        const checkDate = new Date(now);
+        checkDate.setDate(checkDate.getDate() + dayOffset);
+        const dayOfWeek = checkDate.getDay(); // 0=Sun, 6=Sat
+
+        const slotsForDay = availByDay[dayOfWeek];
+        if (!slotsForDay) continue;
+
+        for (const slot of slotsForDay) {
+            // Parse start/end times of availability
+            const parts = slot.startTime.split(':').map(Number);
+            const endParts = slot.endTime.split(':').map(Number);
+            if (parts.some(isNaN) || endParts.some(isNaN)) continue;
+            const [sh, sm] = parts;
+            const [eh, em] = endParts;
+
+            // Iterate in 30-minute steps for finer slot detection
+            let currentMin = sh * 60 + sm;
+            const endMinTotal = eh * 60 + em;
+
+            while (currentMin + durationMin <= endMinTotal) {
+                const currentH = Math.floor(currentMin / 60);
+                const currentM = currentMin % 60;
+
+                const proposedStart = new Date(checkDate);
+                proposedStart.setHours(currentH, currentM, 0, 0);
+
+                // Don't suggest past times
+                if (proposedStart <= now) {
+                    currentMin += 30;
+                    continue;
+                }
+
+                // Check for conflicts
+                const conflicts = await _findConflicts(teacherId, proposedStart, durationMin);
+                if (conflicts.length === 0) {
+                    // Found a free slot!
+                    const dateStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+                    const timeStr = `${String(currentH).padStart(2, '0')}:${String(currentM).padStart(2, '0')}`;
+                    res.json({
+                        teacherName: teacher.name,
+                        nextSlot: {
+                            date: dateStr,
+                            time: timeStr,
+                            dayOfWeek,
+                            dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek],
+                            durationMinutes: durationMin,
+                        },
+                    });
+                    return;
+                }
+
+                // Move to next 30-min block
+                currentMin += 30;
+            }
+        }
+    }
+
+    res.json({
+        teacherName: teacher.name,
+        nextSlot: null,
+        message: 'No available slots found in the next 14 days.',
+    });
 });

@@ -5,7 +5,8 @@ import {
     Briefcase, Mail, Trash2, Edit2, User, Phone, Clock, MapPin,
     DollarSign, CreditCard, IdCard, FileText, X, BookOpen,
     AlertCircle, Plus, Save, RefreshCw, Shield, Eye, EyeOff,
-    Upload, UserPlus, Replace, ChevronDown, AlertTriangle, Calendar
+    Upload, UserPlus, Replace, ChevronDown, AlertTriangle, Calendar,
+    FileSpreadsheet, CheckCircle, Loader2
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
@@ -146,12 +147,29 @@ const ConfirmModal = ({ open, title, message, confirmLabel, confirmColor, icon: 
 };
 
 // ======================== DETAILS MODAL ========================
-const TeacherDetailsModal = ({ teacher, onClose, backendUrl, onEdit, onReplace, allTeachers, onViewTimetable }) => {
+const TeacherDetailsModal = ({ teacher, onClose, backendUrl, adminToken, onEdit, onReplace, allTeachers, onViewTimetable }) => {
     const [showReplace, setShowReplace] = useState(false);
     const [replaceTarget, setReplaceTarget] = useState('');
     const [replacing, setReplacing] = useState(false);
+    const [nextSlotLoading, setNextSlotLoading] = useState(false);
+    const [nextSlotData, setNextSlotData] = useState(null); // { nextSlot, message }
 
     if (!teacher) return null;
+
+    const fetchNextSlot = async () => {
+        setNextSlotLoading(true);
+        setNextSlotData(null);
+        try {
+            const res = await axios.get(`${backendUrl}/api/admin/teacher/${teacher._id}/next-available-slot`, {
+                headers: { Authorization: `Bearer ${adminToken}` },
+            });
+            setNextSlotData(res.data);
+        } catch (err) {
+            setNextSlotData({ nextSlot: null, message: err.response?.data?.message || 'Failed to fetch.' });
+        } finally {
+            setNextSlotLoading(false);
+        }
+    };
 
     const getFileUrl = (filename) => filename ? `${backendUrl}/images/${filename}` : null;
     const profileImageUrl = getFileUrl(teacher.image);
@@ -246,7 +264,29 @@ const TeacherDetailsModal = ({ teacher, onClose, backendUrl, onEdit, onReplace, 
                     >
                         <Calendar className='w-4 h-4' /> View Timetable
                     </button>
+                    <button
+                        onClick={fetchNextSlot}
+                        disabled={nextSlotLoading}
+                        className='flex items-center gap-2 px-5 py-2.5 bg-teal-500 text-white text-sm font-semibold rounded-lg hover:bg-teal-600 disabled:opacity-50 transition shadow'
+                    >
+                        {nextSlotLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : <Clock className='w-4 h-4' />}
+                        Next Available Slot
+                    </button>
                 </div>
+
+                {/* Next Available Slot Result */}
+                {nextSlotData && (
+                    <div className={`mt-3 p-3 rounded-lg border text-sm ${nextSlotData.nextSlot ? 'bg-teal-50 border-teal-200' : 'bg-gray-50 border-gray-200'
+                        }`}>
+                        {nextSlotData.nextSlot ? (
+                            <p className='font-medium text-teal-800'>
+                                ✅ Next free slot: <strong>{nextSlotData.nextSlot.dayName}, {nextSlotData.nextSlot.date}</strong> at <strong>{nextSlotData.nextSlot.time}</strong>
+                            </p>
+                        ) : (
+                            <p className='text-gray-600'>{nextSlotData.message || 'No slots available in the next 14 days.'}</p>
+                        )}
+                    </div>
+                )}
 
                 {/* Replace Teacher Inline Section */}
                 {showReplace && (
@@ -539,6 +579,10 @@ export default function TeacherManagement() {
     const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', confirmLabel: '', confirmColor: 'red', icon: null, onConfirm: null });
     const [timetable, setTimetable] = useState({ open: false, teacherId: null, teacherName: '' });
 
+    // CSV Upload state
+    const [csvUploading, setCsvUploading] = useState(false);
+    const [csvResult, setCsvResult] = useState(null); // { message, details }
+
     const showConfirm = (opts) => setConfirmDialog({ ...opts, open: true });
     const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false, onConfirm: null }));
 
@@ -672,12 +716,67 @@ export default function TeacherManagement() {
                     <h2 className="text-2xl font-bold text-gray-700 flex items-center">
                         <Briefcase className='w-6 h-6 mr-2 text-blue-500' /> Teacher Management ({teachers.length})
                     </h2>
-                    <button
-                        onClick={() => setFormModal({ open: true, mode: 'add', data: null })}
-                        className='flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white font-semibold text-sm rounded-lg hover:bg-green-700 transition shadow-md'
-                    >
-                        <Plus className='w-4 h-4' /> Add Teacher
-                    </button>
+                    <div className='flex items-center gap-2'>
+                        {/* CSV Upload */}
+                        <label
+                            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition shadow-md cursor-pointer ${csvUploading
+                                ? 'bg-gray-400 text-gray-200 cursor-wait'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                }`}
+                        >
+                            {csvUploading ? <Loader2 className='w-4 h-4 animate-spin' /> : <FileSpreadsheet className='w-4 h-4' />}
+                            {csvUploading ? 'Uploading...' : 'Upload Timetable CSV'}
+                            <input
+                                type='file'
+                                accept='.csv'
+                                className='hidden'
+                                disabled={csvUploading}
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+
+                                    // Client-side validation
+                                    if (!file.name.toLowerCase().endsWith('.csv')) {
+                                        toast.error('Only .csv files are allowed.');
+                                        e.target.value = '';
+                                        return;
+                                    }
+                                    if (file.size > 2 * 1024 * 1024) {
+                                        toast.error('File is too large. Maximum size is 2 MB.');
+                                        e.target.value = '';
+                                        return;
+                                    }
+
+                                    setCsvUploading(true);
+                                    setCsvResult(null);
+                                    try {
+                                        const fd = new FormData();
+                                        fd.append('csvFile', file);
+                                        const res = await axios.post(`${backendUrl}/api/admin/upload-timetable`, fd, {
+                                            headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'multipart/form-data' },
+                                        });
+                                        setCsvResult(res.data);
+                                        toast.success(res.data.message || 'CSV uploaded successfully!');
+                                    } catch (err) {
+                                        // Multer errors come as plain text sometimes
+                                        const msg = err.response?.data?.message || err.response?.data?.error || err.response?.data || 'CSV upload failed.';
+                                        const errorStr = typeof msg === 'string' ? msg : 'CSV upload failed.';
+                                        toast.error(errorStr);
+                                        setCsvResult({ message: errorStr, details: { errors: [errorStr] } });
+                                    } finally {
+                                        setCsvUploading(false);
+                                        e.target.value = ''; // Reset file input
+                                    }
+                                }}
+                            />
+                        </label>
+                        <button
+                            onClick={() => setFormModal({ open: true, mode: 'add', data: null })}
+                            className='flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white font-semibold text-sm rounded-lg hover:bg-green-700 transition shadow-md'
+                        >
+                            <Plus className='w-4 h-4' /> Add Teacher
+                        </button>
+                    </div>
                 </div>
 
                 {/* --- Subject Filter Buttons --- */}
@@ -696,6 +795,25 @@ export default function TeacherManagement() {
                         </button>
                     ))}
                 </div>
+
+                {/* CSV Upload Result */}
+                {csvResult && (
+                    <div className={`p-3 rounded-lg border text-sm ${csvResult.details?.errors?.length > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+                        <p className='font-semibold flex items-center gap-1'>
+                            <CheckCircle className='w-4 h-4 text-green-600' /> {csvResult.message}
+                        </p>
+                        {csvResult.details?.errors?.length > 0 && (
+                            <details className='mt-1'>
+                                <summary className='text-xs text-yellow-700 cursor-pointer'>⚠️ {csvResult.details.errors.length} warning(s)</summary>
+                                <ul className='mt-1 text-xs text-yellow-700 list-disc ml-4'>
+                                    {csvResult.details.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
+                                    {csvResult.details.errors.length > 10 && <li>...and {csvResult.details.errors.length - 10} more</li>}
+                                </ul>
+                            </details>
+                        )}
+                        <button onClick={() => setCsvResult(null)} className='text-xs text-gray-500 hover:text-gray-700 mt-1'>Dismiss</button>
+                    </div>
+                )}
 
                 {loading && <p className="text-center text-gray-500">Loading teacher data...</p>}
 
@@ -750,6 +868,7 @@ export default function TeacherManagement() {
                 teacher={selectedTeacher}
                 onClose={() => setSelectedTeacher(null)}
                 backendUrl={backendUrl}
+                adminToken={adminToken}
                 onEdit={handleEditClick}
                 onReplace={handleReplaceTeacher}
                 allTeachers={teachers}

@@ -1,6 +1,9 @@
 // backend/routes/adminRoutes.js
 
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import upload from '../config/multer.js';
 import {
     getAllStudents,
@@ -25,6 +28,8 @@ import {
     updateAssessmentTeachers,
     getTeacherSchedule,
     checkTeacherAvailability,
+    uploadTimetableCSV,
+    getNextAvailableSlot,
 } from '../controllers/adminController.js';
 import { adminOnlyMiddleware } from '../middlewares/adminMiddleware.js';
 
@@ -80,5 +85,28 @@ router.put('/assessment/:assessmentId/update-teachers', updateAssessmentTeachers
 // Teacher Schedule & Availability
 router.get('/teacher/:id/schedule', getTeacherSchedule);
 router.post('/check-teacher-availability', checkTeacherAvailability);
+
+// CSV Timetable Upload & Next Available Slot
+// --- Dedicated multer for CSV: type filter + 2MB limit ---
+const csvUploadDir = path.resolve('uploads');
+if (!fs.existsSync(csvUploadDir)) fs.mkdirSync(csvUploadDir, { recursive: true });
+
+const csvStorage = multer.diskStorage({
+    destination: csvUploadDir,
+    filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`),
+});
+const csvUpload = multer({
+    storage: csvStorage,
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB max
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (ext !== '.csv') {
+            return cb(new Error('Only .csv files are allowed.'), false);
+        }
+        cb(null, true);
+    },
+});
+router.post('/upload-timetable', csvUpload.single('csvFile'), uploadTimetableCSV);
+router.get('/teacher/:id/next-available-slot', getNextAvailableSlot);
 
 export default router;

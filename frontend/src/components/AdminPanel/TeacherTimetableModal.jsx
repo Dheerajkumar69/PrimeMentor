@@ -31,20 +31,26 @@ const fmtDate = (d) => d.toISOString().split('T')[0];
 /** Format date as "Feb 18" */
 const fmtShort = (d) => d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' });
 
-/** Parse time string "14:30" or "2:30 PM" → decimal hours (e.g. 14.5) */
+/** Parse time string "14:30" or "2:30 PM" → decimal hours (e.g. 14.5), with NaN guard */
 const parseTimeToDecimal = (timeStr) => {
-    if (!timeStr) return null;
+    if (!timeStr || typeof timeStr !== 'string') return null;
     const trimmed = timeStr.trim();
 
     // HH:MM 24h
     const m24 = trimmed.match(/^(\d{1,2}):(\d{2})$/);
-    if (m24) return parseInt(m24[1], 10) + parseInt(m24[2], 10) / 60;
+    if (m24) {
+        const h = parseInt(m24[1], 10);
+        const m = parseInt(m24[2], 10);
+        if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+        return h + m / 60;
+    }
 
     // h:mm AM/PM
     const m12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
     if (m12) {
         let h = parseInt(m12[1], 10);
         const min = parseInt(m12[2], 10);
+        if (isNaN(h) || isNaN(min) || h > 12 || h < 1 || min > 59) return null;
         const p = m12[3].toUpperCase();
         if (p === 'PM' && h !== 12) h += 12;
         if (p === 'AM' && h === 12) h = 0;
@@ -109,6 +115,7 @@ const SlotBlock = ({ slot, hourStart }) => {
 export default function TeacherTimetableModal({ teacherId, teacherName, onClose }) {
     const { backendUrl, adminToken } = useContext(AppContext);
     const [schedule, setSchedule] = useState([]);
+    const [availability, setAvailability] = useState([]); // from CSV
     const [teacher, setTeacher] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -117,6 +124,8 @@ export default function TeacherTimetableModal({ teacherId, teacherName, onClose 
     // Fetch schedule
     useEffect(() => {
         if (!teacherId || !backendUrl) return;
+
+        const controller = new AbortController();
         setLoading(true);
         setError(null);
 
@@ -124,11 +133,16 @@ export default function TeacherTimetableModal({ teacherId, teacherName, onClose 
             try {
                 const res = await axios.get(
                     `${backendUrl}/api/admin/teacher/${teacherId}/schedule`,
-                    { headers: { Authorization: `Bearer ${adminToken}` } }
+                    {
+                        headers: { Authorization: `Bearer ${adminToken}` },
+                        signal: controller.signal,
+                    }
                 );
                 setTeacher(res.data.teacher);
                 setSchedule(res.data.schedule || []);
+                setAvailability(res.data.availability || []);
             } catch (err) {
+                if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
                 setError(err.response?.data?.message || 'Failed to fetch schedule.');
                 console.error('Schedule fetch error:', err);
             } finally {
@@ -137,6 +151,7 @@ export default function TeacherTimetableModal({ teacherId, teacherName, onClose 
         };
 
         fetchSchedule();
+        return () => controller.abort();
     }, [teacherId, backendUrl, adminToken]);
 
     // Navigate weeks
@@ -173,6 +188,20 @@ export default function TeacherTimetableModal({ teacherId, teacherName, onClose 
 
         return map;
     }, [schedule, weekStart]);
+
+    // Group availability by dayOfWeek (Mon=0 in our grid, but dayOfWeek: 1=Mon in DB)
+    const availByDay = useMemo(() => {
+        const map = {};
+        DAYS.forEach((_, i) => { map[i] = []; });
+
+        availability.forEach(slot => {
+            // Convert dayOfWeek (0=Sun..6=Sat) to grid index (0=Mon..6=Sun)
+            const gridIdx = slot.dayOfWeek === 0 ? 6 : slot.dayOfWeek - 1;
+            map[gridIdx].push(slot);
+        });
+
+        return map;
+    }, [availability]);
 
     // Count totals
     const totalClasses = schedule.filter(s => s.type === 'class').length;
@@ -227,6 +256,9 @@ export default function TeacherTimetableModal({ teacherId, teacherName, onClose 
                 {/* ---- Legend ---- */}
                 <div className="flex items-center gap-6 px-6 py-2 border-b text-xs text-gray-500">
                     <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-sm bg-green-200 border border-green-300" /> Available (from CSV)
+                    </span>
+                    <span className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded-sm bg-blue-500" /> Regular Class (1hr)
                     </span>
                     <span className="flex items-center gap-1.5">
@@ -279,7 +311,25 @@ export default function TeacherTimetableModal({ teacherId, teacherName, onClose 
                                                 <div key={h} className="absolute left-0 right-0 border-b border-gray-100" style={{ top: `${idx * 64}px`, height: '64px' }} />
                                             ))}
 
-                                            {/* Slot blocks */}
+                                            {/* Availability background blocks (from CSV) */}
+                                            {(availByDay[i] || []).map((avail, aidx) => {
+                                                const startDec = parseTimeToDecimal(avail.startTime);
+                                                const endDec = parseTimeToDecimal(avail.endTime);
+                                                if (startDec === null || endDec === null) return null;
+                                                const top = (startDec - HOURS[0]) * 64;
+                                                const height = (endDec - startDec) * 64;
+                                                if (top < 0 || height <= 0) return null;
+                                                return (
+                                                    <div
+                                                        key={`avail-${aidx}`}
+                                                        className="absolute left-0 right-0 bg-green-100/60 border-l-2 border-green-400"
+                                                        style={{ top: `${top}px`, height: `${height}px` }}
+                                                        title={`Available: ${avail.startTime} - ${avail.endTime}${avail.subject ? ` (${avail.subject})` : ''}`}
+                                                    />
+                                                );
+                                            })}
+
+                                            {/* Slot blocks (classes + assessments) */}
                                             {daySlots.map((slot, idx) => (
                                                 <SlotBlock key={`${slot.id}-${idx}`} slot={slot} hourStart={HOURS[0]} />
                                             ))}

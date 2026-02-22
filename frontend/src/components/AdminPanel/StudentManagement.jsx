@@ -1,8 +1,8 @@
 // frontend/components/AdminPanel/StudentManagement.jsx
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { User, Book, ClipboardList, Clock, CheckCircle, Bell, UserPlus, Zap, X } from 'lucide-react';
+import { User, Book, ClipboardList, Clock, CheckCircle, Bell, UserPlus, Zap, X, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import Select from 'react-select';
 
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
@@ -92,14 +92,82 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
     const [isAssigning, setIsAssigning] = useState(false);
     const [error, setError] = useState(null);
 
+    // ⛔ Availability check state
+    const [availabilityStatus, setAvailabilityStatus] = useState(null); // null | 'checking' | 'available' | 'conflict'
+    const [conflictDetails, setConflictDetails] = useState([]);
+
+    // AbortController ref: cancels in-flight availability checks when user picks a different teacher
+    const abortRef = useRef(null);
+
     const teacherOptions = useMemo(() => teachers.map(t => ({
         value: t._id,
         label: `${t.name} (${t.email})`,
         subject: t.subject
     })), [teachers]);
 
+    // ⛔ Check teacher availability when teacher is selected
+    const handleTeacherSelect = useCallback(async (option) => {
+        // Cancel any in-flight request from a previous selection
+        if (abortRef.current) abortRef.current.abort();
+
+        const tId = option?.value || null;
+        setSelectedTeacherId(tId);
+        setError(null);
+        setAvailabilityStatus(null);
+        setConflictDetails([]);
+
+        if (!tId || !request.preferredDate || !request.scheduleTime) return;
+
+        // Extract start time from scheduleTime (e.g., "3:00 PM - 4:00 PM" → "3:00 PM")
+        const startPart = request.scheduleTime.split(/\s*-\s*/)[0]?.trim();
+        if (!startPart) return;
+
+        // Convert to 24h format for the API
+        const match12 = startPart.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+        let timeForApi = startPart;
+        if (match12) {
+            let h = parseInt(match12[1], 10);
+            const m = match12[2];
+            const period = match12[3].toUpperCase();
+            if (period === 'PM' && h !== 12) h += 12;
+            if (period === 'AM' && h === 12) h = 0;
+            timeForApi = `${String(h).padStart(2, '0')}:${m}`;
+        }
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        setAvailabilityStatus('checking');
+        try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) { setAvailabilityStatus(null); return; }
+
+            const res = await axios.post(`${getBackendUrl()}/api/admin/check-teacher-availability`, {
+                teacherIds: [tId],
+                scheduledDate: request.preferredDate,
+                scheduledTime: timeForApi,
+                durationMinutes: 60,
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+                signal: controller.signal,
+            });
+
+            if (res.data.allAvailable) {
+                setAvailabilityStatus('available');
+            } else {
+                setAvailabilityStatus('conflict');
+                const teacherResult = res.data.teachers?.[0];
+                setConflictDetails(teacherResult?.conflicts || []);
+            }
+        } catch (err) {
+            if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return; // Aborted, ignore
+            console.error('Availability check failed:', err);
+            // Don't block assignment, just show no status
+            setAvailabilityStatus(null);
+        }
+    }, [request.preferredDate, request.scheduleTime]);
+
     const handleAssign = async () => {
-        // ... (handleAssign logic remains UNCHANGED)
         if (!selectedTeacherId) {
             setError('Please select a teacher.');
             return;
@@ -116,8 +184,12 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
             );
 
             if (res.data.message) {
-                alert(`Successfully assigned to ${res.data.assignedTeacherName}. Now awaiting Zoom link.`);
-                onAssignSuccess(request._id, res.data.request); // Pass the updated request to the parent
+                let msg = `Successfully assigned to ${res.data.assignedTeacherName}. Now awaiting Zoom link.`;
+                if (res.data.warning) {
+                    msg += `\n\n⚠️ Warning: ${res.data.warning}`;
+                }
+                alert(msg);
+                onAssignSuccess(request._id, res.data.request);
             }
         } catch (err) {
             console.error('Assignment error:', err);
@@ -126,20 +198,21 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
                 window.location.href = '/admin/login';
                 return;
             }
-            setError(err.response?.data?.message || 'Failed to assign teacher.');
+            const errMsg = err.response?.data?.message || 'Failed to assign teacher.';
+            // If 409 conflict: show the details but let admin decide
+            if (err.response?.status === 409) {
+                setError(`⚠️ ${errMsg}`);
+            } else {
+                setError(errMsg);
+            }
         } finally {
             setIsAssigning(false);
         }
     };
 
     const isTrial = request.purchaseType === 'TRIAL';
-
-    // 🛑 CRITICAL FIX: Display the specific date and time for all sessions 🛑
     const preferredSchedule = `${formatDate(request.preferredDate)} @ ${request.scheduleTime}`;
-
-    // Only show the full Mon-Fri/Sat preference if it's a Starter Pack, for context
     const weeklyContext = !isTrial && request.preferredTimeMonFri ? `(M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})` : '';
-
 
     return (
         <tr className="border-t hover:bg-yellow-50 transition duration-150 align-top bg-white">
@@ -169,25 +242,46 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
                 <div className='space-y-2'>
                     <Select
                         options={teacherOptions}
-                        onChange={(option) => setSelectedTeacherId(option.value)}
+                        onChange={handleTeacherSelect}
                         placeholder="Select Teacher..."
                         className="text-xs"
                         isDisabled={isAssigning}
                     />
+
+                    {/* ⛔ Availability Status Indicator */}
+                    {availabilityStatus === 'checking' && (
+                        <p className="text-xs text-blue-500 flex items-center"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Checking availability...</p>
+                    )}
+                    {availabilityStatus === 'available' && (
+                        <p className="text-xs text-green-600 flex items-center font-semibold"><CheckCircle2 className="w-3 h-3 mr-1" /> Available ✅</p>
+                    )}
+                    {availabilityStatus === 'conflict' && (
+                        <div className="text-xs text-red-600 bg-red-50 p-2 rounded-md border border-red-200">
+                            <p className="font-semibold flex items-center"><AlertTriangle className="w-3 h-3 mr-1" /> ⚠️ Scheduling Conflict!</p>
+                            {conflictDetails.map((c, i) => (
+                                <p key={i} className="ml-4 mt-0.5">• {c.title} — {c.date} @ {c.time}</p>
+                            ))}
+                        </div>
+                    )}
+
                     {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                     <button
                         onClick={handleAssign}
                         disabled={!selectedTeacherId || isAssigning}
-                        className="w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                        className={`w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${availabilityStatus === 'conflict'
+                            ? 'bg-red-500 hover:bg-red-600 focus:ring-red-400'
+                            : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                            }`}
                     >
                         <UserPlus className="w-4 h-4 mr-1" />
-                        {isAssigning ? 'Assigning...' : 'Approve & Assign'}
+                        {isAssigning ? 'Assigning...' : (availabilityStatus === 'conflict' ? 'Assign Anyway (Conflict!)' : 'Approve & Assign')}
                     </button>
                 </div>
             </td>
         </tr>
     );
 };
+
 
 
 // --- NEW Sub-Component: Accepted Class Row (Zoom Link Phase) ---

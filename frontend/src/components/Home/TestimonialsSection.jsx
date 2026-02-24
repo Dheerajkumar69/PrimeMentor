@@ -46,11 +46,11 @@ const VideoPlayerModal = ({ videoUrl, onClose }) => {
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-80 p-4 transition-opacity duration-300"
       onClick={onClose} // Close on backdrop click
     >
-      <div 
+      <div
         className="relative w-full max-w-4xl aspect-video" // 16:9 aspect ratio
         onClick={(e) => e.stopPropagation()} // Prevent modal from closing when clicking inside video area
       >
@@ -61,7 +61,7 @@ const VideoPlayerModal = ({ videoUrl, onClose }) => {
         >
           <X className="w-6 h-6" />
         </button>
-        <iframe 
+        <iframe
           {...iframeAttributes}
           className="rounded-xl shadow-2xl"
         ></iframe>
@@ -130,7 +130,7 @@ export default function TestimonialsSection() {
   // Auto-slide effect - Set to 4000ms (4 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTestimonialIndex((prevIndex) => 
+      setCurrentTestimonialIndex((prevIndex) =>
         (prevIndex + 1) % testimonials.length
       );
     }, 4000); // Change testimonial every 4 seconds
@@ -139,13 +139,13 @@ export default function TestimonialsSection() {
   }, [testimonials.length]);
 
   const goToPrevious = () => {
-    setCurrentTestimonialIndex((prevIndex) => 
+    setCurrentTestimonialIndex((prevIndex) =>
       (prevIndex - 1 + testimonials.length) % testimonials.length
     );
   };
 
   const goToNext = () => {
-    setCurrentTestimonialIndex((prevIndex) => 
+    setCurrentTestimonialIndex((prevIndex) =>
       (prevIndex + 1) % testimonials.length
     );
   };
@@ -190,7 +190,7 @@ export default function TestimonialsSection() {
   return (
     <section id="testimonials" className="relative py-16 sm:py-20 bg-gradient-to-br from-gray-50 to-white overflow-hidden">
       <style>{customAnimations}</style>
-      
+
       {/* Subtle background pattern of dots */}
       <div className="absolute inset-0 z-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
 
@@ -207,22 +207,22 @@ export default function TestimonialsSection() {
         {/* Responsive Grid for Video Testimonials */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 sm:mb-16">
           {videoTestimonials.map((video, index) => (
-            <div 
+            <div
               key={index}
-              className={`bg-gradient-to-br ${video.bannerBg} rounded-2xl p-1 animate-[card-fade-in_1s_ease-out_forwards]`} 
+              className={`bg-gradient-to-br ${video.bannerBg} rounded-2xl p-1 animate-[card-fade-in_1s_ease-out_forwards]`}
               style={{ animationDelay: `${index * 0.2}s` }}
             >
-              <div 
-                className="rounded-2xl h-56 sm:h-64 flex items-center justify-center group cursor-pointer relative overflow-hidden transition-all duration-300" 
-                onClick={() => handlePlayVideo(video.embedUrl)} 
+              <div
+                className="rounded-2xl h-56 sm:h-64 flex items-center justify-center group cursor-pointer relative overflow-hidden transition-all duration-300"
+                onClick={() => handlePlayVideo(video.embedUrl)}
               >
                 {/* 1. Thumbnail Image */}
-                <div 
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" 
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
                   style={{ backgroundImage: `url(${getThumbnailUrl(video.videoId)})` }}
                   aria-label={`Thumbnail for ${video.title} video testimonial`}
                 />
-                
+
                 {/* 2. Dark Overlay for Contrast */}
                 <div className="absolute inset-0 bg-black opacity-50 group-hover:opacity-30 transition-opacity duration-300"></div>
 
@@ -242,15 +242,15 @@ export default function TestimonialsSection() {
         <div className="relative max-w-4xl mx-auto mb-12 sm:mb-16">
           <div className="bg-white rounded-3xl shadow-xl p-6 sm:p-8 md:p-12 relative overflow-hidden min-h-[300px] flex items-center">
             {/* Navigation Buttons */}
-            <button 
-              onClick={goToPrevious} 
+            <button
+              onClick={goToPrevious}
               className="absolute left-0 md:-left-12 top-1/2 -translate-y-1/2 bg-gray-900 text-white p-2 md:p-3 rounded-full shadow-lg hover:bg-orange-500 transition-all duration-300 z-20 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
               aria-label="Previous testimonial"
             >
               <ChevronLeft className="w-6 h-6" />
             </button>
-            <button 
-              onClick={goToNext} 
+            <button
+              onClick={goToNext}
               className="absolute right-0 md:-right-12 top-1/2 -translate-y-1/2 bg-gray-900 text-white p-2 md:p-3 rounded-full shadow-lg hover:bg-orange-500 transition-all duration-300 z-20 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
               aria-label="Next testimonial"
             >
@@ -258,8 +258,8 @@ export default function TestimonialsSection() {
             </button>
 
             {/* Testimonial Content (with unique key for transition) */}
-            <div 
-              key={currentTestimonial.id} 
+            <div
+              key={currentTestimonial.id}
               className="w-full flex items-start gap-3 sm:gap-4 animate-[slide-in-right_0.5s_ease-out_forwards]"
             >
               <Quote className="w-10 h-10 sm:w-12 sm:h-12 text-orange-500 flex-shrink-0 opacity-80" />
@@ -272,7 +272,7 @@ export default function TestimonialsSection() {
                     <Star key={`empty-${i}`} className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300" />
                   ))}
                 </div>
-                <p 
+                <p
                   className="text-gray-700 text-base sm:text-lg leading-relaxed mb-4 sm:mb-6"
                   dangerouslySetInnerHTML={{ __html: currentTestimonial.quote }}
                 />
@@ -295,9 +295,8 @@ export default function TestimonialsSection() {
               <button
                 key={index}
                 onClick={() => setCurrentTestimonialIndex(index)}
-                className={`w-3 h-3 rounded-full transition-all duration-300 ease-in-out ${
-                  currentTestimonialIndex === index ? 'bg-orange-500 w-6' : 'bg-gray-300 hover:bg-orange-300'
-                }`}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ease-in-out ${currentTestimonialIndex === index ? 'bg-orange-500 w-6' : 'bg-gray-300 hover:bg-orange-300'
+                  }`}
                 aria-label={`Go to testimonial ${index + 1}`}
               ></button>
             ))}
@@ -307,7 +306,7 @@ export default function TestimonialsSection() {
         {/* Closing Stat - Responsive Text Size */}
         <div className="text-center animate-[card-fade-in_1s_ease-out_0.8s_forwards]">
           <p className="text-lg sm:text-2xl font-bold text-gray-900 mb-2">
-            Over 1,800 positive reviews from happy parents and students
+            Hundreds of positive reviews from happy parents and students
           </p>
           <div className="flex justify-center gap-1 mb-4">
             {[...Array(5)].map((_, i) => (
@@ -317,11 +316,11 @@ export default function TestimonialsSection() {
           <p className="text-gray-600 text-sm sm:text-base">Join thousands of families who trust Prime Mentor</p>
         </div>
       </div>
-      
+
       {/* Video Player Modal is rendered outside of the main section content */}
-      <VideoPlayerModal 
-        videoUrl={playingVideoUrl} 
-        onClose={handleCloseVideo} 
+      <VideoPlayerModal
+        videoUrl={playingVideoUrl}
+        onClose={handleCloseVideo}
       />
     </section>
   );

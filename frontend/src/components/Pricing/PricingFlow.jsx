@@ -198,7 +198,7 @@ const StepNeeds = ({ onSelect, subject }) => (
             ))}
         </div>
         <div className="text-center pt-3 sm:pt-4">
-            <p className="text-xs text-gray-500 hover:text-orange-500 cursor-pointer">Not sure? Skip ahead</p>
+            <p className="text-xs text-gray-500 hover:text-orange-500 cursor-pointer" onClick={() => onSelect('General support')}>Not sure? Skip ahead</p>
         </div>
     </>
 );
@@ -231,14 +231,14 @@ const StepState = ({ onSelect }) => {
     );
 };
 
-// --- StepName: No changes required (except for data handling below) ---
+// --- StepName: Asks for the student's name ---
 const StepName = ({ onSelect, name, setName, isClerkUser, clerkName }) => (
     <>
         <div className="text-center mb-6 sm:mb-8">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">To finalise your learning program, what is your name?</h2>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">To finalise your learning program, what is the student's name?</h2>
         </div>
         <div className="max-w-xs mx-auto">
-            <label className="text-xs font-medium text-gray-700 mb-1 block">Your name</label>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">Student's name</label>
             <div className="flex flex-col sm:flex-row gap-3">
                 <input
                     type="text"
@@ -372,9 +372,9 @@ const StepLoading = ({ onRedirect, finalData, backendUrl }) => {
 
 // Updated prop to accept initialClassFlowData instead of just initialClassRange
 const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
-// ... (rest of the PricingFlow component remains the same)
-// ... (omitted for brevity, only StepLoading was modified for clarity)
-// ...
+    // ... (rest of the PricingFlow component remains the same)
+    // ... (omitted for brevity, only StepLoading was modified for clarity)
+    // ...
     const { user, backendUrl } = useContext(AppContext);
     const isClerkUser = !!user;
 
@@ -420,7 +420,7 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
             transition: { duration: 0.3 }
         })
     };
-    
+
     // Custom state to track the direction of navigation for Framer Motion
     const [direction, setDirection] = useState(1); // 1 for forward, -1 for backward
 

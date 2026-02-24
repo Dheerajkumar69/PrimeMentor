@@ -1,7 +1,7 @@
 // frontend/src/components/AdminPanel/AdminDashboard.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { LayoutDashboard, LogOut, BookOpen, Users as UsersIcon, Briefcase, ClipboardList, History, MessageSquare } from 'lucide-react'; // 🛑 UPDATED ICONS
+import { LayoutDashboard, LogOut, BookOpen, Users as UsersIcon, Briefcase, ClipboardList, History, MessageSquare, DollarSign } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,7 +11,9 @@ import TeacherManagement from './TeacherManagement.jsx';
 import SyllabusManagement from './SyllabusManagement.jsx';
 import AssessmentBookings from './AssessmentBookings.jsx';
 import PastClassSubmissions from './PastClassSubmissions.jsx';
-import FeedbackManagement from './FeedbackManagement.jsx'; // 🛑 NEW IMPORT
+import FeedbackManagement from './FeedbackManagement.jsx';
+import PricingManagement from './PricingManagement.jsx';
+import ClassRequestsView from './ClassRequestsView.jsx';
 
 // Base URL for API calls
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -128,7 +130,7 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             case 'syllabus':
                 return <SyllabusManagement key={activeTab} />;
             case 'requests':
-                return <div className='p-4 text-gray-600'>Class requests feature coming soon.</div>;
+                return <ClassRequestsView key={activeTab} />;
             case 'assessment':
                 return <AssessmentBookings key={activeTab} />;
             case 'past-classes':
@@ -136,6 +138,8 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
             // 🟢 NEW CASE 🟢
             case 'feedback':
                 return <FeedbackManagement key={activeTab} />;
+            case 'pricing':
+                return <PricingManagement key={activeTab} />;
             default:
                 return null;
         }
@@ -199,12 +203,19 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
                         <History className='w-4 h-4 mr-1' /> Past Class Submissions
                     </button>
 
-                    {/* 🟢 NEW TAB: Feedback Management 🟢 */}
                     <button
                         onClick={() => setActiveTab('feedback')}
                         className={`${tabClass} ${activeTab === 'feedback' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:text-purple-500'} flex items-center`}
                     >
                         <MessageSquare className='w-4 h-4 mr-1' /> Student Feedback
+                    </button>
+
+                    {/* Pricing Management Tab */}
+                    <button
+                        onClick={() => setActiveTab('pricing')}
+                        className={`${tabClass} ${activeTab === 'pricing' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-green-500'} flex items-center`}
+                    >
+                        <DollarSign className='w-4 h-4 mr-1' /> Pricing
                     </button>
                 </div>
 

@@ -74,7 +74,7 @@ const TeacherHeader = () => {
                         alt={`${teacherData.name}'s Profile`} 
                         className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-full border-2 border-indigo-500"
                         // Fallback handling in case image URL is broken
-                        onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/40x40/5c6bcf/FFF?text=T' }}
+                        onError={(e) => { e.target.onerror = null; e.target.src='data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235c6bcf' rx='20'/%3E%3Ctext x='50%25' y='60%25' font-family='Arial' font-size='16' font-weight='bold' text-anchor='middle' fill='white'%3ET%3C/text%3E%3C/svg%3E' }}
                     />
 
                     {/* Logout Button - Responsive Size */}

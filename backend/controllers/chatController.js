@@ -7,10 +7,10 @@ import { knowledgeBase } from '../utils/chatKnowledge.js'; // See Step 4
 // It automatically looks for the GEMINI_API_KEY in process.env
 const ai = new GoogleGenAI({});
 
-// Temporary storage for chat sessions. 
-// In a production app, this should be stored in a database (like Redis) 
-// and keyed by a user session ID.
-const chatSessions = {}; 
+// ⚠️ LIMITATION: Chat sessions are stored in-memory and will be LOST on server
+// restart or crash. This is an accepted trade-off for simplicity.
+// For persistence, migrate to Redis or MongoDB-backed sessions.
+const chatSessions = {};
 
 // A system instruction to define the bot's persona and rules
 const systemInstruction = `
@@ -24,6 +24,9 @@ const systemInstruction = `
   If the question is sensitive (e.g., specific student data) or involves actions you cannot perform (like logging in or processing payment), gently state that you are only an assistant and direct them to the appropriate contact page or user dashboard.
   
   Do not mention that you are a language model or AI.
+
+  Here is important knowledge about PrimeMentor that you should use to answer questions:
+  ${knowledgeBase.join('\n  ')}
 `;
 
 /**
@@ -53,19 +56,19 @@ export const sendMessage = async (req, res) => {
     }
 
     const chat = chatSessions[userId];
-    
+
     // 2. Send Message and Stream Response
     const response = await chat.sendMessage({ message });
-    
+
     // 3. Return the AI's response text
-    res.json({ 
-        response: response.text, 
-        // We can optionally return the full history, but for simplicity, we return only the text
+    res.json({
+      response: response.text,
+      // We can optionally return the full history, but for simplicity, we return only the text
     });
 
   } catch (error) {
     console.error("Gemini API Error:", error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Sorry, the AI service is currently unavailable. Please try again later.",
       details: error.message
     });

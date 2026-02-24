@@ -462,3 +462,77 @@ export const sendAssessmentBookingConfirmation = async (recipientEmail, details)
     throw err;
   }
 };
+
+/**
+ * Sends a password reset email to a teacher.
+ * @param {string} recipientEmail - Teacher's email address
+ * @param {string} recipientName - Teacher's name
+ * @param {string} resetUrl - The full URL with reset token
+ */
+export const sendPasswordResetEmail = async (recipientEmail, recipientName, resetUrl) => {
+  const client = getResendClient();
+  if (!client) {
+    console.error('Skipping sendPasswordResetEmail(): Resend client not configured.');
+    return;
+  }
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Password Reset Request</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+            .header { background: linear-gradient(135deg, #f97316, #ea580c); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
+            .header h2 { margin: 0; font-size: 22px; }
+            .content { padding: 20px; }
+            .reset-box { background-color: #fff7ed; padding: 20px; border-radius: 6px; margin-top: 15px; text-align: center; border: 2px solid #f97316; }
+            .reset-box a { display: inline-block; background: #f97316; color: white; padding: 14px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px; }
+            .footer { text-align: center; margin-top: 20px; color: #888; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>🔐 Password Reset Request</h2>
+            </div>
+            <div class="content">
+                <p>Dear <strong>${recipientName}</strong>,</p>
+                <p>We received a request to reset your password for your Prime Mentor teacher account. Click the button below to create a new password:</p>
+
+                <div class="reset-box">
+                    <a href="${resetUrl}">Reset My Password</a>
+                    <p style="margin-top: 12px; font-size: 12px; color: #666;">
+                        Or copy this link: ${resetUrl}
+                    </p>
+                </div>
+
+                <p style="margin-top: 20px; color: #d97706; font-size: 13px;">
+                    <strong>⚠️ This link will expire in 1 hour.</strong> If you didn't request this reset, you can safely ignore this email.
+                </p>
+                <p>Best regards,<br><strong>The Prime Mentor Team</strong></p>
+            </div>
+            <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} Prime Mentor. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const resp = await sendWithRetry(client, {
+      from: `Prime Mentor <${senderEmail}>`,
+      to: [recipientEmail],
+      subject: `🔐 Password Reset — Prime Mentor Teacher Account`,
+      html: htmlContent,
+    });
+
+    console.log(`Password reset email sent to ${recipientEmail}. Resend ID:`, resp?.id || '[no id]');
+    return resp;
+  } catch (err) {
+    console.error('Error sending password reset email:', err?.message || err);
+    throw err;
+  }
+};

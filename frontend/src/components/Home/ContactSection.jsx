@@ -1,7 +1,7 @@
 import React from 'react';
 import { Phone, User, Mail, FileText } from 'lucide-react';
 
-export default function ContactSection() {
+export default function ContactSection({ onBookFreeAssessment }) {
   const customAnimations = `
     @keyframes subtle-float {
       0%, 100% { transform: translateY(0); }
@@ -32,17 +32,17 @@ export default function ContactSection() {
   return (
     <section className="py-20 bg-gradient-to-br from-gray-50 to-white relative overflow-hidden">
       <style>{customAnimations}</style>
-      
+
       {/* Animated background blobs */}
-      <div 
+      <div
         className="absolute top-20 right-1/4 w-64 h-64 bg-gradient-to-br from-orange-200 to-yellow-200 rounded-full blur-3xl opacity-30 animate-[subtle-float_10s_ease-in-out_infinite]"
         style={{ animationDelay: '2s' }}
       ></div>
-      <div 
+      <div
         className="absolute bottom-20 left-1/4 w-64 h-64 bg-gradient-to-br from-lime-200 to-green-200 rounded-full blur-3xl opacity-30 animate-[subtle-float_12s_ease-in-out_infinite_reverse]"
         style={{ animationDelay: '4s' }}
       ></div>
-      <div 
+      <div
         className="absolute top-1/2 right-10 w-48 h-48 bg-gradient-to-br from-cyan-200 to-blue-200 rounded-full blur-3xl opacity-30 animate-[subtle-float_8s_ease-in-out_infinite]"
         style={{ animationDelay: '6s' }}
       ></div>
@@ -58,7 +58,7 @@ export default function ContactSection() {
               Take the first step towards your child's success. Fill out the form below and we'll match them with the perfect tutor.
             </p>
 
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (onBookFreeAssessment) onBookFreeAssessment(); }}>
               <div className="relative group">
                 <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
                 <input
@@ -95,8 +95,8 @@ export default function ContactSection() {
           <div className="relative animate-[fade-in-right_1s_ease-out_forwards]">
             <div className="relative rounded-3xl overflow-hidden shadow-2xl">
               {/* This div creates the subtle background pan effect over the image */}
-              <div 
-                className="absolute inset-0 bg-[length:200%_200%] opacity-20" 
+              <div
+                className="absolute inset-0 bg-[length:200%_200%] opacity-20"
                 style={{ backgroundImage: 'linear-gradient(45deg, #f97316, transparent, #84cc16)' }}
               ></div>
               <img
@@ -106,15 +106,15 @@ export default function ContactSection() {
               />
             </div>
 
-            <div 
+            <div
               className="absolute -bottom-6 -right-6 bg-white rounded-3xl shadow-2xl p-6 flex items-center gap-4 animate-[subtle-float_5s_ease-in-out_infinite_reverse]"
             >
               <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center">
                 <Phone className="w-8 h-8 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600 mb-1">Questions? Call us!</p>
-                <p className="text-2xl font-bold text-gray-900">1800 TUTOR</p>
+                <p className="text-sm text-gray-600 mb-1">Questions? Email us!</p>
+                <p className="text-xl font-bold text-gray-900">info@primementor.com.au</p>
               </div>
             </div>
           </div>

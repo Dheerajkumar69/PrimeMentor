@@ -12,16 +12,15 @@ import ClassRequest from '../models/ClassRequest.js';
 import PastClassModel from '../models/PastClassModel.js';
 import FeedbackModel from '../models/FeedbackModel.js';
 import Assessment from '../models/AssessmentModel.js';
+import AdminModel from '../models/AdminModel.js';
 import Syllabus from '../models/SyllabusModel.js';
 import TeacherAvailability from '../models/TeacherAvailabilityModel.js';
 import generateToken from '../utils/generateToken.js';
 import { createZoomMeeting, getAvailableHost } from '../utils/zoomIntegration.js';
 import { sendAssessmentApprovalEmail, sendClassAssignmentEmail } from '../utils/emailService.js';
 
-// --- Hardcoded Admin Credentials (Matching Frontend) ---
-const HARDCODED_ADMIN_EMAIL = 'admin@primementor.com.au';
-const HARDCODED_ADMIN_PASSWORD = 'Adminprime@315';
-const DUMMY_ADMIN_ID = 'admin_root_id';
+// Admin credentials are now stored in MongoDB via AdminModel.
+// Run `node seedAdmin.js` to create/update the admin account.
 
 // ======================== INTERNAL HELPER: Time-conflict detection ========================
 
@@ -295,20 +294,35 @@ export const replaceTeacher = asyncHandler(async (req, res) => {
 export const adminLogin = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
-    // Check against hardcoded credentials
-    if (email === HARDCODED_ADMIN_EMAIL && password === HARDCODED_ADMIN_PASSWORD) {
-        // Successful login: Generate a token for future requests
-        const token = generateToken(DUMMY_ADMIN_ID);
+    if (!email || !password) {
+        res.status(400);
+        throw new Error('Email and password are required.');
+    }
 
-        res.json({
-            message: 'Admin login successful',
-            token: token,
-            adminId: DUMMY_ADMIN_ID,
-        });
-    } else {
-        res.status(401); // Unauthorized
+    // Look up admin in MongoDB
+    const admin = await AdminModel.findOne({ email });
+
+    if (!admin) {
+        res.status(401);
         throw new Error('Invalid email or password for Admin access.');
     }
+
+    // Compare password with bcrypt hash
+    const isMatch = await bcrypt.compare(password, admin.password);
+
+    if (!isMatch) {
+        res.status(401);
+        throw new Error('Invalid email or password for Admin access.');
+    }
+
+    // Successful login: Generate a JWT with the admin's real MongoDB _id
+    const token = generateToken(admin._id);
+
+    res.json({
+        message: 'Admin login successful',
+        token: token,
+        adminId: admin._id,
+    });
 });
 
 

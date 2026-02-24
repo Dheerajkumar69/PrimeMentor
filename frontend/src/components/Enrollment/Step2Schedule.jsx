@@ -45,14 +45,14 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
     // Determine which slots to show in the modal
     const allTimeSlots = useMemo(() => {
         if (!isStarterPack) {
-             // For Trial, only show slots for the selected single day
-             return generateTimeSlots(dayOfWeek);
+            // For Trial, only show slots for the selected single day
+            return generateTimeSlots(dayOfWeek);
         } else {
-             // For Starter Pack, show both Mon-Fri and Sat slots for preference
-             return {
-                 ...generateTimeSlots(1), // Mon-Fri slots
-                 ...generateTimeSlots(6)  // Saturday slots
-             };
+            // For Starter Pack, show both Mon-Fri and Sat slots for preference
+            return {
+                ...generateTimeSlots(1), // Mon-Fri slots
+                ...generateTimeSlots(6)  // Saturday slots
+            };
         }
     }, [dayOfWeek, isStarterPack]);
 
@@ -70,8 +70,8 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
                 setSelectedSatSlot(slot);
             }
         } else {
-             // For Trial, only one slot needs to be tracked
-             setSelectedMonFriSlot(slot);
+            // For Trial, only one slot needs to be tracked
+            setSelectedMonFriSlot(slot);
         }
     };
 
@@ -100,7 +100,7 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
 
     const modalSubtitle = isStarterPack
         ? "Select a consistent time for **Mon-Fri** and a separate time for **Saturday**. Our advisor will confirm."
-        : "Select one of our popular time slots for your trial session.";
+        : "Select one of our popular time slots for your assessment session.";
 
     return (
         <div className="fixed inset-0 z-[100] bg-gray-900/70 flex items-center justify-center backdrop-blur-sm transition-opacity p-4">
@@ -119,24 +119,23 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
                             <div key={period} className="w-full max-w-xs text-center">
                                 <h3 className="text-base sm:text-lg font-bold text-gray-800 mb-4">{period}</h3>
                                 <div className="flex flex-col gap-3">
-                                {slots.map((time, index) => {
-                                    const isMonFri = period.includes('Mon-Fri');
-                                    const isSelected = (isMonFri && selectedMonFriSlot === time) || (!isMonFri && selectedSatSlot === time);
+                                    {slots.map((time, index) => {
+                                        const isMonFri = period.includes('Mon-Fri');
+                                        const isSelected = (isMonFri && selectedMonFriSlot === time) || (!isMonFri && selectedSatSlot === time);
 
-                                    return (
-                                        <button
-                                            key={index}
-                                            onClick={() => handleSlotSelect(time, period)}
-                                            className={`w-full text-center py-3 px-4 rounded-xl transition text-base font-semibold border-2 shadow-md hover:scale-[1.02] hover:shadow-lg focus:outline-none focus:ring-4 ring-offset-2 ring-blue-300 ${
-                                                isSelected
-                                                    ? 'bg-blue-600 text-white border-blue-700 shadow-xl'
-                                                    : 'bg-white text-gray-800 border-gray-300 hover:bg-blue-50'
-                                            }`}
-                                        >
-                                            {time}
-                                        </button>
-                                    );
-                                })}
+                                        return (
+                                            <button
+                                                key={index}
+                                                onClick={() => handleSlotSelect(time, period)}
+                                                className={`w-full text-center py-3 px-4 rounded-xl transition text-base font-semibold border-2 shadow-md hover:scale-[1.02] hover:shadow-lg focus:outline-none focus:ring-4 ring-offset-2 ring-blue-300 ${isSelected
+                                                        ? 'bg-blue-600 text-white border-blue-700 shadow-xl'
+                                                        : 'bg-white text-gray-800 border-gray-300 hover:bg-blue-50'
+                                                    }`}
+                                            >
+                                                {time}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}
@@ -146,9 +145,8 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
                         <button
                             onClick={handleSave}
                             disabled={isSaveDisabled}
-                            className={`w-full font-bold py-3 rounded-lg transition text-base sm:text-lg ${
-                                !isSaveDisabled ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            }`}
+                            className={`w-full font-bold py-3 rounded-lg transition text-base sm:text-lg ${!isSaveDisabled ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
                         >
                             Done
                         </button>
@@ -160,14 +158,14 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
 };
 
 // 🚨 UPDATED PROPS for Step2Schedule 🚨
-const Step2Schedule = ({ 
-    quizData, 
-    purchaseType, 
-    onNext, 
-    onBack, 
-    studentDetails, 
-    guardianDetails, 
-    productDetails, 
+const Step2Schedule = ({
+    quizData,
+    purchaseType,
+    onNext,
+    onBack,
+    studentDetails,
+    guardianDetails,
+    productDetails,
     enrollmentDataKey,
     promoCodeData, // 🚨 NEW PROP 🚨
     onPromoCodeUpdate, // 🚨 NEW PROP 🚨
@@ -179,26 +177,25 @@ const Step2Schedule = ({
     const [promoMessage, setPromoMessage] = useState(null);
     const [isPromoLoading, setIsPromoLoading] = useState(false);
     // 🚨 END PROMO CODE HOOKS 🚨
-    
+
     // NEW: Postcode state
     const [postcode, setPostcode] = useState('');
     // NEW: State for errors in this component only
     const [localError, setLocalError] = useState(null);
 
-    const tomorrow = useMemo(() => {
+    const today = useMemo(() => {
         const d = new Date();
-        d.setDate(d.getDate() + 1);
         return new Date(d.getFullYear(), d.getMonth(), d.getDate());
     }, []);
 
     const maxDate = useMemo(() => {
-        const d = new Date(tomorrow);
+        const d = new Date(today);
         d.setMonth(d.getMonth() + 1);
         return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
-    }, [tomorrow]);
+    }, [today]);
 
     const [currentMonth, setCurrentMonth] = useState(
-        new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1)
+        new Date(today.getFullYear(), today.getMonth(), 1)
     );
 
     const [showCalendar, setShowCalendar] = useState(false);
@@ -208,9 +205,9 @@ const Step2Schedule = ({
     const [isModalOpen, setIsModalOpen] = useState(false); // Used for TimePreferencesModal
     // MODIFIED: Use an object to store dual times for STARTER_PACK
     const [selectedTimes, setSelectedTimes] = useState({ monFri: null, saturday: null });
-    
+
     const isStarterPack = purchaseType === 'STARTER_PACK';
-    
+
     // 🛑 NEW: Load state from persistent storage on mount (FIXED logic for restoration) 🛑
     useEffect(() => {
         const storedData = localStorage.getItem(enrollmentDataKey);
@@ -219,35 +216,35 @@ const Step2Schedule = ({
                 const restored = JSON.parse(storedData);
                 // Restore scheduling details if present
                 if (restored.scheduleDetails) {
-                    const { 
-                        preferredDate, 
-                        preferredWeekStart, 
-                        preferredTime, 
-                        preferredTimeMonFri, 
-                        preferredTimeSaturday, 
-                        postcode: restoredPostcode 
+                    const {
+                        preferredDate,
+                        preferredWeekStart,
+                        preferredTime,
+                        preferredTimeMonFri,
+                        preferredTimeSaturday,
+                        postcode: restoredPostcode
                     } = restored.scheduleDetails;
-                    
+
                     if (restoredPostcode) setPostcode(restoredPostcode);
-                    
+
                     const dateToRestoreString = isStarterPack ? preferredDate : preferredDate; // Use preferredDate as the user-selected start date
                     if (dateToRestoreString) {
                         // Reconstruct the selected day (the start date)
                         const dateParts = dateToRestoreString.split('-').map(Number);
                         const initialDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
                         setSelectedDay(initialDate);
-                        
+
                         if (isStarterPack) {
                             // Recalculate date range using the core logic for display consistency
                             const sessionsCount = 6;
                             const sessionDates = [];
-                            
+
                             // CRITICAL FIX: Ensure UTC construction for restoration calculation
                             const year = initialDate.getFullYear();
                             const month = initialDate.getMonth();
                             const date = initialDate.getDate();
                             let currentDate = new Date(Date.UTC(year, month, date));
-                            
+
                             while (sessionDates.length < sessionsCount) {
                                 // Check if currentDate is not Sunday (0) using UTC day getter
                                 if (currentDate.getUTCDay() !== 0) {
@@ -259,7 +256,7 @@ const Step2Schedule = ({
                                 }
                                 currentDate.setUTCDate(currentDate.getUTCDate() + 1);
                             }
-                            
+
                             const formatYMDFromUTCDate = (utcDateObj) => {
                                 const y = utcDateObj.getUTCFullYear();
                                 const m = String(utcDateObj.getUTCMonth() + 1).padStart(2, '0');
@@ -271,13 +268,13 @@ const Step2Schedule = ({
                                 start: formatYMDFromUTCDate(sessionDates[0]),
                                 end: formatYMDFromUTCDate(sessionDates[sessionDates.length - 1]),
                                 sessions: sessionsCount,
-                                sessionDates: sessionDates.map(d => d.toLocaleDateString('en-AU', {day: 'numeric', month: 'long', year: 'numeric'}))
+                                sessionDates: sessionDates.map(d => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }))
                             });
 
-                            
-                            setSelectedTimes({ 
-                                monFri: preferredTimeMonFri, 
-                                saturday: preferredTimeSaturday 
+
+                            setSelectedTimes({
+                                monFri: preferredTimeMonFri,
+                                saturday: preferredTimeSaturday
                             });
                         } else {
                             // Trial
@@ -313,7 +310,7 @@ const Step2Schedule = ({
         }
         // --- END Sunday Check ---
 
-        if (selectedDate >= tomorrow && selectedDate <= maxDate) {
+        if (selectedDate >= today && selectedDate <= maxDate) {
             setSelectedDay(selectedDate);
             setSelectedTimes({ monFri: null, saturday: null }); // Reset times on new date selection
             setShowCalendar(false);
@@ -324,7 +321,7 @@ const Step2Schedule = ({
                 // Build list of session dates (skip Sundays) until we have 6 sessions.
                 const sessionsCount = 6;
                 const sessionDates = [];
-                
+
                 // CRITICAL FIX: Reconstruct selectedDate as UTC midnight for calculation consistency
                 const year = selectedDate.getFullYear();
                 const month = selectedDate.getMonth();
@@ -346,7 +343,7 @@ const Step2Schedule = ({
                     // Move to next calendar day using UTC setter
                     currentDate.setUTCDate(currentDate.getUTCDate() + 1);
                 }
-                
+
                 const endDate = sessionDates[sessionDates.length - 1];
 
                 // Helper to format YYYY-MM-DD string from a Date object created with local components matching the UTC date
@@ -365,7 +362,7 @@ const Step2Schedule = ({
                     start: formatYMDFromLocalDate(sessionDates[0]),
                     end: formatYMDFromLocalDate(endDate),
                     sessions: sessionsCount,
-                    sessionDates: formattedSessionDates 
+                    sessionDates: formattedSessionDates
                 });
             }
 
@@ -375,14 +372,14 @@ const Step2Schedule = ({
     };
 
 
-    // ✅ CORRECTED: Logic for preventing month change outside the tomorrow-to-maxDate range.
+    // ✅ CORRECTED: Logic for preventing month change outside the today-to-maxDate range.
     const handleMonthChange = (direction) => {
         const newMonth = new Date(currentMonth);
         newMonth.setMonth(newMonth.getMonth() + direction);
 
         // Calculate month boundaries
         const startOfNewMonth = new Date(newMonth.getFullYear(), newMonth.getMonth(), 1);
-        const earliestAllowedMonthStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1);
+        const earliestAllowedMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
         const latestAllowedMonthStart = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
 
         // Block navigating backward past the earliest allowed month
@@ -414,17 +411,17 @@ const Step2Schedule = ({
         setIsPromoLoading(true);
         setLocalError(null);
         const codeToValidate = promoInput.toUpperCase().trim();
-        
+
         if (!codeToValidate) {
             setPromoMessage({ text: 'Please enter a code.', type: 'error' });
             setIsPromoLoading(false);
             return;
         }
-        
+
         if (codeToValidate === promoCodeData.code) {
-             setPromoMessage({ text: 'Code is already applied.', type: 'success' });
-             setIsPromoLoading(false);
-             return;
+            setPromoMessage({ text: 'Code is already applied.', type: 'success' });
+            setIsPromoLoading(false);
+            return;
         }
 
         try {
@@ -454,27 +451,27 @@ const Step2Schedule = ({
             setIsPromoLoading(false);
         }
     };
-    
+
     const handleRemovePromoCode = () => {
         onPromoCodeUpdate({ code: null, discountPercentage: 0, discountAmount: 0 });
         setPromoInput('');
         setPromoMessage({ text: 'Promo code removed.', type: 'info' });
     }
     // 🚨 END PROMO CODE HANDLERS 🚨
-    
+
     // 🛑 MODIFIED: handleSubmit to go to the next step 🛑
     const handleSubmit = () => {
-        
+
         // Validation check based on purchase type and dual slots
         if (!selectedDay || (isStarterPack && !isStarterPackReady) || (!isStarterPack && !selectedTimes.monFri)) {
-            setLocalError(isStarterPack ? 'Please select a start date and both Mon-Fri and Saturday time slots for your Starter Pack.' : 'Please select a date and a time slot for your Trial Session.');
+            setLocalError(isStarterPack ? 'Please select a start date and both Mon-Fri and Saturday time slots for your Starter Pack.' : 'Please select a date and a time slot for your Assessment Session.');
             return;
         }
-        
+
         // Postcode validation
         if (!postcode) {
-             setLocalError('Please enter your Postcode to continue.');
-             return;
+            setLocalError('Please enter your Postcode to continue.');
+            return;
         }
 
         setLocalError(null);
@@ -486,7 +483,7 @@ const Step2Schedule = ({
         const mm = String(selectedDay.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
         const dd = String(selectedDay.getDate()).padStart(2, '0');
         const selectedDayString = `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD (Local) // YYYY-MM-DD
-        
+
         if (isStarterPack) {
             // Updated payload for Starter Pack
             scheduleDetails = {
@@ -501,11 +498,11 @@ const Step2Schedule = ({
                 postcode: postcode,
             };
         } else {
-            // Trial session payload
+            // Assessment session payload
             scheduleDetails = {
                 preferredDate: selectedDayString,
                 preferredTime: selectedTimes.monFri,
-                preferredTimeMonFri: null, 
+                preferredTimeMonFri: null,
                 preferredTimeSaturday: null,
                 purchaseType: 'TRIAL',
                 numberOfSessions: 1,
@@ -523,15 +520,15 @@ const Step2Schedule = ({
             studentDetails: studentDetails,
             guardianDetails: guardianDetails,
             // 🚨 CRITICAL: Pass the FINAL discounted amount 🚨
-            paymentAmount: finalPaymentAmount, 
+            paymentAmount: finalPaymentAmount,
             // 🚨 PASS PROMO CODE DATA 🚨
             promoCode: promoCodeData.code,
             appliedDiscountAmount: promoCodeData.discountAmount,
         };
-        
+
         onNext(payloadForNextStep);
     };
-    
+
     const daysOfWeek = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
     const emptyCells = Array(firstDayOfWeek).fill(null);
     const days = [...emptyCells, ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
@@ -540,7 +537,7 @@ const Step2Schedule = ({
 
     const latestAllowedMonthStart = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
 
-    const isPrevDisabled = currentMonth.getMonth() === tomorrow.getMonth() && currentMonth.getFullYear() === tomorrow.getFullYear();
+    const isPrevDisabled = currentMonth.getMonth() === today.getMonth() && currentMonth.getFullYear() === today.getFullYear();
     const isNextDisabled =
         currentMonth.getMonth() === latestAllowedMonthStart.getMonth() &&
         currentMonth.getFullYear() === latestAllowedMonthStart.getFullYear();
@@ -556,7 +553,7 @@ const Step2Schedule = ({
         <div className="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-lg border border-gray-200">
             <div className='flex justify-between items-center mb-6'>
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
-                    {isStarterPack ? 'Schedule your First 6 Sessions' : 'Schedule your Trial session'}
+                    {isStarterPack ? 'Schedule your First 6 Sessions' : 'Schedule your Assessment session'}
                 </h2>
                 {/* 🛑 NEW: Back button for better UX on retry 🛑 */}
                 <button
@@ -582,7 +579,7 @@ const Step2Schedule = ({
 
             <h3 className="text-lg font-bold text-gray-800 mb-4">Lock in your preferred time</h3>
             <p className="text-sm text-gray-600 mb-6">
-                To help us find a suitable tutor, please let us know the best **start day** and **consistent time** to schedule your {isStarterPack ? '6 sessions' : 'Trial session'}.
+                To help us find a suitable tutor, please let us know the best **start day** and **consistent time** to schedule your {isStarterPack ? '6 sessions' : 'Assessment session'}.
             </p>
 
             {/* Date Selection (Calendar remains for both) */}
@@ -621,34 +618,34 @@ const Step2Schedule = ({
                                 <span key={day} className="text-xs font-bold text-gray-500 w-full flex items-center justify-center h-8">{day}</span>
                             ))}
                             {days.map((day, index) => {
-                                    const dayDate = day ? new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day) : null;
-                                    const isAvailable = dayDate && dayDate >= tomorrow && dayDate <= maxDate;
-                                    // --- Sunday Check for Disabled Dates ---
-                                    const isSunday = dayDate && dayDate.getDay() === 0; // Sunday is 0
-                                    const isSelectable = isAvailable && !isSunday;
-                                    // --- END Sunday Check ---
-                                    const isSelected = selectedDay && dayDate && selectedDay.toDateString() === dayDate.toDateString();
+                                const dayDate = day ? new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day) : null;
+                                const isAvailable = dayDate && dayDate >= today && dayDate <= maxDate;
+                                // --- Sunday Check for Disabled Dates ---
+                                const isSunday = dayDate && dayDate.getDay() === 0; // Sunday is 0
+                                const isSelectable = isAvailable && !isSunday;
+                                // --- END Sunday Check ---
+                                const isSelected = selectedDay && dayDate && selectedDay.toDateString() === dayDate.toDateString();
 
-                                    return (
-                                        <button
-                                            key={index}
-                                            onClick={isSelectable ? () => handleDaySelect(day) : undefined}
-                                            disabled={!isSelectable}
-                                            className={`w-full aspect-square flex items-center justify-center rounded-md text-sm transition border border-gray-200
+                                return (
+                                    <button
+                                        key={index}
+                                        onClick={isSelectable ? () => handleDaySelect(day) : undefined}
+                                        disabled={!isSelectable}
+                                        className={`w-full aspect-square flex items-center justify-center rounded-md text-sm transition border border-gray-200
                                                 ${day === null || !isAvailable
-                                                    ? 'cursor-default text-gray-400 bg-white border-transparent'
-                                                    // --- Class for disabled (Sunday or unavailble) ---
-                                                    : !isSelectable
-                                                        ? 'cursor-not-allowed text-red-400 line-through bg-red-50/50 font-medium border-red-200'
-                                                        : isSelected
-                                                            ? 'bg-blue-600 text-white font-medium border-blue-600'
-                                                            : 'hover:bg-gray-100 font-medium bg-white text-gray-900'
-                                                }`}
-                                        >
-                                            {day}
-                                        </button>
-                                    );
-                                })}
+                                                ? 'cursor-default text-gray-400 bg-white border-transparent'
+                                                // --- Class for disabled (Sunday or unavailble) ---
+                                                : !isSelectable
+                                                    ? 'cursor-not-allowed text-red-400 line-through bg-red-50/50 font-medium border-red-200'
+                                                    : isSelected
+                                                        ? 'bg-blue-600 text-white font-medium border-blue-600'
+                                                        : 'hover:bg-gray-100 font-medium bg-white text-gray-900'
+                                            }`}
+                                    >
+                                        {day}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -662,12 +659,12 @@ const Step2Schedule = ({
                         <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200">
                             <h4 className="font-bold text-blue-800 mb-1">Your 6-Session Dates:</h4>
                             <p className="text-sm text-blue-700 font-medium">
-                                 {starterPackDateRange.sessionDates
+                                {starterPackDateRange.sessionDates
                                     ? starterPackDateRange.sessionDates.join(', ')
                                     : `${selectedDay.toLocaleDateString('en-AU', dateOnlyOptions)} to ${new Date(starterPackDateRange.end).toLocaleDateString('en-AU', dateOnlyOptions)}`}
                             </p>
                             <p className='text-xs text-blue-600 mt-1'>
-                                 *Your sessions will run daily, skipping any Sundays.
+                                *Your sessions will run daily, skipping any Sundays.
                             </p>
                         </div>
                     )}
@@ -721,7 +718,7 @@ const Step2Schedule = ({
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                 />
             </div>
-            
+
             {/* 🚨 NEW: PROMO CODE SECTION 🚨 */}
             <div className="mt-8 pt-6 border-t border-gray-200">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center mb-4">
@@ -741,7 +738,7 @@ const Step2Schedule = ({
                         className="flex-1 border p-3 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                         disabled={isPromoLoading || promoCodeData.code}
                     />
-                    
+
                     {promoCodeData.code ? (
                         <button
                             type="button"

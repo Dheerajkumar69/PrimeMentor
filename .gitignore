@@ -2,3 +2,12 @@
 /prompt.txt
 /RawStructure.txt
 /zoom.txt
+
+# Environment variables — NEVER commit secrets
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# Dependencies
+node_modules/

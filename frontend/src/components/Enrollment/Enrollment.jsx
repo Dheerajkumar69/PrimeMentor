@@ -32,7 +32,7 @@ export default function Enrollment() {
 
     // Determine the product from quizData/purchaseType for display
     const [productDetails, setProductDetails] = useState({
-        name: 'Trial Session (1 session)',
+        name: 'Assessment Session (1 session)',
         price: initialLocationState.quizData?.price || 70, 
         sessionPrice: initialLocationState.quizData?.sessionPrice || initialLocationState.quizData?.price || 70, 
         sessions: 1,
@@ -102,7 +102,7 @@ export default function Enrollment() {
             ? initialPrice + fixedDiscount // Starter pack price + fixed $5 discount removed earlier
             : initialPrice; // Trial price, fixed discount is 0 anyway
         
-        const productName = sessions > 1 ? `Starter Pack (${sessions} sessions)` : 'Trial Session (1 session)';
+        const productName = sessions > 1 ? `Starter Pack (${sessions} sessions)` : 'Assessment Session (1 session)';
         
         setProductDetails(prev => ({
             name: productName,
@@ -411,14 +411,10 @@ export default function Enrollment() {
                         </div>
                     </div>
                     <div>
-                        <div className="flex items-center space-x-2 text-gray-700 mb-2">
-                            <Phone size={18} />
-                            <span className='text-sm'>+61433552127</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-gray-700">
+                        <a href="mailto:info@primementor.com.au" className="flex items-center space-x-2 text-gray-700 hover:text-orange-500 transition">
                             <Mail size={18} />
-                            <span className='text-sm'>rajwinderkhakh@gmail.com</span>
-                        </div>
+                            <span className='text-sm'>info@primementor.com.au</span>
+                        </a>
                     </div>
                     <div>
                         <p className="font-bold text-base">Prime Mentor PTY Ltd.</p>

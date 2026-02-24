@@ -8,6 +8,7 @@ import {
     getManagedClasses,
     acceptClassRequest,
     forgotPasswordTeacher,
+    resetPasswordTeacher,
     submitPastClass // 🛑 NEW IMPORT
 } from '../controllers/teacherController.js';
 import { protectTeacher } from '../middlewares/authTeacherMiddleware.js';
@@ -18,15 +19,16 @@ router.get('/test', (req, res) => res.send('✅ Teacher route is working'));
 
 // Auth routes
 router.post(
-    '/register', 
+    '/register',
     upload.fields([
         { name: 'image', maxCount: 1 },    // For the profile picture
         { name: 'cvFile', maxCount: 1 }    // For the CV document
-    ]), 
+    ]),
     registerTeacher
 );
 router.post('/login', loginTeacher);
-router.post('/forgot-password', forgotPasswordTeacher); // NEW ROUTE**
+router.post('/forgot-password', forgotPasswordTeacher);
+router.post('/reset-password', resetPasswordTeacher);
 
 // Protected teacher routes
 router.get('/class-requests', protectTeacher, getClassRequests);

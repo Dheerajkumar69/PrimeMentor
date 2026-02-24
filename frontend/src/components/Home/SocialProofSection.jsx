@@ -3,29 +3,29 @@ import { Award, Users } from 'lucide-react';
 
 export default function SocialProofSection() {
   const featuredIn = [
-    'Education Today Magazine',
-    'The Australian EdTech Review',
-    'Learning & Development Quarterly',
-    'Parent & Student Success Journal',
-    'Digital Education Herald',
-    'National Tutoring Network',
-    'Education Innovation Weekly'
+    'Online Education Leaders',
+    'Australian Tutoring Standards',
+    'Smart Learning Platforms',
+    'Student Achievement Networks',
+    'Digital Classroom Innovation',
+    'Quality Education Reviews',
+    'EdTech Excellence'
   ];
 
   const partners = [
-    'University of Sydney Education Hub',
-    'Melbourne Learning Institute',
-    'Australian Curriculum Board',
-    'National Tutoring Association',
-    'EdTech Australia Coalition',
-    'Student Success Foundation'
+    'Leading Education Institutions',
+    'Curriculum Development Experts',
+    'Australian Teaching Standards',
+    'Professional Tutor Networks',
+    'EdTech Industry Partners',
+    'Student Success Programs'
   ];
 
   const awards = [
-    'National EdTech Innovation Award 2023',
-    'Best Online Tutoring Platform 2023',
-    'Excellence in Personalized Learning 2024',
-    'Parent\'s Choice Award for Education 2024'
+    'Commitment to Quality Education',
+    'Excellence in Personalised Learning',
+    'Innovation in Online Tutoring',
+    'Dedication to Student Success'
   ];
 
   const customAnimations = `
@@ -51,7 +51,7 @@ export default function SocialProofSection() {
       50% { transform: translateY(-5px); }
     }
   `;
-  
+
   // Array of colors for cycling through the marquee items
   const marqueeColors = [
     { bg: 'bg-indigo-600', text: 'text-white' },
@@ -96,12 +96,12 @@ export default function SocialProofSection() {
   return (
     <section className="relative py-16 sm:py-20 bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
       <style>{customAnimations}</style>
-      
+
       {/* Subtle background pattern */}
       <div className="absolute inset-0 z-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-      
+
       <div className="container mx-auto px-4 sm:px-6 relative z-10">
-        
+
         {/* AS FEATURED IN: Marquee Section */}
         <div className="mb-12 sm:mb-16">
           <h3 className="text-center text-gray-600 font-semibold mb-6 sm:mb-8 text-sm sm:text-lg animate-[card-fade-in_1s_ease-out_forwards]">
@@ -141,13 +141,13 @@ export default function SocialProofSection() {
                 key={index}
                 // Applying 3D Hover Effect
                 className="relative bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-6 text-center shadow-2xl transition-all duration-500 ease-in-out transform hover:-translate-y-2 hover:scale-105 hover:rotate-3d hover:shadow-orange group animate-[card-fade-in_1s_ease-out_1s_forwards]"
-                style={{ 
-                    animationDelay: `${0.1 * index}s`, 
-                    // Custom CSS for 3D effect
-                    '--tw-rotate-x': '0deg', 
-                    '--tw-rotate-y': '0deg', 
-                    '--tw-translate-z': '0px',
-                    transformStyle: 'preserve-3d', 
+                style={{
+                  animationDelay: `${0.1 * index}s`,
+                  // Custom CSS for 3D effect
+                  '--tw-rotate-x': '0deg',
+                  '--tw-rotate-y': '0deg',
+                  '--tw-translate-z': '0px',
+                  transformStyle: 'preserve-3d',
                 }}
               >
                 <div className="relative z-10 transform-style-preserve">

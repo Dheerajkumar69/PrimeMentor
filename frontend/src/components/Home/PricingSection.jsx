@@ -1,17 +1,45 @@
 // frontend/src/components/Home/PricingSection.jsx
 
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import PricingFlow from '../Pricing/PricingFlow.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
 import { SignInButton } from '@clerk/clerk-react';
-import { Sparkles, TrendingUp } from 'lucide-react'; 
+import { Sparkles, TrendingUp, Loader } from 'lucide-react';
+import axios from 'axios';
 
 export default function PricingSection() {
-    const { isSignedIn } = useContext(AppContext);
+    const { isSignedIn, backendUrl } = useContext(AppContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [initialClassFlowData, setInitialClassFlowData] = useState(null); 
+    const [initialClassFlowData, setInitialClassFlowData] = useState(null);
+    const [buttons, setButtons] = useState([]);
+    const [loadingPrices, setLoadingPrices] = useState(true);
 
-    // REMOVED: useFloatingCircle hook and related state/refs
+    // Fetch pricing from backend on mount
+    useEffect(() => {
+        const fetchPricing = async () => {
+            try {
+                const apiBase = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+                const response = await axios.get(`${apiBase}/api/admin/pricing`);
+                const { classRanges } = response.data;
+                setButtons([
+                    { label: 'Class 2-6', range: '2-6', price: classRanges['2-6'].sessionPrice },
+                    { label: 'Class 7-9', range: '7-9', price: classRanges['7-9'].sessionPrice },
+                    { label: 'Class 10-12', range: '10-12', price: classRanges['10-12'].sessionPrice },
+                ]);
+            } catch (err) {
+                console.error('Failed to fetch pricing, using defaults:', err);
+                // Fallback to hardcoded defaults if API fails
+                setButtons([
+                    { label: 'Class 2-6', range: '2-6', price: 22 },
+                    { label: 'Class 7-9', range: '7-9', price: 25 },
+                    { label: 'Class 10-12', range: '10-12', price: 27 },
+                ]);
+            } finally {
+                setLoadingPrices(false);
+            }
+        };
+        fetchPricing();
+    }, [backendUrl]);
 
     const handleButtonClick = (classRange, price) => {
         if (isSignedIn) {
@@ -39,12 +67,9 @@ export default function PricingSection() {
              50% { transform: translateY(-15px) scale(1.1); }
         }
     `;
-    
-    const buttons = [
-        { label: 'Class 2-6', range: '2-6', price: 22 },
-        { label: 'Class 7-9', range: '7-9', price: 25 },
-        { label: 'Class 10-12', range: '10-12', price: 27 },
-    ];
+
+    // Find the lowest price for the circle display
+    const lowestPrice = buttons.length > 0 ? Math.min(...buttons.map(b => b.price)) : '...';
 
     return (
         <div id="pricing" className="relative py-16 sm:py-20 overflow-hidden bg-gray-900 min-h-[550px]">
@@ -63,7 +88,6 @@ export default function PricingSection() {
 
                     {/* STATIC PRICE CIRCLE - POSITIONED TOP-RIGHT */}
                     <div
-                        // **FIX 1: Reduced size of the circle for mobile view (w-28 h-28)**
                         className={`absolute top-4 right-4 sm:top-8 sm:right-8 
                                      w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 
                                      bg-gradient-to-br from-orange-500 to-red-600 
@@ -72,20 +96,16 @@ export default function PricingSection() {
                                      shadow-3xl border-4 border-white/70 
                                      z-40 transition-all duration-300 ease-in-out hover:scale-105`}
                     >
-                        {/* <Sparkles className="w-4 h-4 sm:w-6 sm:h-6 mb-0.5 text-yellow-300" /> */}
-                        {/* **FIX: Adjusted text sizes for new smaller circle** */}
-                        <span className='text-xs sm:text-lg mb-1 mt-2 font-semibold'>Starts from</span> 
+                        <span className='text-xs sm:text-lg mb-1 mt-2 font-semibold'>Starts from</span>
                         <div className="flex flex-col items-center leading-none">
-                            <span className='text-2xl sm:text-4xl md:text-5xl font-black'>${buttons[0].price}</span>
+                            <span className='text-2xl sm:text-4xl md:text-5xl font-black'>${lowestPrice}</span>
                             <span className="text-sm sm:text-md md:text-lg font-bold">onwards</span>
                         </div>
                         <TrendingUp className="w-3 h-3 sm:w-4 mt-0.5 text-green-300" />
                     </div>
-                    {/* End STATIC Price Circle */}
 
                     <div className="relative z-20 pt-16 sm:pt-12">
                         {/* Title and Subtitle */}
-                        {/* **FIX 2: Reduced h2 text size for mobile (from text-3xl to text-2xl)** */}
                         <h2 className="text-white text-2xl sm:text-4xl md:text-5xl font-bold mb-3 sm:mb-4 mt-12">
                             Unlock Your Personalized Pricing
                         </h2>
@@ -95,13 +115,15 @@ export default function PricingSection() {
 
                         {/* Responsive Button Layout */}
                         <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-                            {isSignedIn ? (
+                            {loadingPrices ? (
+                                <Loader className="w-8 h-8 text-orange-400 animate-spin mx-auto" />
+                            ) : isSignedIn ? (
                                 <>
                                     {buttons.map((button) => (
                                         <button
                                             key={button.range}
                                             className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
-                                            onClick={() => handleButtonClick(button.range, button.price)} 
+                                            onClick={() => handleButtonClick(button.range, button.price)}
                                         >
                                             View Pricing for {button.label}
                                         </button>

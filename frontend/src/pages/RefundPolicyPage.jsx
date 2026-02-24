@@ -43,7 +43,7 @@ const refundPolicyContent = [
         title: "Payment Disputes & Contact",
         content: (
             <>
-                For any payment disputes or questions, please contact us immediately at <strong className="text-gray-900 text-base">[rajwinderkhakh@gmail.com] or [+61433552127].</strong> We will review the issue and aim to resolve it promptly.
+                For any payment disputes or questions, please contact us immediately at <strong className="text-gray-900 text-base">[info@primementor.com.au] or [info@primementor.com.au].</strong> We will review the issue and aim to resolve it promptly.
                 <p className="mt-3">
                     For a formal refund request, please use the form below.
                 </p>

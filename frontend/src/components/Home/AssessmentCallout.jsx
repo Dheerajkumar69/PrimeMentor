@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, ArrowRight } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react';
+import { X, ArrowRight } from 'lucide-react';
 import { assets } from '../../assets/assets';
+import axios from 'axios';
 
 /**
  * A permanent, fixed-position popup styled like a modal with a blurred background,
@@ -12,10 +13,29 @@ import { assets } from '../../assets/assets';
  * @param {function} props.onBookFreeAssessment - Function to trigger the main booking modal.
  */
 export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessment }) {
+    const [lowestPrice, setLowestPrice] = useState(22); // Default fallback
+
+    useEffect(() => {
+        const fetchPricing = async () => {
+            try {
+                const apiBase = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+                const response = await axios.get(`${apiBase}/api/admin/pricing`);
+                const { classRanges } = response.data;
+                const prices = Object.values(classRanges).map(r => r.sessionPrice);
+                if (prices.length > 0) {
+                    setLowestPrice(Math.min(...prices));
+                }
+            } catch (err) {
+                console.error('Failed to fetch pricing for callout:', err);
+            }
+        };
+        if (isOpen) fetchPricing();
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     return (
-        <div 
+        <div
             className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm bg-black/30 transition-opacity duration-300 "
             role="dialog"
             aria-modal="true"
@@ -32,9 +52,9 @@ export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessmen
                     }
                 `}
             </style>
-            
+
             {/* Main Popup Container - Now using flex for two columns on medium screens and up */}
-            <div 
+            <div
                 // Increased max-w to 4xl to accommodate the image side
                 className="relative bg-white rounded-lg shadow-2xl overflow-hidden w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row transform transition-all duration-300 scale-100 opacity-100 animate-fadeIn"
             >
@@ -49,21 +69,19 @@ export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessmen
 
                 {/* Left Column: Content */}
                 <div className="flex-1 p-6 sm:p-10 flex flex-col justify-center text-center md:text-left">
-                    
+
                     {/* Main Title/Offer */}
                     <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 leading-tight">
                         Start Strong with <br /><span className="text-orange-600">PrimeMentor!</span>
                     </h2>
-                    
+
                     {/* Description */}
                     <p className="mt-4 text-base sm:text-lg text-gray-700">
                         Book your <b>Free Assessment</b> now to get a personalized learning roadmap for your child's success.
                     </p>
 
-                    {/* ✅ MODIFIED: Changed text-xl to text-sm and added md:text-xl for desktop view.
-                       Note: I kept the overall paragraph padding/margin/etc. but adjusted the actual text sizes. */}
                     <p className="mt-4 text-sm md:text-xl font-semibold text-gray-900 bg-yellow-100 px-6 py-3 rounded-full border border-yellow-300 shadow-md transition duration-300 hover:scale-[1.03] hover:shadow-lg cursor-default inline-flex items-center mx-auto md:mx-0">
-                        Classes starts from &nbsp;<span className="text-xxl text-orange-600 font-extrabold"> $22</span> <span className='text-sm md:text-xl text-gray-500 ml-1'>/ session</span>
+                        Classes starts from &nbsp;<span className="text-xxl text-orange-600 font-extrabold"> ${lowestPrice}</span> <span className='text-sm md:text-xl text-gray-500 ml-1'>/ session</span>
                     </p>
 
                     {/* Button */}
@@ -75,13 +93,13 @@ export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessmen
                         <ArrowRight className="w-5 h-5 ml-2" />
                     </button>
                 </div>
-                
+
                 {/* Right Column: Image */}
-                <div className="flex-1 md:block hidden min-h-[200px] md:min-h-auto"> 
+                <div className="flex-1 md:block hidden min-h-[200px] md:min-h-auto">
                     <img
-                        src={assets.studentTutor} 
+                        src={assets.studentTutor}
                         alt="A student and tutor reviewing notes"
-                        className="w-full h-full object-cover rounded-r-lg" 
+                        className="w-full h-full object-cover rounded-r-lg"
                     />
                 </div>
             </div>

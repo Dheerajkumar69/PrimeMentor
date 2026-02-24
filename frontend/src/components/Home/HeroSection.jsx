@@ -120,20 +120,23 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-lime-400 border-2 border-white transform transition-transform duration-300 hover:scale-110 hover:z-10 cursor-pointer"></div>
               </div>
               <p className="text-white text-base sm:text-lg animate-[float_4s_ease-in-out_infinite_0.5s]">
-                Trusted by <span className="font-bold">2,500+</span> families
+                Trusted by <span className="font-bold">a growing community of</span> families
               </p>
             </div>
 
             {/* Buttons with responsive padding and font size */}
             <div className="flex flex-wrap gap-4 justify-center lg:justify-start animate-[fade-in-up_1s_ease-out_forwards_1s]">
-              <button 
+              <button
                 onClick={() => setIsAssessmentModalOpen(true)}
                 className="relative px-6 py-3 sm:px-8 sm:py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-sm sm:text-base overflow-hidden transition transform hover:scale-105 shadow-xl"
               >
                 <span className="relative z-10">Book a Free Assessment</span>
                 <span className="absolute inset-0 bg-[length:200%_auto] opacity-0 transition-opacity duration-500 ease-in-out animate-[background-pan_5s_linear_infinite] hover:opacity-100"></span>
               </button>
-              <button className="px-6 py-3 sm:px-8 sm:py-4 border-2 border-white text-white rounded-full font-semibold text-sm sm:text-base transition hover:bg-white hover:text-gray-900">
+              <button
+                onClick={() => document.getElementById('how')?.scrollIntoView({ behavior: 'smooth' }) || window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+                className="px-6 py-3 sm:px-8 sm:py-4 border-2 border-white text-white rounded-full font-semibold text-sm sm:text-base transition hover:bg-white hover:text-gray-900"
+              >
                 Learn More
               </button>
             </div>

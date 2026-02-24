@@ -5,14 +5,14 @@ const teacherSchema = new mongoose.Schema({
     name: { type: String, required: [true, 'Full name is required.'] },
     email: { type: String, required: [true, 'Email is required.'], unique: true },
     password: { type: String, required: [true, 'Password is required.'] },
-    
+
     // Profile Picture (Technically optional by Mongoose, but mandatory by frontend logic)
     image: { type: String, default: null }, // Store the filename/path
-    
+
     // Personal Information
     address: { type: String, default: null },
     mobileNumber: { type: String, default: null },
-    subject: { type: String, default: null }, 
+    subject: { type: String, default: null },
 
     // Banking Details
     accountHolderName: { type: String, default: null },
@@ -24,9 +24,13 @@ const teacherSchema = new mongoose.Schema({
     aadharCard: { type: String, default: null },
     panCard: { type: String, default: null },
     cvFile: { type: String, default: null }, // Store the filename/path of the uploaded CV
-    
+
     // Teacher status (Optional: for Admin approval/review)
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+
+    // Password reset
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
 
 }, { timestamps: true });
 

@@ -5,27 +5,36 @@ import { History, Send, X, CheckCircle } from "lucide-react"; // Added Send, X, 
 
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
-// Utility functions (UNCHANGED)
+// Utility function to parse date and time (handles 12h AM/PM format)
 const parseClassDateTime = (classData) => {
+    // preferredDate is the Australian YYYY-MM-DD string
     if (!classData.preferredDate || !classData.scheduleTime) return null;
 
     try {
-        const dateObj = new Date(classData.preferredDate);
-        if (isNaN(dateObj)) {
-            console.error("Invalid Date String:", classData.preferredDate);
-            return null;
-        }
+        // Parse YYYY-MM-DD without timezone shift
+        const dateParts = classData.preferredDate.split("-").map(Number);
+        const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
-        const timeString = classData.scheduleTime.split(/[ -]/)[0];
+        if (isNaN(dateObj.getTime())) return null;
 
-        if (!timeString) return null;
+        // 1. Safely extract the first part of the time string (e.g., '4:00pm')
+        const timeString12h = classData.scheduleTime.split(' - ')[0];
+        if (!timeString12h) return null;
 
-        const [timeHours, timeMinutes] = timeString.split(':')
-            .filter(s => s.trim() !== '')
-            .map(s => parseInt(s.trim()));
+        // 2. Convert 12h to 24h
+        let [timeHours, timeMinutes] = timeString12h.replace(/[^0-9:]/g, '').split(':').map(Number);
+        let period = timeString12h.slice(-2).toLowerCase();
 
         if (isNaN(timeHours) || isNaN(timeMinutes)) return null;
 
+        if (period === 'pm' && timeHours !== 12) {
+            timeHours += 12;
+        }
+        if (period === 'am' && timeHours === 12) {
+            timeHours = 0;
+        }
+
+        // 3. Create a Date object interpreted as the Australian local moment
         const classStart = new Date(
             dateObj.getFullYear(),
             dateObj.getMonth(),
@@ -35,7 +44,7 @@ const parseClassDateTime = (classData) => {
             0
         );
 
-        const bufferTimeMinutes = 60;
+        const bufferTimeMinutes = 60; // Class duration buffer
         const classEndTime = new Date(classStart.getTime() + bufferTimeMinutes * 60000);
 
         return { classStart, classEndTime };
@@ -272,8 +281,8 @@ const PastClassSubmissionForm = ({ onSubmissionSuccess }) => {
                         type="submit"
                         disabled={isSubmitting}
                         className={`flex items-center px-6 py-3 font-bold rounded-lg transition ${isSubmitting
-                                ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
-                                : 'bg-green-600 text-white hover:bg-green-700 shadow-lg'
+                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700 shadow-lg'
                             } ml-auto`}
                     >
                         {isSubmitting ? 'Submitting...' : 'Submit Class Details'}
@@ -344,16 +353,7 @@ const PastClasses = () => {
                 Classes Filtered as Past: {pastClasses.length} {pastClasses.length !== 1 ? 'Classes' : 'Class'} completed
             </div>
 
-            {/* Dummy Past Class Box for Testing */}
-            <div className="mb-8 p-4 border border-yellow-300 bg-yellow-50 rounded-lg">
-                <h4 className="text-lg font-bold text-yellow-700">💡 Dummy Past Class Box (Testing)</h4>
-                <div className="p-3 bg-white border rounded-md mt-2">
-                    <p><strong>Student:</strong> Alice Smith</p>
-                    <p><strong>Date:</strong> 2023-11-01 | <strong>Time:</strong> 14:00 - 15:00</p>
-                    <p><strong>Topic:</strong> Introduction to Calculus</p>
-                    <p className="text-sm text-gray-600">This box represents a visual placeholder for a completed class entry.</p>
-                </div>
-            </div>
+
 
             {/* Responsive Grid for Course Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">

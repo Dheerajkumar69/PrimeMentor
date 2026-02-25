@@ -205,6 +205,15 @@ export default function Footer() {
                                     Refund Policy
                                 </button>
                             </li>
+                            <li>
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/admin/login')}
+                                    className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
+                                >
+                                    <Shield className="w-4 h-4 transform group-hover:translate-x-1 transition" />
+                                    Admin
+                                </button>
+                            </li>
                         </ul>
                     </div>
 

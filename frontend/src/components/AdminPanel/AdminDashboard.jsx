@@ -15,6 +15,9 @@ import FeedbackManagement from './FeedbackManagement.jsx';
 import PricingManagement from './PricingManagement.jsx';
 import ClassRequestsView from './ClassRequestsView.jsx';
 
+// Import Payment Records
+import PaymentRecords from './PaymentRecords.jsx';
+
 // Base URL for API calls
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -140,6 +143,8 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
                 return <FeedbackManagement key={activeTab} />;
             case 'pricing':
                 return <PricingManagement key={activeTab} />;
+            case 'payments':
+                return <PaymentRecords key={activeTab} />;
             default:
                 return null;
         }
@@ -216,6 +221,14 @@ export default function AdminDashboard({ onLogout, assessmentRequests: initialAs
                         className={`${tabClass} ${activeTab === 'pricing' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-green-500'} flex items-center`}
                     >
                         <DollarSign className='w-4 h-4 mr-1' /> Pricing
+                    </button>
+
+                    {/* Payments Received Tab */}
+                    <button
+                        onClick={() => setActiveTab('payments')}
+                        className={`${tabClass} ${activeTab === 'payments' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-blue-500'} flex items-center`}
+                    >
+                        <DollarSign className='w-4 h-4 mr-1' /> Payments Received
                     </button>
                 </div>
 

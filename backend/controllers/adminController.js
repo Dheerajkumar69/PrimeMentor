@@ -17,7 +17,7 @@ import Syllabus from '../models/SyllabusModel.js';
 import TeacherAvailability from '../models/TeacherAvailabilityModel.js';
 import generateToken from '../utils/generateToken.js';
 import { createZoomMeeting, getAvailableHost } from '../utils/zoomIntegration.js';
-import { sendAssessmentApprovalEmail, sendClassAssignmentEmail } from '../utils/emailService.js';
+import { sendAssessmentApprovalEmail, sendClassAssignmentEmail, sendPaidClassZoomEmail } from '../utils/emailService.js';
 
 // Admin credentials are now stored in MongoDB via AdminModel.
 // Run `node seedAdmin.js` to create/update the admin account.
@@ -485,7 +485,6 @@ export const assignTeacher = asyncHandler(async (req, res) => {
     }
 
     // 3. Update the ClassRequest with the assigned teacher and status
-    // Note: The status is changed to 'accepted' which means it's ready for the zoom link.
     const updatedRequest = await ClassRequest.findByIdAndUpdate(
         requestId,
         { teacherId: teacherId, status: 'accepted' },
@@ -497,11 +496,77 @@ export const assignTeacher = asyncHandler(async (req, res) => {
         throw new Error('Failed to update class request status.');
     }
 
-    // 3. Update the Student's course entry
+    // 4. AUTO-CREATE ZOOM MEETING (like free assessments)
+    let zoomData = null;
+    let zoomWarning = null;
+    let meetingStartUTC = null;
+
+    if (request.preferredDate && request.scheduleTime) {
+        // Parse schedule time: e.g. "3:00 PM - 4:00 PM" → extract "3:00 PM" → convert to 24h
+        const startPart = request.scheduleTime.split(/\s*-\s*/)[0]?.trim();
+        let timeForZoom = null;
+
+        if (startPart) {
+            const match12 = startPart.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (match12) {
+                let h = parseInt(match12[1], 10);
+                const m = match12[2];
+                const period = match12[3].toUpperCase();
+                if (period === 'PM' && h !== 12) h += 12;
+                if (period === 'AM' && h === 12) h = 0;
+                timeForZoom = `${String(h).padStart(2, '0')}:${m}`;
+            } else if (/^\d{2}:\d{2}$/.test(startPart)) {
+                // Already in 24h format
+                timeForZoom = startPart;
+            }
+        }
+
+        if (timeForZoom) {
+            // Build IST-anchored UTC time (admin enters date/time in IST)
+            const istDateTimeISO = `${request.preferredDate}T${timeForZoom}:00+05:30`;
+            meetingStartUTC = new Date(istDateTimeISO);
+
+            if (!isNaN(meetingStartUTC.getTime())) {
+                const meetingTopic = `${request.courseTitle} — ${request.studentName} (${request.purchaseType === 'TRIAL' ? 'Trial' : 'Starter Pack'})`;
+
+                try {
+                    // Auto-select available Zoom host
+                    let selectedHost;
+                    try {
+                        selectedHost = await getAvailableHost(meetingStartUTC, 60);
+                        console.log(`🎯 Selected Zoom host for paid class: ${selectedHost}`);
+                    } catch (hostErr) {
+                        console.error('❌ Failed to determine available Zoom host:', hostErr.message);
+                        selectedHost = process.env.ZOOM_HOST_EMAIL || 'me';
+                    }
+
+                    zoomData = await createZoomMeeting(meetingTopic, meetingStartUTC, 60, 'Australia/Sydney', selectedHost);
+                    console.log('✅ Zoom meeting created for paid class:', zoomData.meetingId, '| Host:', zoomData.hostEmail);
+
+                    // Save Zoom details to ClassRequest
+                    updatedRequest.zoomMeetingLink = zoomData.joinUrl;
+                    updatedRequest.zoomStartLink = zoomData.startUrl;
+                    updatedRequest.zoomMeetingId = String(zoomData.meetingId);
+                    updatedRequest.zoomHostEmail = zoomData.hostEmail || selectedHost;
+                    await updatedRequest.save();
+                } catch (zoomError) {
+                    console.error('❌ Zoom meeting creation failed for paid class:', zoomError.message);
+                    zoomWarning = `Zoom meeting could not be created: ${zoomError.message}. You can add the Zoom link manually later.`;
+                }
+            } else {
+                zoomWarning = 'Could not parse the scheduled date/time. Zoom meeting was not created. You can add the Zoom link manually.';
+            }
+        } else {
+            zoomWarning = 'Could not parse the schedule time format. Zoom meeting was not created. You can add the Zoom link manually.';
+        }
+    } else {
+        zoomWarning = 'Missing preferred date or schedule time. Zoom meeting was not created. You can add the Zoom link manually.';
+    }
+
+    // 5. Update the Student's course entry
     const student = await User.findOne({ clerkId: request.studentId });
 
     if (student) {
-        // Find the course based on the course name and pending status, or a robust unique identifier if available.
         const courseIndex = student.courses.findIndex(c =>
             c.name === request.courseTitle && c.status === 'pending'
         );
@@ -511,13 +576,13 @@ export const assignTeacher = asyncHandler(async (req, res) => {
                 student.courses[courseIndex].teacher = teacher.name;
                 student.courses[courseIndex].status = 'active';
 
-                // CRITICAL: Update the zoomMeetingUrl in the Student's course if it's been manually added to the ClassRequest (though it's unlikely to be present at this stage).
-                // The next controller (addZoomLink) will handle the final update.
-                // student.courses[courseIndex].zoomMeetingUrl = request.zoomMeetingLink || student.courses[courseIndex].zoomMeetingUrl;
+                // Set the Zoom join URL on the student's course immediately
+                if (zoomData?.joinUrl) {
+                    student.courses[courseIndex].zoomMeetingUrl = zoomData.joinUrl;
+                }
 
                 student.markModified('courses');
                 await student.save();
-
             } catch (studentSaveError) {
                 console.error(`Error saving student ${student.studentName} course update:`, studentSaveError);
             }
@@ -528,54 +593,104 @@ export const assignTeacher = asyncHandler(async (req, res) => {
         console.error(`Student with Clerk ID ${request.studentId} not found.`);
     }
 
-    // 4. Send notification emails to student and teacher (non-blocking)
-    const emailDetails = {
-        studentName: request.studentName,
-        teacherName: teacher.name,
-        courseTitle: request.courseTitle,
-        subject: request.subject,
-        purchaseType: request.purchaseType,
-        preferredDate: request.preferredDate,
-        scheduleTime: request.scheduleTime,
-    };
+    // 6. Send notification emails with Zoom links (or without if Zoom failed)
+    if (zoomData) {
+        // Zoom meeting was created — send emails with Zoom links
+        // Format dates for emails
+        const dateFormatted = meetingStartUTC.toLocaleDateString('en-AU', {
+            timeZone: 'Australia/Sydney', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+        const timeFormatted = meetingStartUTC.toLocaleTimeString('en-AU', {
+            timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: true
+        });
+        const tzLabel = meetingStartUTC.toLocaleTimeString('en-AU', {
+            timeZone: 'Australia/Sydney', timeZoneName: 'short'
+        }).split(' ').pop();
 
-    // Email to student
-    if (student && student.email) {
-        try {
-            await sendClassAssignmentEmail(
-                student.email,
-                request.studentName,
-                'student',
-                emailDetails
-            );
-            console.log('✅ Student class assignment email sent to:', student.email);
-        } catch (emailErr) {
-            console.error('⚠️ Failed to send student class assignment email:', emailErr.message);
+        const emailDetails = {
+            studentName: request.studentName,
+            teacherName: teacher.name,
+            courseTitle: request.courseTitle,
+            subject: request.subject,
+            purchaseType: request.purchaseType,
+            scheduledDate: dateFormatted,
+            scheduledTime: `${timeFormatted} ${tzLabel}`,
+            zoomLink: zoomData.joinUrl,
+            zoomStartLink: zoomData.startUrl,
+        };
+
+        // Email to student (join link)
+        if (student && student.email) {
+            try {
+                await sendPaidClassZoomEmail(student.email, request.studentName, 'student', emailDetails);
+                console.log('✅ Student paid class zoom email sent to:', student.email);
+            } catch (emailErr) {
+                console.error('⚠️ Failed to send student paid class zoom email:', emailErr.message);
+            }
+            await new Promise(r => setTimeout(r, 600)); // Rate-limit buffer
+        }
+
+        // Email to teacher (host/start link)
+        if (teacher.email) {
+            try {
+                await sendPaidClassZoomEmail(teacher.email, teacher.name, 'teacher', emailDetails);
+                console.log('✅ Teacher paid class zoom email sent to:', teacher.email);
+            } catch (emailErr) {
+                console.error('⚠️ Failed to send teacher paid class zoom email:', emailErr.message);
+            }
+        }
+    } else {
+        // Zoom failed — send basic assignment emails (no Zoom link)
+        const emailDetails = {
+            studentName: request.studentName,
+            teacherName: teacher.name,
+            courseTitle: request.courseTitle,
+            subject: request.subject,
+            purchaseType: request.purchaseType,
+            preferredDate: request.preferredDate,
+            scheduleTime: request.scheduleTime,
+        };
+
+        if (student && student.email) {
+            try {
+                await sendClassAssignmentEmail(student.email, request.studentName, 'student', emailDetails);
+                console.log('✅ Student class assignment email sent to:', student.email);
+            } catch (emailErr) {
+                console.error('⚠️ Failed to send student class assignment email:', emailErr.message);
+            }
+        }
+        if (teacher.email) {
+            try {
+                await sendClassAssignmentEmail(teacher.email, teacher.name, 'teacher', emailDetails);
+                console.log('✅ Teacher class assignment email sent to:', teacher.email);
+            } catch (emailErr) {
+                console.error('⚠️ Failed to send teacher class assignment email:', emailErr.message);
+            }
         }
     }
 
-    // Email to teacher
-    if (teacher.email) {
-        try {
-            await sendClassAssignmentEmail(
-                teacher.email,
-                teacher.name,
-                'teacher',
-                emailDetails
-            );
-            console.log('✅ Teacher class assignment email sent to:', teacher.email);
-        } catch (emailErr) {
-            console.error('⚠️ Failed to send teacher class assignment email:', emailErr.message);
-        }
+    // 7. Build response
+    const warnings = [];
+    if (conflictCheckSkipped) {
+        warnings.push('Conflict check was skipped because the class request is missing a preferred date or schedule time. Please verify manually.');
+    }
+    if (zoomWarning) {
+        warnings.push(zoomWarning);
     }
 
     res.json({
-        message: 'Teacher assigned and class request approved successfully. Notification emails sent.',
+        message: zoomData
+            ? `Teacher assigned and Zoom meeting created! Host: ${zoomData.hostEmail}. Emails sent.`
+            : 'Teacher assigned. Notification emails sent.',
         request: updatedRequest,
         assignedTeacherName: teacher.name,
-        ...(conflictCheckSkipped && {
-            warning: 'Conflict check was skipped because the class request is missing a preferred date or schedule time. Please verify manually that there is no scheduling overlap.',
+        ...(zoomData && {
+            zoom: {
+                meetingId: zoomData.meetingId,
+                joinUrl: zoomData.joinUrl,
+            },
         }),
+        ...(warnings.length > 0 && { warning: warnings.join(' | ') }),
     });
 });
 
@@ -668,6 +783,64 @@ export const getAllFeedback = asyncHandler(async (req, res) => {
         .lean();
 
     res.json(feedbackList);
+});
+
+// 🟢 ROBUST: Get All Payment Records 🟢
+// @desc    Get all paid class requests as payment records for Admin
+// @route   GET /api/admin/payments
+// @access  Private (Admin Only)
+export const getAllPayments = asyncHandler(async (req, res) => {
+    try {
+        // Fetch all ClassRequests that have been paid, sorted newest first
+        const payments = await ClassRequest.find({ paymentStatus: 'paid' })
+            .populate('teacherId', 'name email')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // 🛡️ Safe aggregation with NaN guards
+        const totalRevenue = payments.reduce((sum, p) => {
+            const amount = Number(p.amountPaid);
+            return sum + (Number.isFinite(amount) ? amount : 0);
+        }, 0);
+
+        const totalCount = payments.length;
+        const trialCount = payments.filter(p => p.purchaseType === 'TRIAL').length;
+        const starterPackCount = payments.filter(p => p.purchaseType === 'STARTER_PACK').length;
+
+        // 🛡️ Normalize each payment record to ensure consistent shape for frontend
+        const normalizedPayments = payments.map(p => ({
+            ...p,
+            amountPaid: Number(p.amountPaid) || 0,
+            transactionId: p.transactionId || 'N/A',
+            courseTitle: p.courseTitle || 'Unknown Course',
+            studentName: p.studentName || 'Unknown Student',
+            studentDetails: p.studentDetails || {},
+            subject: p.subject || 'N/A',
+            purchaseType: p.purchaseType || 'UNKNOWN',
+            currency: p.currency || 'AUD',
+            promoCodeUsed: p.promoCodeUsed || null,
+            discountApplied: Number(p.discountApplied) || 0,
+            createdAt: p.createdAt || new Date(),
+        }));
+
+        res.json({
+            payments: normalizedPayments,
+            summary: {
+                totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+                totalCount,
+                trialCount,
+                starterPackCount,
+                averagePayment: totalCount > 0 ? parseFloat((totalRevenue / totalCount).toFixed(2)) : 0,
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching payment records:', error?.message || error);
+        res.status(500).json({
+            payments: [],
+            summary: { totalRevenue: 0, totalCount: 0, trialCount: 0, starterPackCount: 0, averagePayment: 0 },
+            message: 'Failed to fetch payment records.'
+        });
+    }
 });
 
 // @desc    Admin approves a free assessment: assigns multiple teachers, creates Zoom meeting, sends emails

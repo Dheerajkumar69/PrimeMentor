@@ -184,7 +184,9 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
             );
 
             if (res.data.message) {
-                let msg = `Successfully assigned to ${res.data.assignedTeacherName}. Now awaiting Zoom link.`;
+                let msg = res.data.zoom
+                    ? `✅ Teacher assigned & Zoom meeting created! Meeting ID: ${res.data.zoom.meetingId}`
+                    : `Successfully assigned to ${res.data.assignedTeacherName}.`;
                 if (res.data.warning) {
                     msg += `\n\n⚠️ Warning: ${res.data.warning}`;
                 }
@@ -284,15 +286,15 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
 
 
 
-// --- NEW Sub-Component: Accepted Class Row (Zoom Link Phase) ---
+// --- Sub-Component: Accepted Class Row (Zoom Link Display / Manual Fallback) ---
 const AcceptedClassRow = ({ request, onLinkSuccess }) => {
     const [zoomLink, setZoomLink] = useState(request.zoomMeetingLink || '');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState(null);
-    const [showInput, setShowInput] = useState(!request.zoomMeetingLink); // Show input if link is missing initially
+    // Show manual input only if there's no auto-generated link
+    const [showInput, setShowInput] = useState(!request.zoomMeetingLink);
 
     const handleAddZoomLink = async () => {
-        // ... (handleAddZoomLink logic remains UNCHANGED)
         if (!zoomLink || !zoomLink.startsWith('http')) {
             setError('Please enter a valid Zoom meeting URL (must start with http/https).');
             return;
@@ -327,19 +329,14 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
     };
 
     const isTrial = request.purchaseType === 'TRIAL';
-    // 🛑 CRITICAL FIX: Display the specific date and time for all sessions 🛑
     const preferredSchedule = `${formatDate(request.preferredDate)} @ ${request.scheduleTime}`;
-
-    // Only show the full Mon-Fri/Sat preference if it's a Starter Pack, for context
     const weeklyContext = !isTrial && request.preferredTimeMonFri ? `(M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})` : '';
 
-
-
-    // 🛑 FIX START: Safely extract teacher name from the populated object 🛑
     const teacherDisplay = request.teacherId
         ? (typeof request.teacherId === 'object' ? request.teacherId.name : request.teacherId)
         : 'Unassigned';
-    // 🛑 FIX END 🛑
+
+    const hasAutoZoom = !!request.zoomMeetingId;
 
     return (
         <tr className="border-t hover:bg-green-50 transition duration-150 align-top bg-white">
@@ -348,7 +345,6 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
                     <User className="w-4 h-4 mr-2 text-green-500" />
                     {request.studentName}
                 </div>
-                {/* 🛑 FIX APPLICATION: Use the safe display variable 🛑 */}
                 <span className='block text-xs text-gray-500'>Tutor: {teacherDisplay}</span>
             </td>
             <td className="px-6 py-4 text-sm text-gray-700">
@@ -358,7 +354,34 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
             </td>
             <td className="px-6 py-4 text-sm text-gray-600">
                 {error && <p className="text-red-500 text-xs mb-2">{error}</p>}
-                {showInput ? (
+
+                {hasAutoZoom && !showInput ? (
+                    /* Auto-generated Zoom meeting — show as read-only */
+                    <div className='flex flex-col items-start'>
+                        <p className='text-xs font-medium flex items-center text-green-700 mb-1'>
+                            <CheckCircle className='w-4 h-4 mr-1' /> Zoom Meeting Auto-Created
+                        </p>
+                        {request.zoomMeetingId && (
+                            <p className='text-xs text-gray-500 mb-1'>Meeting ID: {request.zoomMeetingId}</p>
+                        )}
+                        <p className='text-xs text-gray-500 mb-1'>Join Link:</p>
+                        <a
+                            href={zoomLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline text-xs break-all"
+                        >
+                            {zoomLink.substring(0, 60)}...
+                        </a>
+                        <button
+                            onClick={() => setShowInput(true)}
+                            className='mt-2 text-xs text-indigo-500 hover:text-indigo-700 underline'
+                        >
+                            Edit Link
+                        </button>
+                    </div>
+                ) : showInput ? (
+                    /* Manual Zoom link input (fallback or edit mode) */
                     <div className='space-y-2'>
                         <input
                             type="url"
@@ -376,8 +399,17 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
                             <Zap className="w-4 h-4 mr-1" />
                             {isSaving ? 'Saving...' : (request.zoomMeetingLink ? 'Update Link' : 'Add Link')}
                         </button>
+                        {hasAutoZoom && (
+                            <button
+                                onClick={() => setShowInput(false)}
+                                className='text-xs text-gray-500 hover:text-gray-700 underline'
+                            >
+                                Cancel
+                            </button>
+                        )}
                     </div>
                 ) : (
+                    /* Existing manual link — show as before */
                     <div className='flex flex-col items-start'>
                         <p className='text-xs font-medium flex items-center text-blue-700 mb-1'>
                             <Zap className='w-4 h-4 mr-1' /> Link Added
@@ -562,7 +594,7 @@ export default function StudentManagement({ students: initialStudents }) {
             {/* Accepted Classes Tab Content (NEW) */}
             {activeTab === 'accepted' && !loading && (
                 <div className="space-y-4">
-                    <h3 className="text-xl font-semibold text-gray-700">Accepted Classes (Add Zoom Link)</h3>
+                    <h3 className="text-xl font-semibold text-gray-700">Accepted Classes (Zoom Links)</h3>
                     <div className="overflow-x-auto border rounded-xl shadow-inner">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">

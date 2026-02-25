@@ -1,6 +1,7 @@
 // backend/utils/zoomIntegration.js
 import axios from 'axios';
 import Assessment from '../models/AssessmentModel.js';
+import ClassRequest from '../models/ClassRequest.js';
 
 // ======================== MULTI-HOST CONFIGURATION ========================
 // All licensed Zoom users that can host meetings. The first entry is the primary host.
@@ -140,6 +141,13 @@ export const getAvailableHost = async (proposedStart, durationMin = 30) => {
         zoomHostEmail: { $ne: null },
     }).lean();
 
+    // Also check accepted paid class requests with Zoom meetings
+    const overlappingClasses = await ClassRequest.find({
+        status: 'accepted',
+        zoomHostEmail: { $ne: null },
+        preferredDate: { $ne: null },
+    }).lean();
+
     // Track which hosts have overlapping meetings
     const busyHosts = new Set();
 
@@ -154,6 +162,44 @@ export const getAvailableHost = async (proposedStart, durationMin = 30) => {
         if (proposedStart < aEnd && aStart < proposedEnd) {
             if (assessment.zoomHostEmail) {
                 busyHosts.add(assessment.zoomHostEmail.toLowerCase());
+            }
+        }
+    }
+
+    // Check paid class requests for host conflicts
+    for (const classReq of overlappingClasses) {
+        // Parse the preferredDate (YYYY-MM-DD) and scheduleTime
+        const cStart = classReq.scheduledDate
+            ? new Date(classReq.scheduledDate)
+            : null;
+
+        // If we don't have a proper scheduledDate, try to parse from preferredDate + scheduleTime
+        let classStart = cStart;
+        if (!classStart || isNaN(classStart.getTime())) {
+            if (classReq.preferredDate && classReq.scheduleTime) {
+                const timePart = classReq.scheduleTime.split(/\s*-\s*/)[0]?.trim();
+                if (timePart) {
+                    const match12 = timePart.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+                    if (match12) {
+                        let h = parseInt(match12[1], 10);
+                        const m = match12[2];
+                        const period = match12[3].toUpperCase();
+                        if (period === 'PM' && h !== 12) h += 12;
+                        if (period === 'AM' && h === 12) h = 0;
+                        classStart = new Date(`${classReq.preferredDate}T${String(h).padStart(2, '0')}:${m}:00+05:30`);
+                    }
+                }
+            }
+        }
+
+        if (!classStart || isNaN(classStart.getTime())) continue;
+
+        // Paid classes are 60 minutes by default
+        const cEnd = new Date(classStart.getTime() + 60 * 60 * 1000);
+
+        if (proposedStart < cEnd && classStart < proposedEnd) {
+            if (classReq.zoomHostEmail) {
+                busyHosts.add(classReq.zoomHostEmail.toLowerCase());
             }
         }
     }

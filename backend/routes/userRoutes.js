@@ -6,9 +6,9 @@ import {
     createBooking,
     initiatePaymentAndBooking,
     finishEwayPaymentAndBooking,
-    // 🚨 NEW IMPORTS 🚨
     validatePromoCode,
-    submitFeedback // 🛑 NEW IMPORT: submitFeedback
+    submitFeedback,
+    requestRepeatClasses,
 } from '../controllers/userController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { promoLimiter } from '../middlewares/rateLimiters.js';
@@ -29,6 +29,9 @@ userRouter.post('/book', protect, createBooking);
 userRouter.get('/courses', protect, getUserCourses);
 
 // 🟢 NEW ROUTE FOR STUDENT FEEDBACK 🟢
-userRouter.post('/feedback', protect, submitFeedback); // Needs 'protect' middleware
+userRouter.post('/feedback', protect, submitFeedback);
+
+// 🔁 Repeat/Recurring Classes
+userRouter.post('/repeat-classes', protect, requestRepeatClasses);
 
 export default userRouter;

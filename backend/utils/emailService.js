@@ -374,6 +374,126 @@ export const sendClassAssignmentEmail = async (recipientEmail, recipientName, ro
 };
 
 /**
+ * Sends a paid class assignment email WITH Zoom meeting link.
+ * Used when admin assigns a teacher and a Zoom meeting is auto-created.
+ * @param {string} recipientEmail - Email address to send to
+ * @param {string} recipientName - Name of the recipient
+ * @param {'student'|'teacher'} role - Whether the recipient is a student or teacher
+ * @param {object} details - Class assignment details
+ * @param {string} details.studentName - Full name of the student
+ * @param {string} details.teacherName - Full name of the assigned teacher
+ * @param {string} details.courseTitle - Title of the course
+ * @param {string} details.subject - Subject area
+ * @param {string} details.purchaseType - TRIAL or STARTER_PACK
+ * @param {string} details.scheduledDate - Formatted date string
+ * @param {string} details.scheduledTime - Formatted time string
+ * @param {string} details.zoomLink - Zoom meeting join URL
+ * @param {string} details.zoomStartLink - Zoom meeting start/host URL
+ */
+export const sendPaidClassZoomEmail = async (recipientEmail, recipientName, role, details) => {
+  const client = getResendClient();
+  if (!client) {
+    console.error('Skipping sendPaidClassZoomEmail(): Resend client not configured.');
+    return;
+  }
+
+  const isStudent = role === 'student';
+  const courseType = details.purchaseType === 'TRIAL' ? 'Trial Session' : 'Starter Pack';
+
+  const greeting = isStudent
+    ? `Dear <strong>${details.studentName}</strong>,`
+    : `Dear <strong>${details.teacherName}</strong>,`;
+
+  const intro = isStudent
+    ? `Great news! Your <strong>${courseType}</strong> for <strong>${details.courseTitle}</strong> has been approved and your Zoom session is ready. A qualified tutor has been assigned to you.`
+    : `You have been assigned to a new <strong>${courseType}</strong> class for <strong>${details.courseTitle}</strong>. The Zoom meeting has been created — please review the details below and start the meeting at the scheduled time.`;
+
+  // Teacher gets startUrl (to start as host), student gets joinUrl (join as participant)
+  const zoomLink = isStudent ? details.zoomLink : (details.zoomStartLink || details.zoomLink);
+  const zoomButtonText = isStudent ? 'Join Zoom Meeting' : 'Start Zoom Meeting (Host)';
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Class ${isStudent ? 'Confirmed' : 'Assignment'} — ${details.courseTitle}</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+            .header { background: linear-gradient(135deg, #004d99, #0066cc); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
+            .header h2 { margin: 0; font-size: 22px; }
+            .content { padding: 20px; }
+            .details-box { background-color: #f0f7ff; padding: 15px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #004d99; }
+            .zoom-box { background-color: #eff6ff; padding: 15px; border-radius: 6px; margin-top: 15px; text-align: center; border: 2px solid #3b82f6; }
+            .zoom-box a { display: inline-block; background: #3b82f6; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px; }
+            ul { list-style-type: none; padding: 0; }
+            li { margin-bottom: 8px; padding: 5px 0; border-bottom: 1px dashed #eee; }
+            .footer { text-align: center; margin-top: 20px; color: #888; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>📚 Class ${isStudent ? 'Approved!' : 'Assignment'} — ${details.courseTitle}</h2>
+            </div>
+            <div class="content">
+                <p>${greeting}</p>
+                <p>${intro}</p>
+
+                <div class="details-box">
+                    <h3 style="margin-top: 0; color: #004d99;">📋 Session Details</h3>
+                    <ul>
+                        <li><strong>Student:</strong> ${details.studentName}</li>
+                        <li><strong>Course:</strong> ${details.courseTitle}</li>
+                        <li><strong>Subject:</strong> ${details.subject || 'N/A'}</li>
+                        <li><strong>Type:</strong> ${courseType}</li>
+                        <li><strong>Teacher:</strong> ${details.teacherName}</li>
+                        <li><strong>Date:</strong> ${details.scheduledDate}</li>
+                        <li><strong>Time:</strong> ${details.scheduledTime}</li>
+                    </ul>
+                </div>
+
+                <div class="zoom-box">
+                    <p style="margin-top: 0; font-weight: bold; color: #1e40af;">🎥 ${isStudent ? 'Join' : 'Start'} the Zoom Meeting</p>
+                    <a href="${zoomLink}">${zoomButtonText}</a>
+                    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                        Or copy this link: ${zoomLink}
+                    </p>
+                    ${!isStudent ? '<p style="margin-top: 8px; font-size: 12px; color: #d97706;"><strong>⚠️ Important:</strong> You are the host. Please click the link above to start the meeting before the scheduled time. Students cannot join until you start it.</p>' : ''}
+                </div>
+
+                <p style="margin-top: 20px;">If you have any questions, please contact us at <a href="mailto:info@primementor.com.au">info@primementor.com.au</a>.</p>
+                <p>Best regards,<br><strong>The Prime Mentor Team</strong></p>
+            </div>
+            <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} Prime Mentor. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const subjectLine = isStudent
+      ? `✅ Class Approved: ${details.courseTitle} — Zoom Session Ready`
+      : `📋 New Class Assignment: ${details.studentName} — ${details.courseTitle}`;
+
+    const resp = await sendWithRetry(client, {
+      from: `Prime Mentor <${senderEmail}>`,
+      to: [recipientEmail],
+      subject: subjectLine,
+      html: htmlContent,
+    });
+
+    console.log(`Paid class zoom email sent to ${role} (${recipientEmail}). Resend ID:`, resp?.id || '[no id]');
+    return resp;
+  } catch (err) {
+    console.error(`Error sending paid class zoom email to ${role}:`, err?.message || err);
+    throw err;
+  }
+};
+
+/**
  * Sends a booking confirmation email when a student submits a free assessment request.
  * @param {string} recipientEmail - Parent/student email address
  * @param {object} details - Assessment submission details
@@ -536,3 +656,125 @@ export const sendPasswordResetEmail = async (recipientEmail, recipientName, rese
     throw err;
   }
 };
+
+
+/**
+ * Sends a notification email to the company (info@primementor.com.au) when a student makes a purchase.
+ */
+export const sendNewPurchaseNotification = async (purchaseDetails = {}, classRequests = []) => {
+  if (!senderEmail) {
+    console.error("FATAL ERROR: EMAIL_SENDER is not defined. Cannot send company notification.");
+    return;
+  }
+
+  const client = getResendClient();
+  if (!client) {
+    console.error('Skipping sendNewPurchaseNotification(): Resend client not configured.');
+    return;
+  }
+
+  const companyEmail = 'info@primementor.com.au';
+
+  const {
+    studentName = 'Unknown Student',
+    studentEmail = 'N/A',
+    courseTitle = 'Unknown Course',
+    purchaseType = 'TRIAL',
+    amountPaid = '0.00',
+    currency = 'AUD',
+    transactionId = 'N/A',
+    promoCode = null,
+    discountApplied = 0,
+  } = purchaseDetails;
+
+  const isTrial = purchaseType === 'TRIAL';
+  const typeLabel = isTrial ? 'Trial Session' : 'Starter Pack';
+
+  const sessionsList = (classRequests || []).map((req, index) => {
+    return `<tr>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee;">${index + 1}</td>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee;">${req.preferredDate || 'TBD'}</td>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee;">${req.scheduleTime || 'TBD'}</td>
+    </tr>`;
+  }).join('');
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>New Purchase Notification</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #16a34a, #15803d); color: white; padding: 15px 20px; border-radius: 8px 8px 0 0; text-align: center; }
+            .content { padding: 20px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; }
+            .summary-box { background-color: #f0fdf4; padding: 15px; border-radius: 6px; margin: 15px 0; border-left: 4px solid #16a34a; }
+            .amount { font-size: 28px; font-weight: bold; color: #16a34a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background-color: #f3f4f6; padding: 8px 10px; text-align: left; font-size: 13px; }
+            .footer { text-align: center; margin-top: 15px; color: #888; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>💰 New ${typeLabel} Purchase!</h2>
+            </div>
+            <div class="content">
+                <div class="summary-box">
+                    <p class="amount">$${amountPaid} ${currency}</p>
+                    <p style="margin: 5px 0 0; font-size: 14px; color: #555;">Transaction ID: <strong>${transactionId}</strong></p>
+                </div>
+
+                <h3 style="margin-top: 20px;">Student Details</h3>
+                <ul style="list-style: none; padding: 0;">
+                    <li><strong>Name:</strong> ${studentName}</li>
+                    <li><strong>Email:</strong> ${studentEmail}</li>
+                    <li><strong>Course:</strong> ${courseTitle}</li>
+                    <li><strong>Type:</strong> ${typeLabel} (${classRequests.length} session${classRequests.length !== 1 ? 's' : ''})</li>
+                    ${promoCode ? `<li><strong>Promo Code:</strong> ${promoCode} (saved $${discountApplied})</li>` : ''}
+                </ul>
+
+                ${classRequests.length > 0 ? `
+                <h3>Scheduled Sessions</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sessionsList}
+                    </tbody>
+                </table>` : ''}
+
+                <p style="margin-top: 20px; font-size: 13px; color: #666;">
+                    <strong>Action Required:</strong> Assign a teacher to this student's class request(s) in the Admin Panel.
+                </p>
+            </div>
+            <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} Prime Mentor. Automated notification.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const resp = await sendWithRetry(client, {
+      from: `Prime Mentor <${senderEmail}>`,
+      to: [companyEmail],
+      subject: `💰 New Purchase: ${courseTitle} (${typeLabel}) — $${amountPaid} from ${studentName}`,
+      html: htmlContent,
+    });
+
+    console.log(`✅ Company purchase notification sent to ${companyEmail}. Resend ID:`, resp?.id || '[no id]');
+    return resp;
+  } catch (err) {
+    console.error('⚠️ Failed to send company purchase notification:', err?.message || err);
+    // Non-blocking — don't throw, payment was already successful
+  }
+};
+

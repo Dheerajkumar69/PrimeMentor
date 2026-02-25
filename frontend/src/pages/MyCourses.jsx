@@ -10,6 +10,7 @@ import Footer from "../components/Home/Footer.jsx"
 import CourseCard from "../components/StudentPanel/CourseCard.jsx"
 import UserProfileCard from "../components/StudentPanel/UserProfileCard.jsx"
 import PastClasses from "../components/StudentPanel/PastClasses.jsx"
+import RepeatClassModal from "../components/StudentPanel/RepeatClassModal.jsx"
 import { getMeetingTime } from "../utils/dateUtils.js"
 
 // Animation Variants
@@ -49,6 +50,10 @@ const MyCourses = () => {
 
     // State to track which sessions have submitted feedback locally
     const [submittedFeedbackIds, setSubmittedFeedbackIds] = useState(new Set());
+
+    // State for the Repeat Class Modal
+    const [repeatModalOpen, setRepeatModalOpen] = useState(false);
+    const [repeatCourse, setRepeatCourse] = useState(null);
 
     useEffect(() => {
         const fetchCourses = async () => {
@@ -195,9 +200,14 @@ const MyCourses = () => {
 
     const pastSessions = courses.filter((session) => isSessionPast(session)).map(session => ({
         ...session,
-        // Check if the session ID is in our submitted set
         feedbackSubmitted: submittedFeedbackIds.has(session._id)
     }));
+
+    // Handler: open the repeat modal for a past session
+    const handleRepeatRequest = useCallback((course) => {
+        setRepeatCourse(course);
+        setRepeatModalOpen(true);
+    }, []);
 
 
 
@@ -296,7 +306,8 @@ const MyCourses = () => {
                                 <motion.div variants={containerVariants} initial="hidden" animate="visible">
                                     <PastClasses
                                         courses={pastSessions}
-                                        onFeedbackSubmit={handleFeedbackSubmission} // 🛑 PASS HANDLER
+                                        onFeedbackSubmit={handleFeedbackSubmission}
+                                        onRepeatRequest={handleRepeatRequest}
                                     />
                                 </motion.div>
                             </div>
@@ -310,6 +321,13 @@ const MyCourses = () => {
                     </div>
                 </div>
             </div>
+            {/* Repeat Class Modal */}
+            <RepeatClassModal
+                course={repeatCourse}
+                isOpen={repeatModalOpen}
+                onClose={() => { setRepeatModalOpen(false); setRepeatCourse(null); }}
+                onSuccess={() => { /* Could refresh courses here if needed */ }}
+            />
             <Footer />
         </>
     )

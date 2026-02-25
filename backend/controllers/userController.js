@@ -9,7 +9,7 @@ import ClassRequest from '../models/ClassRequest.js';
 import { clerkClient } from '@clerk/express';
 import rapid from 'eway-rapid';
 import FeedbackModel from '../models/FeedbackModel.js';
-import { sendCourseConfirmationEmail } from '../utils/emailService.js';
+import { sendCourseConfirmationEmail, sendNewPurchaseNotification } from '../utils/emailService.js';
 
 // 🚨 NEW IMPORT 🚨
 import PromoCode from '../models/PromoCodeModel.js';
@@ -63,43 +63,55 @@ const getClerkUserIdFromToken = (req) => {
 }
 
 // -----------------------------------------------------------
-// 🟢 HELPER: Generate the 6 non-Sunday session dates 🟢
-// ... (generateSessionDates function is unchanged) ...
-const generateSessionDates = (preferredDate) => {
-    const sessionsCount = 6;
+// 🟢 HELPER: Generate non-Sunday session dates (fully UTC-safe) 🟢
+// @param {string} preferredDate - YYYY-MM-DD format start date
+// @param {number} [count=6] - Number of session dates to generate
+// @returns {string[]} Array of YYYY-MM-DD date strings
+const generateSessionDates = (preferredDate, count) => {
+    // Defensive defaults
+    const sessionsCount = (typeof count === 'number' && Number.isFinite(count) && count > 0) ? count : 6;
+    const MAX_ITERATIONS = sessionsCount + 60; // Safety valve to prevent infinite loops
     const sessionDates = [];
 
-
+    // Parse the date string safely
+    if (!preferredDate || typeof preferredDate !== 'string') {
+        console.error('generateSessionDates: invalid preferredDate:', preferredDate);
+        return sessionDates;
+    }
 
     const dateParts = preferredDate.split('-').map(Number);
-    // Use UTC constructor: new Date(year, monthIndex, day). 
+    if (dateParts.length !== 3 || dateParts.some(isNaN)) {
+        console.error('generateSessionDates: unparseable date:', preferredDate);
+        return sessionDates;
+    }
+
+    // Use UTC constructor to avoid timezone drift
     let currentDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
 
+    if (isNaN(currentDate.getTime())) {
+        console.error('generateSessionDates: invalid Date object from:', preferredDate);
+        return sessionDates;
+    }
 
+    let iterations = 0;
+    while (sessionDates.length < sessionsCount && iterations < MAX_ITERATIONS) {
+        iterations++;
 
-    // We only need to account for Sundays (day 0)
-    while (sessionDates.length < sessionsCount) {
-
-        // CRITICAL: Use getUTCDay() since the object was created using Date.UTC()
+        // Skip Sundays (UTC day 0)
         if (currentDate.getUTCDay() !== 0) {
-
-            // Push the YYYY-MM-DD string representation using UTC components
             const yyyy = currentDate.getUTCFullYear();
             const mm = String(currentDate.getUTCMonth() + 1).padStart(2, '0');
             const dd = String(currentDate.getUTCDate()).padStart(2, '0');
-            const newDateStr = `${yyyy}-${mm}-${dd}`;
-
-            sessionDates.push(newDateStr);
-
-
-        } else {
-
+            sessionDates.push(`${yyyy}-${mm}-${dd}`);
         }
 
-        // Move to the next calendar day (using UTC date setters)
+        // Move to the next calendar day (UTC)
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
+    if (iterations >= MAX_ITERATIONS) {
+        console.warn(`generateSessionDates: hit safety limit of ${MAX_ITERATIONS} iterations. Generated ${sessionDates.length}/${sessionsCount} dates.`);
+    }
 
     return sessionDates;
 };
@@ -229,14 +241,21 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
 
 // 🛑 MODIFIED: Controller to Finish eWAY Payment and Booking 🛑
 export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
-    const { accessCode, clerkId, bookingPayload } = req.body;
+    const { accessCode, bookingPayload } = req.body;
 
-    if (!accessCode || !clerkId) {
-        return res.status(400).json({ success: false, message: "Missing eWAY AccessCode or Clerk ID." });
+    // 🛡️ ROBUST: Use the authenticated user's clerkId from the auth middleware, NOT from req.body
+    const clerkId = req.user?.clerkId || req.body?.clerkId;
+
+    if (!accessCode) {
+        return res.status(400).json({ success: false, message: "Missing eWAY AccessCode." });
+    }
+    if (!clerkId) {
+        return res.status(401).json({ success: false, message: "Authentication failed. Missing Clerk ID." });
     }
 
-
-
+    // 🛡️ IDEMPOTENCY GUARD: Check if this accessCode was already finalized
+    const existingRequest = await ClassRequest.findOne({ transactionId: { $regex: new RegExp(`^${accessCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) } }).lean();
+    // Fallback: also check by transactionID after we retrieve it from eWAY (below)
 
     let transactionSucceeded = false;
     let transactionID = null;
@@ -254,12 +273,26 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
         if (transaction.TransactionStatus) {
             transactionSucceeded = true;
-            transactionID = transaction.TransactionID;
+            transactionID = String(transaction.TransactionID);
             console.log(`✅ eWAY Payment Successful. Transaction ID: ${transactionID}`);
+
+            // 🛡️ IDEMPOTENCY GUARD: Check if this transactionID already has records
+            const alreadyProcessed = await ClassRequest.findOne({ transactionId: transactionID }).lean();
+            if (alreadyProcessed) {
+                console.warn(`⚠️ TransactionID ${transactionID} already processed. Returning existing data.`);
+                pendingPayloads.delete(accessCode); // Clean up cache
+                return res.status(200).json({
+                    success: true,
+                    message: 'Payment already processed. Your booking is confirmed.',
+                    alreadyProcessed: true,
+                });
+            }
         } else {
             // Handle payment failure
-            const responseMessage = transaction.ResponseMessage;
-            const errorCodes = responseMessage.split(', ').map(errorCode => rapid.getMessage(errorCode, "en"));
+            const responseMessage = transaction.ResponseMessage || '';
+            const errorCodes = responseMessage.split(', ').filter(Boolean).map(errorCode => {
+                try { return rapid.getMessage(errorCode, "en"); } catch { return errorCode; }
+            });
             errorDetails = `Payment declined by eWAY. Messages: ${errorCodes.join(' | ')}`;
             console.error(`eWAY Transaction Failed: ${errorDetails}`);
 
@@ -283,26 +316,38 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             throw new Error("Payment successful, but booking data was lost during redirect. Please contact support.");
         }
 
-        const {
-            courseDetails,
-            scheduleDetails,
-            studentDetails,
-            guardianDetails,
-            paymentAmount,
-            // 🚨 NEW FIELDS FROM PAYLOAD 🚨
-            promoCode,
-            appliedDiscountAmount
-        } = resolvedPayload;
+        // 🛡️ DEFENSIVE: Safely destructure with defaults for every field
+        const courseDetails = resolvedPayload.courseDetails || {};
+        const scheduleDetails = resolvedPayload.scheduleDetails || {};
+        const studentDetails = resolvedPayload.studentDetails || {};
+        const guardianDetails = resolvedPayload.guardianDetails || {};
+        const rawPaymentAmount = resolvedPayload.paymentAmount;
+        const promoCode = resolvedPayload.promoCode || null;
+        const appliedDiscountAmount = Number(resolvedPayload.appliedDiscountAmount) || 0;
+
+        // 🛡️ Validate paymentAmount is a real positive number
+        const paymentAmount = (typeof rawPaymentAmount === 'number' && Number.isFinite(rawPaymentAmount) && rawPaymentAmount > 0)
+            ? rawPaymentAmount
+            : null;
+
+        if (paymentAmount === null) {
+            console.error(`❌ Invalid paymentAmount in payload: ${rawPaymentAmount}`);
+            return res.status(400).json({ success: false, message: 'Invalid payment amount in booking data.' });
+        }
+
+        if (!courseDetails.courseTitle) {
+            return res.status(400).json({ success: false, message: 'Missing course title in booking data.' });
+        }
 
         const {
-            purchaseType,
-            preferredDate,
-            preferredTime,
-            preferredWeekStart,
-            preferredTimeMonFri,
-            preferredTimeSaturday,
-            postcode,
-            numberOfSessions
+            purchaseType = 'TRIAL',
+            preferredDate = null,
+            preferredTime = null,
+            preferredWeekStart = null,
+            preferredTimeMonFri = null,
+            preferredTimeSaturday = null,
+            postcode = null,
+            numberOfSessions = 1
         } = scheduleDetails;
 
         // ... (User Lookup/Creation Logic UNCHANGED) ...
@@ -389,14 +434,21 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
             const startDateForSessions = preferredWeekStart || preferredDate;
 
-
-            if (!startDateForSessions) {
-                return res.status(400).json({ success: false, message: "Missing start date for starter pack sessions." });
+            if (!startDateForSessions || typeof startDateForSessions !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(startDateForSessions)) {
+                console.error('Invalid start date for starter pack:', startDateForSessions);
+                return res.status(400).json({ success: false, message: "Missing or invalid start date for starter pack sessions." });
             }
 
-            // CRITICAL: Use the helper to generate the correct dates (Australian dates)
-            const dates = generateSessionDates(startDateForSessions);
-            const sessionsToCreate = Number.isInteger(numberOfSessions) && numberOfSessions > 0 ? Number(numberOfSessions) : dates.length;
+            // Generate session dates (fully UTC-safe, with count param)
+            const safeSessionCount = (typeof numberOfSessions === 'number' && Number.isFinite(numberOfSessions) && numberOfSessions > 0) ? numberOfSessions : 6;
+            const dates = generateSessionDates(startDateForSessions, safeSessionCount);
+
+            if (!dates || dates.length === 0) {
+                console.error('generateSessionDates returned no dates for:', startDateForSessions);
+                return res.status(500).json({ success: false, message: 'Failed to generate session dates. Please contact support.' });
+            }
+
+            const sessionsToCreate = Math.min(safeSessionCount, dates.length);
 
             // Calculate the total cost BEFORE discount was applied, then distribute the discounted amount.
             // For simplicity and matching the paymentAmount, we calculate perSessionCost based on the final paid amount.
@@ -408,8 +460,11 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             for (let i = 0; i < sessionDatesToUse.length; i++) {
                 const sessionDate = sessionDatesToUse[i];
                 const dateParts = sessionDate.split('-').map(Number);
-                const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-                const dayOfWeek = dateObj.getDay();
+
+                // 🚨 CRITICAL FIX: Use Date.UTC to prevent local timezone offsets on the server
+                // month is 0-indexed in JS dates
+                const dateObj = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+                const dayOfWeek = dateObj.getUTCDay(); // Use getUTCDay() for consistency with UTC date creation
 
 
                 // Determine the correct time slot for the current day (Mon-Fri = 1-5, Sat = 6)
@@ -473,34 +528,66 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
 
 
-        // 🛑 --- 5. SEND CONFIRMATION EMAIL (NEW STEP) --- 🛑
-        const emailRecipient = student.email || student.guardianEmail;
+        // --- 5. SEND CONFIRMATION EMAIL ---
+        // 🛡️ ROBUST: Try multiple email sources with validation
+        const isValidEmail = (e) => typeof e === 'string' && e.trim().length > 3 && e.includes('@');
+
+        const payloadEmail = studentDetails?.email || guardianDetails?.email;
+        const dbEmail = student.email || student.guardianEmail;
+        // Also try Clerk user data as last resort
+        const clerkEmail = clerkUser?.emailAddresses?.[0]?.emailAddress;
+
+        const emailRecipient = isValidEmail(payloadEmail) ? payloadEmail.trim()
+            : isValidEmail(dbEmail) ? dbEmail.trim()
+                : isValidEmail(clerkEmail) ? clerkEmail.trim()
+                    : null;
+
         const emailCourseDetails = {
-            courseTitle: courseDetails.courseTitle,
-            purchaseType: purchaseType,
+            courseTitle: courseDetails.courseTitle || 'Course',
+            purchaseType: purchaseType || 'TRIAL',
             amountPaid: paymentAmount.toFixed(2),
             currency: 'AUD',
-            transactionId: transactionID,
-            // 🚨 PASS PROMO INFO TO EMAIL 🚨
-            promoCode: promoCode,
-            discountApplied: appliedDiscountAmount,
+            transactionId: transactionID || 'N/A',
+            promoCode: promoCode || null,
+            discountApplied: appliedDiscountAmount || 0,
         };
         const emailStudentDetails = {
-            name: student.studentName,
+            name: student.studentName || studentDetails?.first || 'Valued Student',
         };
+
+        console.log(`📧 Attempting confirmation email — recipient: ${emailRecipient || 'NONE'}, student: ${student.studentName}, clerkId: ${clerkId}`);
 
         if (emailRecipient) {
             try {
-
                 await sendCourseConfirmationEmail(emailRecipient, emailCourseDetails, emailStudentDetails, classRequestsToSave);
-                console.log('✅ Purchase confirmation email sent to:', emailRecipient);
+                console.log(`✅ Purchase confirmation email sent successfully to: ${emailRecipient}`);
             } catch (emailErr) {
-                console.error('⚠️ Failed to send purchase confirmation email to:', emailRecipient, '| Error:', emailErr.message);
+                console.error(`❌ FAILED to send confirmation email to ${emailRecipient}:`, emailErr?.message || emailErr);
+                // Log full error for debugging — does NOT block the success response
             }
         } else {
-            console.warn(`Cannot send email: Recipient email is missing for Clerk ID: ${clerkId}`);
+            console.warn(`⚠️ Cannot send email: No valid recipient email for Clerk ID ${clerkId}. student.email='${student.email}', guardianEmail='${student.guardianEmail}'`);
         }
-        // ----------------------------------------------------
+
+        // --- 5b. SEND COMPANY NOTIFICATION EMAIL ---
+        try {
+            await sendNewPurchaseNotification({
+                studentName: student.studentName || nameToUse,
+                studentEmail: emailRecipient || 'N/A',
+                courseTitle: courseDetails.courseTitle || 'Course',
+                purchaseType: purchaseType || 'TRIAL',
+                amountPaid: paymentAmount.toFixed(2),
+                currency: 'AUD',
+                transactionId: transactionID || 'N/A',
+                promoCode: promoCode || null,
+                discountApplied: appliedDiscountAmount || 0,
+            }, classRequestsToSave);
+            console.log('✅ Company purchase notification sent to info@primementor.com.au');
+        } catch (companyEmailErr) {
+            console.error('⚠️ Failed to send company purchase notification:', companyEmailErr?.message || companyEmailErr);
+            // Non-blocking — student booking is already confirmed
+        }
+        // -------------------------------------------------
 
         // Final successful response
         res.status(201).json({
@@ -641,4 +728,102 @@ export const submitFeedback = asyncHandler(async (req, res) => {
         console.error('Error saving feedback:', error);
         res.status(500).json({ message: 'Server error: Could not save feedback data.' });
     }
+});
+
+
+// 🔁 NEW CONTROLLER: Request Repeat/Recurring Classes 🔁
+// @desc    Student requests the same class to repeat weekly on a chosen day/time
+// @route   POST /api/user/repeat-classes
+// @access  Private (Student - requires authentication)
+export const requestRepeatClasses = asyncHandler(async (req, res) => {
+    const clerkId = getClerkUserIdFromToken(req);
+
+    if (!clerkId) {
+        return res.status(401).json({ success: false, message: "Authentication failed. Please log in again." });
+    }
+
+    const {
+        courseId,       // _id from the student's courses array
+        dayOfWeek,      // 1=Mon, 2=Tue, ..., 6=Sat (no Sunday)
+        timeSlot,       // e.g. "3:00 PM - 4:00 PM"
+        repeatWeeks,    // number of weeks (1-12)
+    } = req.body;
+
+    // --- Validation ---
+    if (!courseId || !timeSlot || dayOfWeek === undefined || dayOfWeek === null) {
+        return res.status(400).json({ success: false, message: "Missing required fields: courseId, dayOfWeek, timeSlot." });
+    }
+
+    const parsedDay = parseInt(dayOfWeek, 10);
+    if (isNaN(parsedDay) || parsedDay < 1 || parsedDay > 6) {
+        return res.status(400).json({ success: false, message: "dayOfWeek must be 1 (Mon) through 6 (Sat). No Sunday." });
+    }
+
+    const weeks = parseInt(repeatWeeks, 10);
+    if (isNaN(weeks) || weeks < 1 || weeks > 12) {
+        return res.status(400).json({ success: false, message: "repeatWeeks must be between 1 and 12." });
+    }
+
+    // --- Find student and course ---
+    const student = await User.findOne({ clerkId });
+    if (!student) {
+        return res.status(404).json({ success: false, message: "Student not found." });
+    }
+
+    const course = student.courses.id(courseId);
+    if (!course) {
+        return res.status(404).json({ success: false, message: "Course not found in your enrollment." });
+    }
+
+    // --- Generate dates for each week ---
+    // Start from the NEXT occurrence of the chosen dayOfWeek after today
+    const today = new Date();
+    // Build a date in Australian timezone (we work with YYYY-MM-DD strings)
+    const auFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }); // en-CA gives YYYY-MM-DD
+    const todayStr = auFormatter.format(today);
+    const todayParts = todayStr.split('-').map(Number);
+    let cursor = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
+
+    // Advance cursor to the next occurrence of parsedDay
+    // JS Date: 0=Sun, 1=Mon, ..., 6=Sat — matches our parsedDay convention
+    const currentDayUTC = cursor.getUTCDay();
+    let daysToAdd = parsedDay - currentDayUTC;
+    if (daysToAdd <= 0) {
+        daysToAdd += 7; // next week
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + daysToAdd);
+
+    const sessionDates = [];
+    for (let i = 0; i < weeks; i++) {
+        const yyyy = cursor.getUTCFullYear();
+        const mm = String(cursor.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(cursor.getUTCDate()).padStart(2, '0');
+        sessionDates.push(`${yyyy}-${mm}-${dd}`);
+        cursor.setUTCDate(cursor.getUTCDate() + 7); // next week same day
+    }
+
+    // --- Create ClassRequests ---
+    const classRequests = sessionDates.map((dateStr, i) => new ClassRequest({
+        courseId: course._id,
+        courseTitle: `${course.name.split('(')[0].trim()} (Repeat ${i + 1}/${weeks})`,
+        studentId: clerkId,
+        studentName: student.studentName,
+        purchaseType: 'TRIAL', // Repeats are treated as individual sessions
+        preferredDate: dateStr,
+        scheduleTime: timeSlot,
+        subject: course.subject || 'N/A',
+        status: 'pending',
+        paymentStatus: 'unpaid', // Repeats don't require payment (per approved plan)
+        amountPaid: 0,
+    }));
+
+    await ClassRequest.insertMany(classRequests);
+    console.log(`🔁 Created ${classRequests.length} repeat ClassRequest(s) for student ${student.studentName} (${clerkId})`);
+
+    res.status(201).json({
+        success: true,
+        message: `${weeks} recurring class request(s) created! Your admin will assign a teacher and you'll receive Zoom links via email.`,
+        requestsCreated: classRequests.length,
+        dates: sessionDates,
+    });
 });

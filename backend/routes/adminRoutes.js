@@ -23,6 +23,7 @@ import {
     getAcceptedClassRequests,
     getAllPastClassSubmissions,
     getAllFeedback,
+    getAllPayments,
     approveAssessment,
     addMeeting,
     updateAssessmentTeachers,
@@ -77,6 +78,9 @@ router.get('/past-classes', getAllPastClassSubmissions);
 
 // Fetch All Student Feedback
 router.get('/feedback', getAllFeedback);
+
+// Fetch All Payments
+router.get('/payments', getAllPayments);
 
 // Approve a free assessment (assign teacher + create Zoom + send emails)
 router.put('/assessment/:assessmentId/approve', approveAssessment);

@@ -9,6 +9,7 @@ import ClassRequest from '../models/ClassRequest.js';
 import { clerkClient } from '@clerk/express';
 import rapid from 'eway-rapid';
 import FeedbackModel from '../models/FeedbackModel.js';
+import PendingPayload from '../models/PendingPayload.js';
 import { sendCourseConfirmationEmail, sendNewPurchaseNotification } from '../utils/emailService.js';
 
 // 🚨 NEW IMPORT 🚨
@@ -16,8 +17,7 @@ import PromoCode from '../models/PromoCodeModel.js';
 
 dotenv.config();
 
-// 🛑 EWAY Initialization (UNCHANGED) 🛑
-// ... (eWAY Initialization code is unchanged) ...
+// 🛑 EWAY Initialization 🛑
 const EWAY_API_KEY = process.env.EWAY_API_KEY;
 const EWAY_PASSWORD = process.env.EWAY_PASSWORD;
 const EWAY_ENDPOINT = process.env.EWAY_ENDPOINT || 'sandbox';
@@ -29,23 +29,6 @@ if (!EWAY_API_KEY || !EWAY_PASSWORD) {
 
 const ewayClient = rapid.createClient(EWAY_API_KEY, EWAY_PASSWORD, EWAY_ENDPOINT);
 // 🛑 END eWAY Initialization 🛑
-
-// 🛑 SERVER-SIDE BOOKING PAYLOAD CACHE 🛑
-// Stores booking payloads keyed by eWAY accessCode so they survive browser data loss.
-// Entries auto-expire after 1 hour.
-const pendingPayloads = new Map();
-const PAYLOAD_TTL_MS = 60 * 60 * 1000; // 1 hour
-const cleanupExpiredPayloads = () => {
-    const now = Date.now();
-    for (const [key, entry] of pendingPayloads) {
-        if (now - entry.createdAt > PAYLOAD_TTL_MS) {
-            pendingPayloads.delete(key);
-        }
-    }
-};
-// Run cleanup every 10 minutes
-setInterval(cleanupExpiredPayloads, 10 * 60 * 1000);
-
 const getClerkUserIdFromToken = (req) => {
     // ... (getClerkUserIdFromToken function is unchanged) ...
     const token = req.headers.authorization?.split(' ')[1];
@@ -216,13 +199,14 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
 
         console.log(`✅ eWAY Shared Page created. AccessCode: ${accessCode}`);
 
-        // --- 2. Store booking payload server-side for resilient retrieval ---
-        pendingPayloads.set(accessCode, {
-            payload: bookingPayload,
-            clerkId: studentClerkId,
-            createdAt: Date.now(),
-        });
-        console.log(`📦 Booking payload cached server-side for AccessCode: ${accessCode}`);
+        // --- 2. Store booking payload in MongoDB for resilient retrieval ---
+        // Survives PM2 restarts. TTL index auto-deletes after 1 hour.
+        await PendingPayload.findOneAndUpdate(
+            { accessCode },
+            { accessCode, payload: bookingPayload, clerkId: studentClerkId },
+            { upsert: true, new: true }
+        );
+        console.log(`📦 Booking payload persisted to MongoDB for AccessCode: ${accessCode}`);
 
         // --- 3. Send Redirect URL and AccessCode back to Frontend ---
         res.status(200).json({
@@ -280,7 +264,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             const alreadyProcessed = await ClassRequest.findOne({ transactionId: transactionID }).lean();
             if (alreadyProcessed) {
                 console.warn(`⚠️ TransactionID ${transactionID} already processed. Returning existing data.`);
-                pendingPayloads.delete(accessCode); // Clean up cache
+                await PendingPayload.deleteOne({ accessCode }); // Clean up cache
                 return res.status(200).json({
                     success: true,
                     message: 'Payment already processed. Your booking is confirmed.',
@@ -300,16 +284,15 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
         }
 
         // --- 2. Finalize Booking (Booking Logic) ---
-        // Prefer server-side cached payload, fall back to client-sent payload
-        const cachedEntry = pendingPayloads.get(accessCode);
+        // Prefer MongoDB-persisted payload, fall back to client-sent payload
+        const cachedEntry = await PendingPayload.findOneAndDelete({ accessCode });
         const resolvedPayload = cachedEntry ? cachedEntry.payload : bookingPayload;
 
-        // Clean up the cache entry
+        // Log which source was used
         if (cachedEntry) {
-            pendingPayloads.delete(accessCode);
-            console.log(`📦 Using server-cached booking payload for AccessCode: ${accessCode}`);
+            console.log(`📦 Using MongoDB-persisted booking payload for AccessCode: ${accessCode}`);
         } else if (bookingPayload) {
-            console.warn(`⚠️ Server cache miss for AccessCode: ${accessCode}. Using client-sent payload as fallback.`);
+            console.warn(`⚠️ MongoDB cache miss for AccessCode: ${accessCode}. Using client-sent payload as fallback.`);
         }
 
         if (!resolvedPayload) {

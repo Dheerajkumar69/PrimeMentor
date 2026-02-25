@@ -7,7 +7,8 @@ import validator from 'validator';
 import ClassRequest from '../models/ClassRequest.js';
 import PastClassModel from '../models/PastClassModel.js'; // 🛑 NEW IMPORT
 
-const createToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+// 12 h — tokens that live for days create a large stolen-credential window.
+const createToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '12h' });
 
 // --- Register (UNCHANGED) ---
 export const registerTeacher = async (req, res) => {
@@ -54,9 +55,14 @@ export const registerTeacher = async (req, res) => {
             status: 'pending' // New teachers start as pending review
         });
 
-        // 5. Respond with Token and Redirect Trigger (data.success: true)
-        const token = createToken(teacher._id);
-        res.json({ success: true, token, teacher: { _id: teacher._id, name: teacher.name, email: teacher.email, image: teacher.image } });
+        // 5. Do NOT issue a JWT for pending registrations.
+        //    Teachers must wait for admin approval and then log in.
+        //    Issuing a token here would let them call protected teacher routes
+        //    before an admin has reviewed their identity / documents.
+        res.status(201).json({
+            success: true,
+            message: 'Application submitted successfully. You will be notified once your account has been reviewed and approved by an admin.',
+        });
     } catch (err) {
         console.error('Teacher registration error:', err);
 
@@ -81,6 +87,15 @@ export const loginTeacher = async (req, res) => {
 
         const match = await bcrypt.compare(password, teacher.password);
         if (!match) return res.json({ success: false, message: 'Invalid credentials' });
+
+        // Block pending / rejected teachers from obtaining a JWT.
+        // Only 'approved' accounts may access the teacher dashboard.
+        if (teacher.status !== 'approved') {
+            const statusMsg = teacher.status === 'rejected'
+                ? 'Your application has been rejected. Please contact support for more information.'
+                : 'Your account is pending admin approval. You will be notified once it is reviewed.';
+            return res.status(403).json({ success: false, message: statusMsg });
+        }
 
         const token = createToken(teacher._id);
         res.json({
@@ -281,5 +296,27 @@ export const submitPastClass = async (req, res) => {
     } catch (error) {
         console.error('Error submitting past class:', error);
         res.status(500).json({ success: false, message: 'Server error during submission.' });
+    }
+};
+
+// --- Get Logged-In Teacher Profile (for page-refresh re-hydration) ---
+export const getTeacherProfile = async (req, res) => {
+    try {
+        const teacher = req.user; // Set by protectTeacher middleware
+        if (!teacher) {
+            return res.status(401).json({ success: false, message: 'Not authenticated.' });
+        }
+        res.json({
+            success: true,
+            teacher: {
+                _id: teacher._id,
+                name: teacher.name,
+                email: teacher.email,
+                image: teacher.image,
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching teacher profile:', error);
+        res.status(500).json({ success: false, message: 'Server error.' });
     }
 };

@@ -11,21 +11,33 @@ const CourseCard = ({ course }) => {
   const navigate = useNavigate();
 
   const handleEnrollClick = () => {
-    navigate('/#pricing');
-    setTimeout(() => {
+    // Navigate to home page first, then try scrolling to pricing
+    navigate('/');
+    // Use a MutationObserver approach: wait for pricing section to render
+    const scrollToPricing = () => {
       const pricingSection = document.getElementById('pricing');
       if (pricingSection) {
         pricingSection.scrollIntoView({ behavior: 'smooth' });
+        return true;
       }
-    }, 100);
+      return false;
+    };
+    // Try immediately, then retry a few times for lazy-loaded content
+    if (!scrollToPricing()) {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        if (scrollToPricing() || attempts++ > 10) clearInterval(interval);
+      }, 200);
+    }
   };
 
   return (
     <div className={`
       ${course.color} text-white p-8 rounded-2xl 
-      shadow-xl hover:${course.shadow} transition-all duration-500 
+      shadow-xl transition-all duration-500 
       transform hover:scale-[1.03] cursor-pointer 
       flex flex-col h-full
+      ${course.hoverShadow}
     `}>
       <div className="flex items-center justify-between mb-4">
         <Icon className="w-10 h-10 text-white/90" />
@@ -75,7 +87,7 @@ const Courses = () => {
             description: "Build a rock-solid academic foundation. Focus on core skills in Math, English, and Science through engaging, interactive lessons.",
             tagline: "Interactive online Zoom sessions to spark curiosity and confidence early on!",
             color: "bg-green-600",
-            shadow: "shadow-green-500/50"
+            hoverShadow: "hover:shadow-green-500/50"
           },
           {
             id: 2,
@@ -86,7 +98,7 @@ const Courses = () => {
             description: "Deepen subject understanding and critical thinking. Prepare for high school with advanced coursework and conceptual clarity.",
             tagline: "Dedicated one-on-one and small group Zoom classes focusing on conceptual clarity and exam success!",
             color: "bg-blue-600",
-            shadow: "shadow-blue-500/50"
+            hoverShadow: "hover:shadow-blue-500/50"
           },
           {
             id: 3,
@@ -97,7 +109,7 @@ const Courses = () => {
             description: "Targeted support for board exams and university entrance. Master complex topics with focused, personalized tutoring.",
             tagline: "Premium online Zoom tutoring tailored for Board Exams, AP, and college readiness!",
             color: "bg-red-600",
-            shadow: "shadow-red-500/50"
+            hoverShadow: "hover:shadow-red-500/50"
           },
         ]);
       } catch (err) {
@@ -107,17 +119,17 @@ const Courses = () => {
           {
             id: 1, title: "Primary Years Excellence", grades: "Classes 2 - 6", price: "$22 / hr",
             icon: Users, description: "Build a rock-solid academic foundation. Focus on core skills in Math, English, and Science through engaging, interactive lessons.",
-            tagline: "Interactive online Zoom sessions to spark curiosity and confidence early on!", color: "bg-green-600", shadow: "shadow-green-500/50"
+            tagline: "Interactive online Zoom sessions to spark curiosity and confidence early on!", color: "bg-green-600", hoverShadow: "hover:shadow-green-500/50"
           },
           {
             id: 2, title: "Middle School Mastery", grades: "Classes 7 - 9", price: "$25 / hr",
             icon: School, description: "Deepen subject understanding and critical thinking. Prepare for high school with advanced coursework and conceptual clarity.",
-            tagline: "Dedicated one-on-one and small group Zoom classes focusing on conceptual clarity and exam success!", color: "bg-blue-600", shadow: "shadow-blue-500/50"
+            tagline: "Dedicated one-on-one and small group Zoom classes focusing on conceptual clarity and exam success!", color: "bg-blue-600", hoverShadow: "hover:shadow-blue-500/50"
           },
           {
             id: 3, title: "High School Achievement", grades: "Classes 10 - 12", price: "$27 / hr",
             icon: GraduationCap, description: "Targeted support for board exams and university entrance. Master complex topics with focused, personalized tutoring.",
-            tagline: "Premium online Zoom tutoring tailored for Board Exams, AP, and college readiness!", color: "bg-red-600", shadow: "shadow-red-500/50"
+            tagline: "Premium online Zoom tutoring tailored for Board Exams, AP, and college readiness!", color: "bg-red-600", hoverShadow: "hover:shadow-red-500/50"
           },
         ]);
       } finally {

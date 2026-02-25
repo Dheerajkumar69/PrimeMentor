@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback } from "react"
 import { useUser, useAuth } from "@clerk/clerk-react"
 import axios from "axios"
+import toast from "react-hot-toast"
 import { motion } from "framer-motion"
-import { useLocation } from "react-router-dom"
-import Header from "../components/Home/Header.jsx"
+import { useLocation, useNavigate } from "react-router-dom"
+
 import Footer from "../components/Home/Footer.jsx"
 import CourseCard from "../components/StudentPanel/CourseCard.jsx"
 import UserProfileCard from "../components/StudentPanel/UserProfileCard.jsx"
@@ -33,26 +34,14 @@ const isSessionPast = (session) => {
     return now > scheduledEnd
 }
 
-// ----------------------------------------------------
-// 🛑 DUMMY CLASS FOR TESTING FEEDBACK 🛑
-const DUMMY_PAST_CLASS = {
-    _id: "dummy_feedback_test_123", // Unique ID for testing feedback submission
-    name: "Dummy Test Class: Algebra Essentials",
-    teacher: "Mr. John Doe (Dummy)",
-    preferredDate: "2023-11-01", // A date clearly in the past
-    preferredTime: "10:00", // A time clearly in the past
-    isWeeklySession: false,
-    description: "This is a dummy class entry to test the student feedback mechanism.",
-    zoomMeetingUrl: "n/a",
-    status: "completed"
-};
-// ----------------------------------------------------
+
 
 
 const MyCourses = () => {
     const { user, isLoaded } = useUser()
     const { isSignedIn, getToken } = useAuth()
     const location = useLocation()
+    const navigate = useNavigate()
 
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
@@ -74,7 +63,7 @@ const MyCourses = () => {
                 const response = await axios.get(`${backendUrl}/api/user/courses`, {
                     headers: { Authorization: `Bearer ${token}` },
                 })
-                console.log('[MYCOURSES] API Response:', response.data);
+
 
                 const rawCourses = response.data.courses || []
                 const sessions = []
@@ -88,7 +77,7 @@ const MyCourses = () => {
                 const getSessionDate = (startDateString, sessionIndex) => {
                     if (!startDateString) return null
 
-                    console.log(`[MYCOURSES DEBUG] Calculating session index ${sessionIndex} starting from ${startDateString}`);
+
 
                     const dateParts = startDateString.split("-").map(Number)
                     // Start from the chosen date using UTC components
@@ -110,7 +99,7 @@ const MyCourses = () => {
                                 const mm = String(currentDate.getUTCMonth() + 1).padStart(2, "0")
                                 const dd = String(currentDate.getUTCDate()).padStart(2, "0")
                                 const finalDateStr = `${yyyy}-${mm}-${dd}`;
-                                console.log(`[MYCOURSES DEBUG] Session ${sessionIndex + 1} finalized date: ${finalDateStr}`);
+
                                 return finalDateStr;
                             }
                             sessionsFound++
@@ -127,7 +116,7 @@ const MyCourses = () => {
                     // CRITICAL: Date constructor here MUST use local components
                     const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2])
                     const dayOfWeek = dateObj.getDay()
-                    console.log(`[MYCOURSES DEBUG] Day of Week for ${dateString}: ${dayOfWeek} (0=Sun, 6=Sat)`);
+
                     // Saturday = 6, Mon-Fri = 1-5
                     return dayOfWeek === 6 ? satTime : monFriTime
                 }
@@ -147,7 +136,7 @@ const MyCourses = () => {
                         course.sessionsRemaining > 1 && course.preferredTimeMonFri && course.preferredTimeSaturday
 
                     if (isStarterPack) {
-                        console.log(`[MYCOURSES] Processing Starter Pack for course: ${course.courseTitle}. Start Date: ${course.preferredDate}`);
+
                         for (let i = 0; i < course.sessionsRemaining; i++) {
                             const sessionDateStr = getSessionDate(course.preferredDate, i)
 
@@ -179,7 +168,7 @@ const MyCourses = () => {
                         })
                     }
                 })
-                console.log('[MYCOURSES] Final generated sessions:', sessions.map(s => ({ date: s.preferredDate, time: s.preferredTime, name: s.name })));
+
 
                 setCourses(sessions)
                 setError(null)
@@ -198,7 +187,7 @@ const MyCourses = () => {
     const handleFeedbackSubmission = useCallback((courseId, feedbackData) => {
         // Add the course ID to the set of submitted IDs
         setSubmittedFeedbackIds(prev => new Set(prev).add(courseId));
-        alert(`Thank you! Feedback for ${feedbackData.courseName} submitted.`);
+        toast.success(`Thank you! Feedback for ${feedbackData.courseName} submitted.`);
     }, []);
 
     // --- Filtering Logic (MODIFIED to include feedbackSubmitted status) ---
@@ -210,42 +199,22 @@ const MyCourses = () => {
         feedbackSubmitted: submittedFeedbackIds.has(session._id)
     }));
 
-    // ----------------------------------------------------
-    // 🛑 INJECTION OF DUMMY CLASS FOR TESTING 🛑
-    // Ensure the dummy class hasn't been submitted yet in the local state
-    if (!submittedFeedbackIds.has(DUMMY_PAST_CLASS._id)) {
-        // Find if the dummy class is already present to avoid duplicates during re-renders
-        const isDummyPresent = pastSessions.some(c => c._id === DUMMY_PAST_CLASS._id);
 
-        if (!isDummyPresent) {
-            pastSessions.unshift({ // Add to the front of the list
-                ...DUMMY_PAST_CLASS,
-                feedbackSubmitted: false
-            });
-        }
-    }
-    // ----------------------------------------------------
 
 
     if (isLoading || !isLoaded) {
         return (
-            <>
-                <Header />
-                <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
-                    <p className="text-xl text-gray-700">Loading user profile and courses...</p>
-                </div>
-            </>
+            <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
+                <p className="text-xl text-gray-700">Loading user profile and courses...</p>
+            </div>
         )
     }
 
     if (!user) {
         return (
-            <>
-                <Header />
-                <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
-                    <p className="text-xl text-red-500">Authentication required. Please log in.</p>
-                </div>
-            </>
+            <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
+                <p className="text-xl text-red-500">Authentication required. Please log in.</p>
+            </div>
         )
     }
 
@@ -253,7 +222,6 @@ const MyCourses = () => {
 
     return (
         <>
-            <Header />
             <div className="min-h-screen bg-gray-50 pt-[80px]">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-900 text-white pt-12 sm:pt-12 pb-8 shadow-xl mb-10">
                     <div className="mx-auto max-w-8xl px-6">
@@ -281,14 +249,36 @@ const MyCourses = () => {
                                     {upcomingSessions.length === 0 ? (
                                         <motion.div variants={itemVariants} className="text-center py-12">
                                             <p className="text-2xl font-bold text-gray-800 mb-4">No upcoming sessions!</p>
-                                            <p className="text-lg text-gray-600 mb-8">Start your journey by exploring available courses.</p>
-                                            <motion.a
-                                                variants={itemVariants}
-                                                href="/#courses"
-                                                className="inline-block bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition transform hover:-translate-y-1 hover:shadow-xl"
-                                            >
-                                                Explore Courses
-                                            </motion.a>
+                                            <p className="text-lg text-gray-600 mb-8">Book your next session to continue learning.</p>
+                                            <div className="flex flex-col sm:flex-row justify-center gap-4">
+                                                <motion.button
+                                                    variants={itemVariants}
+                                                    onClick={() => {
+                                                        // Pre-fill from last course if available
+                                                        const lastCourse = courses.length > 0 ? courses[courses.length - 1] : null;
+                                                        const quizData = lastCourse ? {
+                                                            year: lastCourse.year || 8,
+                                                            subject: lastCourse.subject || 'Mathematics',
+                                                            initialClassRange: lastCourse.classRange || '7-9',
+                                                            name: { firstName: user?.firstName || '', lastName: user?.lastName || '' },
+                                                            email: user?.emailAddresses?.[0]?.emailAddress || '',
+                                                            needs: "I'm ready to extend my learning",
+                                                            state: lastCourse.state || 'New South Wales',
+                                                        } : {};
+                                                        navigate('/booking', { state: { quizData } });
+                                                    }}
+                                                    className="inline-block bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition transform hover:-translate-y-1 hover:shadow-xl"
+                                                >
+                                                    Book Another Session
+                                                </motion.button>
+                                                <motion.a
+                                                    variants={itemVariants}
+                                                    href="/courses"
+                                                    className="inline-block bg-white text-orange-500 border-2 border-orange-500 font-semibold py-3 px-8 rounded-full shadow-lg transition transform hover:-translate-y-1 hover:shadow-xl"
+                                                >
+                                                    Explore Courses
+                                                </motion.a>
+                                            </div>
                                         </motion.div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -320,6 +310,7 @@ const MyCourses = () => {
                     </div>
                 </div>
             </div>
+            <Footer />
         </>
     )
 }

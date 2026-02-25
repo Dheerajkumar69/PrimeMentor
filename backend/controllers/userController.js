@@ -30,6 +30,22 @@ if (!EWAY_API_KEY || !EWAY_PASSWORD) {
 const ewayClient = rapid.createClient(EWAY_API_KEY, EWAY_PASSWORD, EWAY_ENDPOINT);
 // 🛑 END eWAY Initialization 🛑
 
+// 🛑 SERVER-SIDE BOOKING PAYLOAD CACHE 🛑
+// Stores booking payloads keyed by eWAY accessCode so they survive browser data loss.
+// Entries auto-expire after 1 hour.
+const pendingPayloads = new Map();
+const PAYLOAD_TTL_MS = 60 * 60 * 1000; // 1 hour
+const cleanupExpiredPayloads = () => {
+    const now = Date.now();
+    for (const [key, entry] of pendingPayloads) {
+        if (now - entry.createdAt > PAYLOAD_TTL_MS) {
+            pendingPayloads.delete(key);
+        }
+    }
+};
+// Run cleanup every 10 minutes
+setInterval(cleanupExpiredPayloads, 10 * 60 * 1000);
+
 const getClerkUserIdFromToken = (req) => {
     // ... (getClerkUserIdFromToken function is unchanged) ...
     const token = req.headers.authorization?.split(' ')[1];
@@ -53,14 +69,13 @@ const generateSessionDates = (preferredDate) => {
     const sessionsCount = 6;
     const sessionDates = [];
 
-    console.log('[SERVER DEBUG] Input preferredDate:', preferredDate);
+
 
     const dateParts = preferredDate.split('-').map(Number);
     // Use UTC constructor: new Date(year, monthIndex, day). 
     let currentDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
 
-    console.log('[SERVER DEBUG] Initial currentDate UTC time:', currentDate.toUTCString());
-    console.log('[SERVER DEBUG] Initial currentDate UTC Day (0=Sun, 4=Thu):', currentDate.getUTCDay());
+
 
     // We only need to account for Sundays (day 0)
     while (sessionDates.length < sessionsCount) {
@@ -75,17 +90,17 @@ const generateSessionDates = (preferredDate) => {
             const newDateStr = `${yyyy}-${mm}-${dd}`;
 
             sessionDates.push(newDateStr);
-            console.log(`[SERVER DEBUG] Session ${sessionDates.length}: Found date ${newDateStr} (Day: ${currentDate.getUTCDay()})`);
+
 
         } else {
-            console.log(`[SERVER DEBUG] Skipping date: ${currentDate.getUTCFullYear()}-${currentDate.getUTCMonth() + 1}-${currentDate.getUTCDate()} (Sunday)`);
+
         }
 
         // Move to the next calendar day (using UTC date setters)
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
-    console.log('[SERVER DEBUG] Final generated sessionDates array:', sessionDates);
+
     return sessionDates;
 };
 // -----------------------------------------------------------
@@ -189,7 +204,15 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
 
         console.log(`✅ eWAY Shared Page created. AccessCode: ${accessCode}`);
 
-        // --- 2. Send Redirect URL and AccessCode back to Frontend ---
+        // --- 2. Store booking payload server-side for resilient retrieval ---
+        pendingPayloads.set(accessCode, {
+            payload: bookingPayload,
+            clerkId: studentClerkId,
+            createdAt: Date.now(),
+        });
+        console.log(`📦 Booking payload cached server-side for AccessCode: ${accessCode}`);
+
+        // --- 3. Send Redirect URL and AccessCode back to Frontend ---
         res.status(200).json({
             success: true,
             redirectUrl: redirectURL,
@@ -212,7 +235,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: "Missing eWAY AccessCode or Clerk ID." });
     }
 
-    console.log('[SERVER DEBUG] Received bookingPayload:', JSON.stringify(bookingPayload, null, 2));
+
 
 
     let transactionSucceeded = false;
@@ -244,7 +267,19 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
         }
 
         // --- 2. Finalize Booking (Booking Logic) ---
-        if (!bookingPayload) {
+        // Prefer server-side cached payload, fall back to client-sent payload
+        const cachedEntry = pendingPayloads.get(accessCode);
+        const resolvedPayload = cachedEntry ? cachedEntry.payload : bookingPayload;
+
+        // Clean up the cache entry
+        if (cachedEntry) {
+            pendingPayloads.delete(accessCode);
+            console.log(`📦 Using server-cached booking payload for AccessCode: ${accessCode}`);
+        } else if (bookingPayload) {
+            console.warn(`⚠️ Server cache miss for AccessCode: ${accessCode}. Using client-sent payload as fallback.`);
+        }
+
+        if (!resolvedPayload) {
             throw new Error("Payment successful, but booking data was lost during redirect. Please contact support.");
         }
 
@@ -257,7 +292,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             // 🚨 NEW FIELDS FROM PAYLOAD 🚨
             promoCode,
             appliedDiscountAmount
-        } = bookingPayload;
+        } = resolvedPayload;
 
         const {
             purchaseType,
@@ -331,7 +366,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
         if (isTrial) {
             // Case 1: TRIAL - Single session, one ClassRequest
-            console.log('[SERVER DEBUG] Creating single TRIAL session...');
+
             classRequestsToSave.push({
                 courseId: courseDetails.courseId,
                 courseTitle: courseDetails.courseTitle,
@@ -351,9 +386,9 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             });
         } else {
             // Case 2: STARTER_PACK - numberOfSessions sessions, multiple ClassRequests
-            console.log('[SERVER DEBUG] Creating STARTER_PACK sessions...');
+
             const startDateForSessions = preferredWeekStart || preferredDate;
-            console.log('[SERVER DEBUG] startDateForSessions (preferredWeekStart):', startDateForSessions);
+
 
             if (!startDateForSessions) {
                 return res.status(400).json({ success: false, message: "Missing start date for starter pack sessions." });
@@ -368,14 +403,14 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             const perSessionCost = paymentAmount / sessionsToCreate;
 
             const sessionDatesToUse = dates.slice(0, sessionsToCreate);
-            console.log('[SERVER DEBUG] sessionDatesToUse from generateSessionDates:', sessionDatesToUse);
+
 
             for (let i = 0; i < sessionDatesToUse.length; i++) {
                 const sessionDate = sessionDatesToUse[i];
                 const dateParts = sessionDate.split('-').map(Number);
                 const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
                 const dayOfWeek = dateObj.getDay();
-                console.log(`[SERVER DEBUG] Session ${i + 1} Date: ${sessionDate}, Local Day of Week (0=Sun): ${dayOfWeek}`);
+
 
                 // Determine the correct time slot for the current day (Mon-Fri = 1-5, Sat = 6)
                 const sessionTime = (dayOfWeek >= 1 && dayOfWeek <= 5)
@@ -405,7 +440,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                     // We record the total discount on the User's main course record below.
                 });
             }
-            console.log('[SERVER DEBUG] Class requests saved to DB:', classRequestsToSave.map(r => ({ date: r.preferredDate, time: r.scheduleTime, title: r.courseTitle })));
+
         }
 
         // Save ALL generated class requests
@@ -435,7 +470,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
         };
         student.courses.push(newCourse);
         await student.save();
-        console.log('[SERVER DEBUG] Student course record updated in UserModel:', newCourse.preferredDate, newCourse.preferredTime);
+
 
 
         // 🛑 --- 5. SEND CONFIRMATION EMAIL (NEW STEP) --- 🛑
@@ -456,7 +491,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
         if (emailRecipient) {
             try {
-                console.log('[SERVER DEBUG] Sending purchase confirmation email to:', emailRecipient);
+
                 await sendCourseConfirmationEmail(emailRecipient, emailCourseDetails, emailStudentDetails, classRequestsToSave);
                 console.log('✅ Purchase confirmation email sent to:', emailRecipient);
             } catch (emailErr) {

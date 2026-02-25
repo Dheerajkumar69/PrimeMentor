@@ -25,7 +25,7 @@ const PaymentSuccessRedirect = () => {
     useEffect(() => {
         const accessCode = searchParams.get('AccessCode');
         const clerkId = searchParams.get('clerkId');
-        
+
         // --- 1. Basic Validation ---
         if (!accessCode || !clerkId) {
             setStatus('error');
@@ -36,13 +36,13 @@ const PaymentSuccessRedirect = () => {
         // --- 2. Retrieve Stored Payload ---
         const storedPayloadJSON = localStorage.getItem(EWAY_BOOKING_PAYLOAD_KEY);
         const storedAccessCode = localStorage.getItem(EWAY_ACCESS_CODE_KEY);
-        
+
         if (storedAccessCode !== accessCode) {
-              setStatus('error');
-              setMessage("Payment integrity check failed: Access code mismatch. Please contact support.");
-              return;
+            setStatus('error');
+            setMessage("Payment integrity check failed: Access code mismatch. Please contact support.");
+            return;
         }
-        
+
         if (!storedPayloadJSON) {
             setStatus('error');
             setMessage("Payment succeeded, but booking details were lost. Please contact support with your transaction ID.");
@@ -55,7 +55,7 @@ const PaymentSuccessRedirect = () => {
         const finishPayment = async () => {
             try {
                 const token = await getToken();
-                
+
                 const response = await axios.post(
                     FINISH_PAYMENT_API_ENDPOINT,
                     {
@@ -75,15 +75,15 @@ const PaymentSuccessRedirect = () => {
                     setStatus('success');
                     // Message now includes the confirmation email information
                     setMessage('Payment verified. Course enrollment confirmed! A confirmation email has been sent. Redirecting now.');
-                    
+
                     // Clean up storage
                     localStorage.removeItem(EWAY_BOOKING_PAYLOAD_KEY);
                     localStorage.removeItem(EWAY_ACCESS_CODE_KEY);
                     localStorage.removeItem(EWAY_PRODUCT_DETAILS_KEY);
-                    
+
                     // 🛑 FINAL REDIRECT TO MYCOURSES with Refresh Trigger 🛑
                     setTimeout(() => {
-                        navigate('/my-courses?refresh=' + Date.now()); 
+                        navigate('/my-courses?refresh=' + Date.now());
                     }, 2000);
                 } else {
                     // Backend failed to finalize booking (e.g., payment declined, or a server issue after payment)
@@ -95,7 +95,7 @@ const PaymentSuccessRedirect = () => {
                 setMessage(err.response?.data?.message || err.message || 'An unexpected error occurred during confirmation.');
             }
         };
-        
+
         finishPayment();
 
     }, [searchParams, getToken, navigate]);
@@ -121,11 +121,11 @@ const PaymentSuccessRedirect = () => {
                 </h2>
                 <p className="text-gray-700">{message}</p>
                 {status === 'error' && (
-                    <button 
-                        onClick={() => navigate('/enrollment?step=3')}
+                    <button
+                        onClick={() => navigate('/my-courses')}
                         className="mt-4 bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition"
                     >
-                        Return to Payment
+                        Go to My Courses
                     </button>
                 )}
             </div>

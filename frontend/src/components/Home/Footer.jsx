@@ -1,16 +1,32 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Facebook, Twitter, Youtube, Instagram, MapPin, Phone, Mail, ChevronRight, ArrowUp, Shield } from 'lucide-react';
 import { assets } from '../../assets/assets';
 
 export default function Footer() {
     const navigate = useNavigate();
-    
+    const location = useLocation();
+
     // New function to navigate and scroll to the top immediately
     const navigateAndScrollToTop = (path) => {
         navigate(path);
         // Use an immediate scroll to ensure the new page starts at the top
-        window.scrollTo({ top: 0, behavior: 'instant' }); 
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
+    // Navigate to home page first (if not already there) then scroll to anchor
+    const navigateToAnchor = (hash) => {
+        if (location.pathname !== '/') {
+            navigate('/');
+            // Wait for the home page to render, then scroll to the section
+            setTimeout(() => {
+                const el = document.getElementById(hash);
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+        } else {
+            const el = document.getElementById(hash);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
     };
 
     const scrollToTop = () => {
@@ -37,7 +53,7 @@ export default function Footer() {
     return (
         <footer id='contact' className="relative bg-gray-50 pt-20 pb-8">
             <style>{customAnimations}</style>
-            
+
             <div className="container mx-auto px-4">
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
                     {/* Column 1: Brand Info */}
@@ -64,10 +80,10 @@ export default function Footer() {
                                 <span>info@primementor.com.au</span>
                             </a>
                             {/* UPDATED: MapPin Link */}
-                            <a 
-                                href="https://www.google.com/maps/search/?api=1&query=Office+1,+Floor+1,+105a+High+Street+Cranbourne+Vic+3977" 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
+                            <a
+                                href="https://www.google.com/maps/search/?api=1&query=Office+1,+Floor+1,+105a+High+Street+Cranbourne+Vic+3977"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="flex items-center gap-3 text-gray-700 hover:text-orange-500 transition"
                             >
                                 <MapPin className="w-5 h-5 text-orange-500" />
@@ -84,40 +100,40 @@ export default function Footer() {
                         </h3>
                         <ul className="space-y-3">
                             <li>
-                                <a href="#home" className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group">
+                                <button onClick={() => navigateToAnchor('home')} className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left">
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
                                     Home
-                                </a>
+                                </button>
                             </li>
                             <li>
-                                <a href="#why" className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group">
+                                <button onClick={() => navigateToAnchor('why')} className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left">
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
                                     Why Prime Mentor
-                                </a>
+                                </button>
                             </li>
                             <li>
-                                <a href="#how" className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group">
+                                <button onClick={() => navigateToAnchor('how')} className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left">
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
                                     How It Works
-                                </a>
+                                </button>
                             </li>
                             <li>
-                                <a href="#tutors" className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group">
+                                <button onClick={() => navigateToAnchor('tutors')} className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left">
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
                                     Our Tutors
-                                </a>
+                                </button>
                             </li>
                             <li>
-                                <a href="#testimonials" className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group">
+                                <button onClick={() => navigateToAnchor('testimonials')} className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left">
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
                                     Testimonials
-                                </a>
+                                </button>
                             </li>
                             <li>
-                                <a href="#pricing" className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group">
+                                <button onClick={() => navigateToAnchor('pricing')} className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left">
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
                                     Pricing
-                                </a>
+                                </button>
                             </li>
                         </ul>
                     </div>
@@ -127,8 +143,8 @@ export default function Footer() {
                         <h3 className="text-xl font-bold text-gray-900 mb-6">SUPPORT</h3>
                         <ul className="space-y-3">
                             <li>
-                                <button 
-                                    onClick={() => navigateAndScrollToTop('/contact')} 
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/contact')}
                                     className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
                                 >
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
@@ -136,8 +152,8 @@ export default function Footer() {
                                 </button>
                             </li>
                             <li>
-                                <button 
-                                    onClick={() => navigateAndScrollToTop('/faq')} 
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/faq')}
                                     className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
                                 >
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
@@ -145,8 +161,8 @@ export default function Footer() {
                                 </button>
                             </li>
                             <li>
-                                <button 
-                                    onClick={() => navigateAndScrollToTop('/help-center')} 
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/help-center')}
                                     className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
                                 >
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
@@ -154,8 +170,8 @@ export default function Footer() {
                                 </button>
                             </li>
                             <li>
-                                <button 
-                                    onClick={() => navigateAndScrollToTop('/support')} 
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/support')}
                                     className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
                                 >
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
@@ -163,8 +179,8 @@ export default function Footer() {
                                 </button>
                             </li>
                             <li>
-                                <button 
-                                    onClick={() => navigateAndScrollToTop('/privacy-policy')} 
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/privacy-policy')}
                                     className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
                                 >
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
@@ -172,8 +188,8 @@ export default function Footer() {
                                 </button>
                             </li>
                             <li>
-                                <button 
-                                    onClick={() => navigateAndScrollToTop('/terms-of-service')} 
+                                <button
+                                    onClick={() => navigateAndScrollToTop('/terms-of-service')}
                                     className="text-gray-600 hover:text-orange-500 transition flex items-center gap-2 group p-0 bg-transparent border-none w-full text-left"
                                 >
                                     <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition" />
@@ -189,16 +205,6 @@ export default function Footer() {
                                     Refund Policy
                                 </button>
                             </li>
-                            {/* NEW: Admin Panel Link/Button */}
-                            <li>
-                                <button
-                                    onClick={() => navigateAndScrollToTop('/admin/login')}
-                                    className="w-full text-left text-orange-600 font-bold hover:text-blue-600 transition flex items-center gap-2 group p-0 bg-transparent border-none"
-                                >
-                                    <Shield className="w-4 h-4 transform group-hover:translate-x-1 transition" />
-                                    Admin Panel
-                                </button>
-                            </li>
                         </ul>
                     </div>
 
@@ -206,36 +212,36 @@ export default function Footer() {
                     <div className="animate-[fade-in-up_1s_ease-out_0.6s_forwards]">
                         <h3 className="text-xl font-bold text-gray-900 mb-6">STUDENT SUCCESS</h3>
                         <div className="grid grid-cols-3 gap-2 mb-6">
-                            <img 
-                                src="https://images.pexels.com/photos/5905713/pexels-photo-5905713.jpeg?auto=compress&cs=tinysrgb&w=200" 
-                                alt="Student writing" 
-                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg" 
+                            <img
+                                src="https://images.pexels.com/photos/5905713/pexels-photo-5905713.jpeg?auto=compress&cs=tinysrgb&w=200"
+                                alt="Student writing"
+                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg"
                             />
-                            <img 
-                                src="https://images.pexels.com/photos/5905703/pexels-photo-5905703.jpeg?auto=compress&cs=tinysrgb&w=200" 
-                                alt="Student on laptop" 
-                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg" 
+                            <img
+                                src="https://images.pexels.com/photos/5905703/pexels-photo-5905703.jpeg?auto=compress&cs=tinysrgb&w=200"
+                                alt="Student on laptop"
+                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg"
                             />
                             {/* **FIX: Replaced the third image with the user-provided URL** */}
-                            <img 
-                                src="https://images.pexels.com/photos/8363150/pexels-photo-8363150.jpeg?auto=compress&cs=tinysrgb&w=200" 
-                                alt="A kid handing out a best teacher trophy" 
-                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg" 
+                            <img
+                                src="https://images.pexels.com/photos/8363150/pexels-photo-8363150.jpeg?auto=compress&cs=tinysrgb&w=200"
+                                alt="A kid handing out a best teacher trophy"
+                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg"
                             />
-                            <img 
-                                src="https://images.pexels.com/photos/5212702/pexels-photo-5212702.jpeg?auto=compress&cs=tinysrgb&w=200" 
-                                alt="Group study" 
-                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg" 
+                            <img
+                                src="https://images.pexels.com/photos/5212702/pexels-photo-5212702.jpeg?auto=compress&cs=tinysrgb&w=200"
+                                alt="Group study"
+                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg"
                             />
-                            <img 
-                                src="https://images.pexels.com/photos/4144926/pexels-photo-4144926.jpeg?auto=compress&cs=tinysrgb&w=200" 
-                                alt="Online tutor session" 
-                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg" 
+                            <img
+                                src="https://images.pexels.com/photos/4144926/pexels-photo-4144926.jpeg?auto=compress&cs=tinysrgb&w=200"
+                                alt="Online tutor session"
+                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg"
                             />
-                            <img 
-                                src="https://images.pexels.com/photos/5905466/pexels-photo-5905466.jpeg?auto=compress&cs=tinysrgb&w=200" 
-                                alt="Smiling student at desk" 
-                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg" 
+                            <img
+                                src="https://images.pexels.com/photos/5905466/pexels-photo-5905466.jpeg?auto=compress&cs=tinysrgb&w=200"
+                                alt="Smiling student at desk"
+                                className="w-full h-20 object-cover rounded-lg transform transition hover:scale-110 hover:shadow-lg"
                             />
                         </div>
                     </div>
@@ -244,7 +250,7 @@ export default function Footer() {
                 {/* Separator and Bottom Bar */}
                 <div className="border-t border-gray-300 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
                     <p className="text-gray-600">
-                        © All right are reserved by Prime Mentor PTY Ltd Australia.
+                        © All rights are reserved by Prime Mentor PTY Ltd Australia.
                     </p>
                     <div className="flex items-center gap-4">
                         <span className="text-gray-600">Follow us:</span>

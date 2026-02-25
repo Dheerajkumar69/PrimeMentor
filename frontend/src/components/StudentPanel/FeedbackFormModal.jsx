@@ -21,26 +21,26 @@ const StarRating = ({ value, onChange }) => (
 
 const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
     const { getToken } = useAuth();
-    
+
     // Pre-fill form data from the passed course object
     const [formData, setFormData] = useState({
         courseName: course.name,
         teacherName: course.teacher || 'N/A',
         sessionDate: course.preferredDate,
         sessionTime: course.preferredTime,
-        
+
         // Initial Ratings
         clarityRating: 5,
         engagingRating: 5,
         contentRating: 5,
         overallSatisfaction: 100, // Starts at 100%
-        
+
         // Text Fields
         likes: '',
         improvements: '',
         additionalComments: '',
     });
-    
+
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -78,7 +78,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
 
         try {
             const token = await getToken();
-            
+
             const payload = {
                 ...formData,
                 likes: formData.likes || '',
@@ -87,18 +87,18 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
             };
 
             const response = await axios.post(`${BACKEND_URL}/api/user/feedback`, payload, {
-                headers: { 
-                    Authorization: `Bearer ${token}`, 
+                headers: {
+                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             setIsSubmitted(true);
-            onSubmissionSuccess(course._id, response.data.feedback); 
+            onSubmissionSuccess(course._id, response.data.feedback);
 
             // Close the modal after a short delay to show success message
-            setTimeout(onClose, 3000); 
-            
+            setTimeout(onClose, 3000);
+
         } catch (err) {
             console.error('Feedback submission error:', err.response?.data || err.message);
             setError(err.response?.data?.message || 'Failed to submit feedback. Please ensure you are logged in.');
@@ -109,7 +109,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
 
     const renderForm = () => (
         <form onSubmit={handleSubmit} className="space-y-5">
-            
+
             {/* Course / Teacher Details (Read-only) */}
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm shadow-inner">
                 <p className="font-bold text-gray-800">Class Details</p>
@@ -122,31 +122,31 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
             <h3 className="text-xl font-bold text-gray-800 flex items-center border-b pb-2">
                 <Star className="w-5 h-5 mr-2 text-yellow-500" /> Class Experience Rating
             </h3>
-            
+
             {/* Clarity */}
             <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">How was the teacher’s clarity?</label>
-                <StarRating 
-                    value={formData.clarityRating} 
-                    onChange={(val) => handleRatingChange('clarityRating', val)} 
+                <StarRating
+                    value={formData.clarityRating}
+                    onChange={(val) => handleRatingChange('clarityRating', val)}
                 />
             </div>
-            
+
             {/* Engagement */}
             <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">How engaging was the class?</label>
-                <StarRating 
-                    value={formData.engagingRating} 
-                    onChange={(val) => handleRatingChange('engagingRating', val)} 
+                <StarRating
+                    value={formData.engagingRating}
+                    onChange={(val) => handleRatingChange('engagingRating', val)}
                 />
             </div>
-            
+
             {/* Content */}
             <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">How was the course content?</label>
-                <StarRating 
-                    value={formData.contentRating} 
-                    onChange={(val) => handleRatingChange('contentRating', val)} 
+                <StarRating
+                    value={formData.contentRating}
+                    onChange={(val) => handleRatingChange('contentRating', val)}
                 />
             </div>
 
@@ -165,7 +165,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
                     onChange={handleChange}
                     // Tailwind for custom slider track/thumb
                     className="w-full h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer range-lg transition-colors"
-                    style={{'--range-thumb-color': '#4f46e5'}}
+                    style={{ '--range-thumb-color': '#4f46e5' }}
                 />
             </div>
 
@@ -173,7 +173,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
             <h3 className="text-xl font-bold text-gray-800 flex items-center border-b pb-2 pt-4">
                 <MessageSquare className="w-5 h-5 mr-2 text-indigo-500" /> Open Feedback
             </h3>
-            
+
             {[
                 { id: 'likes', label: 'What did you like about the class?' },
                 { id: 'improvements', label: 'What can be improved?' },
@@ -181,10 +181,11 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
             ].map(({ id, label }) => (
                 <div key={id}>
                     <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
-                    <textarea 
+                    <textarea
                         id={id}
                         name={id}
                         rows="3"
+                        maxLength={500}
                         value={formData[id]}
                         onChange={handleChange}
                         className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
@@ -193,7 +194,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
             ))}
 
             {error && <p className="bg-red-100 text-red-700 p-3 rounded-lg text-sm font-medium mt-3">{error}</p>}
-            
+
             {/* Submit Button (Styled to match AssessmentModal interactive look) */}
             <button
                 type="submit"
@@ -231,7 +232,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
     return (
         // Modal Container with blurred background and interactive feel
         <div className="fixed inset-0 z-50 overflow-y-auto backdrop-blur-sm bg-black/30 flex items-start justify-center p-4 md:items-start pt-4 md:pt-32 pb-8 mt-20 md:mt-0">
-             <style jsx="true">{`
+            <style jsx="true">{`
                 .custom-scroll::-webkit-scrollbar {
                     width: 8px;
                 }

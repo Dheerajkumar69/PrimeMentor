@@ -2,8 +2,8 @@
 
 import React, { useContext, useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
-import { SignedIn, SignedOut, RedirectToSignIn, useUser } from '@clerk/clerk-react'; 
-import { Toaster } from 'react-hot-toast'; 
+import { SignedIn, SignedOut, RedirectToSignIn, useUser } from '@clerk/clerk-react';
+import { Toaster } from 'react-hot-toast';
 
 // --- STATIC IMPORTS (Necessary for App Shell or Modals) ---
 import { AppContext } from './context/AppContext.jsx';
@@ -11,7 +11,7 @@ import TeacherLogin from './components/TeacherPanel/TeacherLogin.jsx';
 import AdminLogin from './components/AdminPanel/AdminLogin.jsx';
 import AssessmentModal from './components/Booking/AssessmentModal.jsx';
 import AssessmentCallout from './components/Home/AssessmentCallout.jsx';
-import Header from './components/Home/Header.jsx'; 
+import Header from './components/Home/Header.jsx';
 import Footer from './components/Home/Footer.jsx';
 // --- NEW IMPORT: Chatbot Widget ---
 import ChatbotWidget from './components/Chatbot/ChatbotWidget.jsx';
@@ -20,20 +20,21 @@ import ScrollToTop from './components/Home/ScrollToTop.jsx'; // <-- IMPORT Scrol
 
 // --- DYNAMIC IMPORTS (Lazy Loading for Page Routes) ---
 const Home = lazy(() => import('./pages/Home.jsx'));
-const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard.jsx')); 
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard.jsx'));
 const Booking = lazy(() => import('./pages/Booking.jsx'));
-const MyCourses = lazy(() => import('./pages/MyCourses.jsx')); 
-const ContactPage = lazy(() => import('./pages/ContactPage.jsx')); 
-const FaqPage = lazy(() => import('./pages/FaqPage.jsx')); 
-const HelpCenterPage = lazy(() => import('./pages/HelpCenterPage.jsx')); 
-const SupportPage = lazy(() => import('./pages/SupportPage.jsx')); 
-const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx')); 
-const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage.jsx')); 
-const RefundPolicyPage = lazy(() => import('./pages/RefundPolicyPage.jsx')); 
-const Courses = lazy(() => import('./pages/Courses.jsx')); 
+const MyCourses = lazy(() => import('./pages/MyCourses.jsx'));
+const ContactPage = lazy(() => import('./pages/ContactPage.jsx'));
+const FaqPage = lazy(() => import('./pages/FaqPage.jsx'));
+const HelpCenterPage = lazy(() => import('./pages/HelpCenterPage.jsx'));
+const SupportPage = lazy(() => import('./pages/SupportPage.jsx'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx'));
+const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage.jsx'));
+const RefundPolicyPage = lazy(() => import('./pages/RefundPolicyPage.jsx'));
+const Courses = lazy(() => import('./pages/Courses.jsx'));
 const Enrollment = lazy(() => import('./components/Enrollment/Enrollment.jsx'));
 const AdminDashboard = lazy(() => import('./components/AdminPanel/AdminDashboard.jsx'));
 const PaymentSuccessRedirect = lazy(() => import('./pages/PaymentSuccessRedirect.jsx'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'));
 
 // --------------------------------------------------------
 // --- UTILITY COMPONENTS ---
@@ -70,22 +71,22 @@ const AdminRouteGuard = ({ isAuthenticated, children }) => {
 const App = () => {
     const { isSignedIn, isLoaded } = useUser();
     const location = useLocation();
-    
-    const { showTeacherLogin, setShowTeacherLogin } = useContext(AppContext); 
-    
+
+    const { showTeacherLogin, setShowTeacherLogin, teacherToken } = useContext(AppContext);
+
     const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
         !!localStorage.getItem('adminAuthenticated')
     );
 
     const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
-    const [isAssessmentCalloutOpen, setIsAssessmentCalloutOpen] = useState(false); 
+    const [isAssessmentCalloutOpen, setIsAssessmentCalloutOpen] = useState(false);
 
     // --- Authentication and Context Handlers (unchanged) ---
     useEffect(() => {
         const checkAuth = () => {
             setIsAdminAuthenticated(!!localStorage.getItem('adminAuthenticated'));
         };
-        checkAuth(); 
+        checkAuth();
         const handleStorageChange = (e) => {
             if (e.key === 'adminAuthenticated') {
                 setIsAdminAuthenticated(e.newValue === 'true');
@@ -93,45 +94,45 @@ const App = () => {
         };
         window.addEventListener('storage', handleStorageChange);
         return () => { window.removeEventListener('storage', handleStorageChange); };
-    }, []); 
+    }, []);
 
     useEffect(() => {
-        if (!isLoaded) return; 
+        if (!isLoaded) return;
         const isHomePage = window.location.pathname === '/';
         if (isHomePage && !isSignedIn) {
             setIsAssessmentCalloutOpen(true);
         } else {
             setIsAssessmentCalloutOpen(false);
         }
-    }, [isLoaded, isSignedIn]); 
+    }, [isLoaded, isSignedIn]);
 
     const handleCalloutBook = () => {
         setIsAssessmentCalloutOpen(false);
-        setIsAssessmentModalOpen(true); 
+        setIsAssessmentModalOpen(true);
     };
 
     const handleAdminLogout = () => {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminAuthenticated');
         setIsAdminAuthenticated(false);
-        window.location.href = '/admin/login'; 
+        window.location.href = '/admin/login';
     };
 
     const handleSubmissionComplete = useCallback((data) => {
         console.log("New Assessment Request successfully submitted to DB:", data);
     }, []);
     // --- End Handlers ---
-    
+
     // Logic to hide the main site Header/Footer on specific routes (dashboards, login pages)
     const hideNavPaths = [
-        '/teacher/dashboard', 
-        '/admin/login', 
+        '/teacher/dashboard',
+        '/admin/login',
         '/admin/dashboard',
         '/booking',
         '/enrollment',
-        '/payment-status'     
+        '/payment-status'
     ];
-    
+
     const shouldHideNav = showTeacherLogin || hideNavPaths.some(path => location.pathname.startsWith(path));
 
     // The state is still needed to block pointer events on the background
@@ -141,18 +142,18 @@ const App = () => {
     return (
         <div className="min-h-screen bg-white">
             <Toaster position="top-center" reverseOrder={false} />
-            
+
             {/* 1. SCROLL TO TOP INTEGRATION: Must be placed inside the component 
                so it can access the useLocation() hook from react-router-dom. */}
-            <ScrollToTop /> 
+            <ScrollToTop />
             {/* ------------------------------------------------------------ */}
-            
+
             {/* Modals are placed outside the main content flow */}
             {showTeacherLogin && <TeacherLogin setShowTeacherLogin={setShowTeacherLogin} />}
-            <AssessmentModal 
-                isOpen={isAssessmentModalOpen} 
-                onClose={() => setIsAssessmentModalOpen(false)} 
-                onSubmissionComplete={handleSubmissionComplete} 
+            <AssessmentModal
+                isOpen={isAssessmentModalOpen}
+                onClose={() => setIsAssessmentModalOpen(false)}
+                onSubmissionComplete={handleSubmissionComplete}
             />
 
             {/* --- INTEGRATION: Chatbot Widget is placed here, floating above all content --- */}
@@ -160,10 +161,10 @@ const App = () => {
 
             {/* Main Content Wrapper: Disables pointer events when a full-screen modal is open */}
             <div className={`relative z-10 ${isModalOpen ? 'pointer-events-none' : ''}`}>
-                
+
                 {/* Header and Assessment Callout are STATIC imports */}
-                {!shouldHideNav && <Header />}        
-                
+                {!shouldHideNav && <Header />}
+
                 <AssessmentCallout
                     isOpen={isAssessmentCalloutOpen}
                     onClose={() => setIsAssessmentCalloutOpen(false)}
@@ -173,41 +174,48 @@ const App = () => {
                 {/* Wrap all Routes with Suspense for lazy loading */}
                 <Suspense fallback={<Fallback />}>
                     <Routes>
-                        <Route 
-                            path="/" 
-                            element={<Home setIsAssessmentModalOpen={setIsAssessmentModalOpen} />} 
+                        <Route
+                            path="/"
+                            element={<Home setIsAssessmentModalOpen={setIsAssessmentModalOpen} />}
                         />
-                        
+
                         {/* Public Pages (Now Lazy Loaded) */}
-                        <Route path="/courses" element={<Courses />} /> 
+                        <Route path="/courses" element={<Courses />} />
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/faq" element={<FaqPage />} />
                         <Route path="/help-center" element={<HelpCenterPage />} />
                         <Route path="/support" element={<SupportPage />} />
                         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                         <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-                        <Route path="/refund-policy" element={<RefundPolicyPage />} /> 
-                        
+                        <Route path="/refund-policy" element={<RefundPolicyPage />} />
+
                         {/* Auth & Protected Pages (Now Lazy Loaded) */}
                         <Route path="/admin/login" element={<AdminLogin setAdminAuthenticated={setIsAdminAuthenticated} />} />
-                        
-                        <Route 
-                            path="/admin/dashboard" 
+
+                        <Route
+                            path="/admin/dashboard"
                             element={
                                 <AdminRouteGuard isAuthenticated={isAdminAuthenticated}>
                                     <AdminDashboard onLogout={handleAdminLogout} />
                                 </AdminRouteGuard>
-                            } 
+                            }
                         />
 
-                        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-                        
+                        <Route
+                            path="/teacher/dashboard"
+                            element={
+                                teacherToken
+                                    ? <TeacherDashboard />
+                                    : <Navigate to="/" replace />
+                            }
+                        />
+
                         {/* Clerk Protected Routes (Wrapped around Lazy Loaded Components) */}
                         <Route path="/booking" element={
                             <SignedIn><Booking /></SignedIn>
                         } />
                         <Route path="/booking" element={<SignedOut><RedirectToSignIn /></SignedOut>} />
-                        
+
                         <Route path="/enrollment" element={
                             <SignedIn><Enrollment /></SignedIn>
                         } />
@@ -222,7 +230,10 @@ const App = () => {
                             <SignedIn><MyCourses /></SignedIn>
                         } />
                         <Route path="/my-courses" element={<SignedOut><RedirectToSignIn /></SignedOut>} />
-                        
+
+                        {/* 404 Catch-All Route */}
+                        <Route path="*" element={<NotFoundPage />} />
+
                     </Routes>
                 </Suspense>
             </div>

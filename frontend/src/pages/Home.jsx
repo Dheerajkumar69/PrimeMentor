@@ -1,5 +1,4 @@
 import React from 'react';
-import Header from '../components/Home/Header.jsx';
 import HeroSection from '../components/Home/HeroSection.jsx';
 import ReasonsSection from '../components/Home/ReasonsSection.jsx';
 import HowItWorksSection from '../components/Home/HowItWorksSection.jsx';
@@ -21,22 +20,21 @@ import Footer from '../components/Home/Footer.jsx'; // Assuming Footer is in thi
 const Home = ({ setIsAssessmentModalOpen }) => {
   return (
     <div>
-        {/* Header is the fixed navigation bar */}
-        <Header />
-        
-        {/* The HeroSection is a direct child of the Home page */}
-        <HeroSection setIsAssessmentModalOpen={setIsAssessmentModalOpen} />
-        
-        {/* Other components of the Home page */}
-        <PricingSection />
-        <ReasonsSection />
-        <HowItWorksSection />
-        <TestimonialsSection />
-        <SocialProofSection />
-        <NewsletterSection />
-        {/* <ContactSection /> */}
-        {/* <Footer /> */}
-        {/* <CookieBanner /> */}
+      {/* Header is managed by App.jsx — not rendered here to avoid double-render */}
+
+      {/* The HeroSection is a direct child of the Home page */}
+      <HeroSection setIsAssessmentModalOpen={setIsAssessmentModalOpen} />
+
+      {/* Other components of the Home page */}
+      <PricingSection />
+      <ReasonsSection />
+      <HowItWorksSection />
+      <TestimonialsSection />
+      <SocialProofSection />
+      <NewsletterSection />
+      {/* <ContactSection /> */}
+      {/* <Footer /> */}
+      <CookieBanner />
     </div>
   );
 };

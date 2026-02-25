@@ -33,7 +33,7 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                     ...prev,
                     phone: contactNumber || ''
                 }));
-                
+
                 if (guardianDetails.first && guardianDetails.email) {
                     setGuardianDetails(prev => ({
                         ...prev,
@@ -47,11 +47,14 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
     }, [quizData, setStudentDetails, setGuardianDetails]);
 
 
+    // Helper for basic email validation
+    const isValidEmail = (email) => email && email.includes('@') && email.includes('.');
+
     // Determine if all required fields are filled to enable the button
-    const isNextDisabled = !studentDetails.first || !studentDetails.last || !studentDetails.email ||
-        !guardianDetails.first || !guardianDetails.last || !guardianDetails.email ||
+    const isNextDisabled = !studentDetails.first || !studentDetails.last || !isValidEmail(studentDetails.email) ||
+        !guardianDetails.first || !guardianDetails.last || !isValidEmail(guardianDetails.email) ||
         !guardianDetails.phone;
-        
+
     // 🛑 NEW HANDLER: Pass current state to parent before moving to the next step
     const handleNextClick = () => {
         onNext(studentDetails, guardianDetails);
@@ -68,7 +71,8 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                         id="studentFirstName"
                         placeholder="First Name"
                         value={studentDetails.first}
-                        onChange={(e) => setStudentDetails({ ...studentDetails, first: e.target.value })}
+                        onChange={(e) => setStudentDetails({ ...studentDetails, first: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
+                        maxLength={50}
                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                     />
                 </div>
@@ -79,7 +83,8 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                         id="studentLastName"
                         placeholder="Last Name"
                         value={studentDetails.last}
-                        onChange={(e) => setStudentDetails({ ...studentDetails, last: e.target.value })}
+                        onChange={(e) => setStudentDetails({ ...studentDetails, last: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
+                        maxLength={50}
                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                     />
                 </div>
@@ -91,6 +96,7 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                         placeholder="example@gmail.com"
                         value={studentDetails.email}
                         onChange={(e) => setStudentDetails({ ...studentDetails, email: e.target.value })}
+                        maxLength={254}
                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                     />
                     <p className="text-xs text-gray-500 mt-1">You consent to receive emails from us.</p>
@@ -107,7 +113,8 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                             id="guardianFirstName"
                             placeholder="First Name"
                             value={guardianDetails.first}
-                            onChange={(e) => setGuardianDetails({ ...guardianDetails, first: e.target.value })}
+                            onChange={(e) => setGuardianDetails({ ...guardianDetails, first: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
+                            maxLength={50}
                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                         />
                     </div>
@@ -118,7 +125,8 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                             id="guardianLastName"
                             placeholder="Last Name"
                             value={guardianDetails.last}
-                            onChange={(e) => setGuardianDetails({ ...guardianDetails, last: e.target.value })}
+                            onChange={(e) => setGuardianDetails({ ...guardianDetails, last: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
+                            maxLength={50}
                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                         />
                     </div>
@@ -130,6 +138,7 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                             placeholder="guardian@example.com"
                             value={guardianDetails.email}
                             onChange={(e) => setGuardianDetails({ ...guardianDetails, email: e.target.value })}
+                            maxLength={254}
                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                         />
                     </div>
@@ -141,7 +150,8 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                             id="guardianPhone"
                             placeholder="e.g., +61 412 345 678"
                             value={guardianDetails.phone}
-                            onChange={(e) => setGuardianDetails({ ...guardianDetails, phone: e.target.value })}
+                            onChange={(e) => setGuardianDetails({ ...guardianDetails, phone: e.target.value.replace(/[^\d+\s()-]/g, '') })}
+                            maxLength={20}
                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                         />
                     </div>

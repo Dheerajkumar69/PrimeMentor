@@ -16,6 +16,18 @@ export const protectTeacher = async (req, res, next) => {
 
     if (!teacher) return res.status(401).json({ message: 'Teacher not found' });
 
+    // Double-check approval status on every request.
+    // This catches tokens that were issued before this middleware was hardened,
+    // and immediately locks out any teacher whose status is later changed to
+    // 'pending' or 'rejected' by an admin WITHOUT waiting for token expiry.
+    if (teacher.status !== 'approved') {
+        return res.status(403).json({
+            message: teacher.status === 'rejected'
+                ? 'Your application has been rejected. Please contact support.'
+                : 'Your account is pending admin approval. Please wait for your account to be reviewed.',
+        });
+    }
+
     req.user = teacher;
     next();
   } catch (err) {

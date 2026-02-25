@@ -59,33 +59,7 @@ export default function ContactSection({ onBookFreeAssessment }) {
             </p>
 
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (onBookFreeAssessment) onBookFreeAssessment(); }}>
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Your Name"
-                  className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-full border-none focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                />
-              </div>
-
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                <input
-                  type="email"
-                  placeholder="Your Email"
-                  className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-full border-none focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                />
-              </div>
-
-              <div className="relative group">
-                <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Your Subject"
-                  className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-full border-none focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                />
-              </div>
-
+              <p className="text-gray-500 text-base mb-4">Click below to fill out a quick assessment form and we'll match you with the perfect tutor.</p>
               <button className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold hover:shadow-lg transition transform hover:scale-[1.02] active:scale-100 animate-[pulse-ring_2s_infinite]">
                 Book Free Assessment
               </button>

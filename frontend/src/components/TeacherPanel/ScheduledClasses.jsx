@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import { Calendar, Clock, Loader2, Zap } from "lucide-react";
 // CRITICAL IMPORT: Timezone utility
-import { convertAuTimeToIndiaDisplay } from "../../utils/dateUtils.js"; 
+import { convertAuTimeToIndiaDisplay } from "../../utils/dateUtils.js";
 
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
@@ -12,14 +12,14 @@ const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhos
 const parseClassDateTime = (classData) => {
     // preferredDate is the Australian YYYY-MM-DD string
     if (!classData.preferredDate || !classData.scheduleTime) return null;
-    
+
     try {
         // We rely on the date string being YYYY-MM-DD (Australian Date)
         const dateParts = classData.preferredDate.split("-").map(Number);
         const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
         if (isNaN(dateObj.getTime())) return null;
-        
+
         // 1. Safely extract the first part of the time string (e.g., '4:00pm')
         const timeString12h = classData.scheduleTime.split(' - ')[0];
 
@@ -35,7 +35,7 @@ const parseClassDateTime = (classData) => {
         if (period === 'am' && timeHours === 12) {
             timeHours = 0;
         }
-            
+
         // 3. Create a Date object interpreted as the Australian local moment
         const classStart = new Date(
             dateObj.getFullYear(),
@@ -64,7 +64,7 @@ const isClassInPast = (classData) => {
     // to the local time, but to avoid relying on complex client-side TZ conversion, 
     // we assume the local browser time is IST for the teacher, and rely on the string 
     // manipulation for display.
-    return times.classEndTime < new Date(); 
+    return times.classEndTime < new Date();
 };
 
 const ScheduledClasses = () => {
@@ -77,13 +77,13 @@ const ScheduledClasses = () => {
             setLoading(true);
             setError(null);
             const token = localStorage.getItem('teacherToken');
-            
+
             const res = await axios.get(`${getBackendUrl()}/api/teacher/class-requests`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {}
             });
-            
+
             if (res.data.success) {
-                setAssignedClasses(res.data.requests); 
+                setAssignedClasses(res.data.requests);
             }
             else setError(res.data.message || 'Failed to fetch assigned classes.');
         } catch (err) {
@@ -94,7 +94,7 @@ const ScheduledClasses = () => {
 
     useEffect(() => {
         fetchAllAssignedClasses();
-        const dataInterval = setInterval(fetchAllAssignedClasses, 60000); 
+        const dataInterval = setInterval(fetchAllAssignedClasses, 60000);
         return () => clearInterval(dataInterval);
     }, [fetchAllAssignedClasses]);
 
@@ -131,7 +131,7 @@ const ScheduledClasses = () => {
     const ScheduleBlock = ({ course }) => {
         // CRITICAL FIX: Convert the Australian time string to Indian time for the teacher
         const indianTimeDisplay = convertAuTimeToIndiaDisplay(course.preferredDate, course.scheduleTime);
-        
+
         return (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 shadow-md hover:shadow-lg transition cursor-pointer">
                 <p className="text-sm font-semibold text-blue-800">{course.courseTitle}</p>
@@ -155,30 +155,30 @@ const ScheduledClasses = () => {
         <div className="space-y-6">
             <div className="text-base sm:text-lg font-semibold text-gray-700 flex items-center">
                 <Calendar className="w-5 h-5 mr-2 text-indigo-500" />
-                Your Upcoming Schedule (All times shown in **Indian Time**)
+                Your Upcoming Schedule (All times shown in <strong className="ml-1">Indian Time</strong>)
             </div>
             {/* ... (rest of the component remains the same, using the updated ScheduleBlock) ... */}
             {days.length > 0 ? (
                 <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden shadow-lg">
                     {days.map(day => {
-                    const parts = day.split(',');
-                    const weekday = parts[0] || day;
-                    const rest = parts.slice(1).join(',').trim() || ''; 
-                    
-                    return (
-                        <div key={day} className="p-4 bg-white hover:bg-gray-50 transition sm:flex">
-                            <div className="sm:w-1/4 flex-shrink-0 mb-3 sm:mb-0 sm:pr-4">
-                                <p className="text-lg font-bold text-gray-800 border-b sm:border-b-0 pb-1">{weekday}</p>
-                                <p className="text-xs text-gray-500">{rest}</p>
+                        const parts = day.split(',');
+                        const weekday = parts[0] || day;
+                        const rest = parts.slice(1).join(',').trim() || '';
+
+                        return (
+                            <div key={day} className="p-4 bg-white hover:bg-gray-50 transition sm:flex">
+                                <div className="sm:w-1/4 flex-shrink-0 mb-3 sm:mb-0 sm:pr-4">
+                                    <p className="text-lg font-bold text-gray-800 border-b sm:border-b-0 pb-1">{weekday}</p>
+                                    <p className="text-xs text-gray-500">{rest}</p>
+                                </div>
+                                <div className="sm:w-3/4 flex flex-wrap gap-4 pt-2 sm:pt-0">
+                                    {scheduledClassesByDay[day].map((course, index) => (
+                                        <ScheduleBlock key={index} course={course} />
+                                    ))}
+                                </div>
                             </div>
-                            <div className="sm:w-3/4 flex flex-wrap gap-4 pt-2 sm:pt-0">
-                                {scheduledClassesByDay[day].map((course, index) => (
-                                    <ScheduleBlock key={index} course={course} />
-                                ))}
-                            </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">

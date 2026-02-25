@@ -8,7 +8,7 @@ const NewsletterSection = () => {
 
     const handleSubscribe = (e) => {
         e.preventDefault();
-        if (email && email.includes('@')) {
+        if (email && /\S+@\S+\.\S+/.test(email.trim())) {
             setSubscribed(true);
             setEmail('');
         }

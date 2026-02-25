@@ -325,11 +325,11 @@ export default function Enrollment() {
                         <span className="text-xl sm:text-2xl font-bold text-orange-500">ENROLMENT</span>
                     </div>
                     <div className="flex items-center space-x-4 sm:space-x-6 text-gray-400 font-medium text-sm md:text-base">
-                        <div onClick={() => setStep(1)} className={`flex items-center cursor-pointer ${step === 1 ? 'text-orange-500' : ''}`}>
+                        <div onClick={() => { if (step > 1) setStep(1); }} className={`flex items-center ${step > 1 ? 'cursor-pointer' : ''} ${step === 1 ? 'text-orange-500' : ''}`}>
                             <span className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mr-1 sm:mr-2 ${step === 1 ? 'bg-orange-500 text-white' : 'border-2 border-gray-300'}`}>1</span>
                             <span className="hidden xs:inline">Account</span>
                         </div>
-                        <div onClick={() => setStep(2)} className={`flex items-center cursor-pointer ${step === 2 ? 'text-orange-500' : ''}`}>
+                        <div onClick={() => { if (step > 2) setStep(2); }} className={`flex items-center ${step > 2 ? 'cursor-pointer' : ''} ${step === 2 ? 'text-orange-500' : ''}`}>
                             <span className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mr-1 sm:mr-2 ${step === 2 ? 'bg-orange-500 text-white' : 'border-2 border-gray-300'}`}>2</span>
                             <span className="hidden xs:inline">Schedule</span>
                         </div>

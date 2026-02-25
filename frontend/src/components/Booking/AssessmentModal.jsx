@@ -83,9 +83,23 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        let sanitized = value;
+
+        // Real-time input filtering by field type
+        if (name === 'contactNumber' || name === 'studentPhone') {
+            // Phone: only allow digits, +, spaces, hyphens, parentheses
+            sanitized = value.replace(/[^\d+\s()-]/g, '');
+        } else if (['studentFirstName', 'studentLastName', 'parentFirstName', 'parentLastName'].includes(name)) {
+            // Names: only letters, spaces, hyphens, apostrophes
+            sanitized = value.replace(/[^a-zA-Z\s'-]/g, '');
+        } else if (name === 'postalCode') {
+            // Postal code: only alphanumeric and spaces
+            sanitized = value.replace(/[^a-zA-Z0-9\s]/g, '');
+        }
+
         setFormData(prev => ({
             ...prev,
-            [name]: name === 'class' ? parseInt(value) : value // Ensure class is a number for DB
+            [name]: name === 'class' ? parseInt(sanitized) : sanitized
         }));
         if (validationError) setValidationError('');
     };
@@ -98,8 +112,16 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
         ];
 
         for (const field of requiredFields) {
-            if (!formData[field] || !formData[field].trim()) {
+            if (!formData[field] || !formData[field].toString().trim()) {
                 return `Please fill in the required field: ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`;
+            }
+        }
+
+        // Name fields: minimum 2 characters
+        const nameFields = ['studentFirstName', 'studentLastName', 'parentFirstName', 'parentLastName'];
+        for (const field of nameFields) {
+            if (formData[field].trim().length < 2) {
+                return `${field.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())} must be at least 2 characters.`;
             }
         }
 
@@ -110,13 +132,32 @@ export default function AssessmentModal({ isOpen, onClose, onSubmissionComplete 
             return 'Please enter a valid parent email address.';
         }
 
-        // Validate phone numbers — only allow digits, +, spaces, hyphens, parentheses
+        // Validate phone numbers — only digits, +, spaces, hyphens, parentheses
         const phoneRegex = /^[\d+\s()-]+$/;
+        const digitsOnly = (str) => str.replace(/\D/g, '').length;
+
         if (!phoneRegex.test(formData.contactNumber.trim())) {
             return 'Contact number can only contain digits, +, spaces, hyphens, and parentheses.';
         }
-        if (formData.studentPhone && formData.studentPhone.trim() && !phoneRegex.test(formData.studentPhone.trim())) {
-            return 'Student phone number can only contain digits, +, spaces, hyphens, and parentheses.';
+        if (digitsOnly(formData.contactNumber) < 7) {
+            return 'Contact number must have at least 7 digits.';
+        }
+        if (digitsOnly(formData.contactNumber) > 15) {
+            return 'Contact number cannot exceed 15 digits.';
+        }
+
+        if (formData.studentPhone && formData.studentPhone.trim()) {
+            if (!phoneRegex.test(formData.studentPhone.trim())) {
+                return 'Student phone number can only contain digits, +, spaces, hyphens, and parentheses.';
+            }
+            if (digitsOnly(formData.studentPhone) < 7) {
+                return 'Student phone number must have at least 7 digits.';
+            }
+        }
+
+        // Postal code: at least 3 characters
+        if (formData.postalCode.trim().length < 3) {
+            return 'Postal / ZIP code must be at least 3 characters.';
         }
 
         return null;

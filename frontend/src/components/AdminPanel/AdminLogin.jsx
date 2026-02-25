@@ -94,7 +94,7 @@ export default function AdminLogin({ setAdminAuthenticated }) {
                             <input
                                 id="password"
                                 type={showPassword ? "text" : "password"} // Conditional type
-                                placeholder="admin@123"
+                                placeholder="Password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 transition duration-150 pr-10" // Added pr-10 for button

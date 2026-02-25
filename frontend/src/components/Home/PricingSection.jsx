@@ -41,12 +41,27 @@ export default function PricingSection() {
         fetchPricing();
     }, [backendUrl]);
 
+    // Pending flow data for after sign-in
+    const [pendingFlowData, setPendingFlowData] = useState(null);
+
     const handleButtonClick = (classRange, price) => {
         if (isSignedIn) {
             setInitialClassFlowData({ initialClassRange: classRange, basePrice: price });
             setIsModalOpen(true);
+        } else {
+            // Store the intended flow data so we can resume after sign-in
+            setPendingFlowData({ initialClassRange: classRange, basePrice: price });
         }
     };
+
+    // After sign-in completes, check if there's a pending flow to resume
+    useEffect(() => {
+        if (isSignedIn && pendingFlowData) {
+            setInitialClassFlowData(pendingFlowData);
+            setIsModalOpen(true);
+            setPendingFlowData(null);
+        }
+    }, [isSignedIn, pendingFlowData]);
 
     const closeModal = () => {
         setIsModalOpen(false);
@@ -113,30 +128,33 @@ export default function PricingSection() {
                             Complete a quick questionnaire (in less than 1 minute) to determine your ideal learning package.
                         </p>
 
-                        {/* Responsive Button Layout */}
+                        {/* Responsive Button Layout — Visible to ALL users */}
                         <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
                             {loadingPrices ? (
                                 <Loader className="w-8 h-8 text-orange-400 animate-spin mx-auto" />
-                            ) : isSignedIn ? (
+                            ) : (
                                 <>
                                     {buttons.map((button) => (
-                                        <button
-                                            key={button.range}
-                                            className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
-                                            onClick={() => handleButtonClick(button.range, button.price)}
-                                        >
-                                            View Pricing for {button.label}
-                                        </button>
+                                        isSignedIn ? (
+                                            <button
+                                                key={button.range}
+                                                className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
+                                                onClick={() => handleButtonClick(button.range, button.price)}
+                                            >
+                                                View Pricing for {button.label}
+                                            </button>
+                                        ) : (
+                                            <SignInButton key={button.range} mode="modal">
+                                                <button
+                                                    className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
+                                                    onClick={() => handleButtonClick(button.range, button.price)}
+                                                >
+                                                    View Pricing for {button.label}
+                                                </button>
+                                            </SignInButton>
+                                        )
                                     ))}
                                 </>
-                            ) : (
-                                <SignInButton mode="modal">
-                                    <button
-                                        className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-12 rounded-full shadow-2xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
-                                    >
-                                        Login to Start Pricing Flow
-                                    </button>
-                                </SignInButton>
                             )}
                         </div>
                     </div>

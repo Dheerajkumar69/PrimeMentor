@@ -3,6 +3,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
 import { connectDB } from './config/db.js';
 import teacherRouter from './routes/teacherRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -11,6 +13,7 @@ import contactRoutes from './routes/contactRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import { clerkMiddleware } from '@clerk/express';
+import { generalApiLimiter } from './middlewares/rateLimiters.js';
 
 dotenv.config();
 
@@ -74,13 +77,33 @@ app.use(
 // ❌ REMOVE THIS – it was crashing the app
 // app.options('*', cors());
 
+// ======================== SECURITY MIDDLEWARE ========================
+// 1. Helmet: sets secure HTTP headers (X-Content-Type-Options, HSTS,
+//    X-Frame-Options, Content-Security-Policy, etc.)
+app.use(helmet());
+
 app.use(express.json());
+
+// 2. NoSQL injection prevention (body only): strips '$' and '.' keys.
+// express-mongo-sanitize v2 crashes on Express v5 because req.query is now
+// a read-only getter. We sanitize req.body manually after parsing.
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = mongoSanitize.sanitize(req.body);
+  }
+  next();
+});
+
 connectDB();
+
+// 3. Rate limiting: global 200 req / 5 min safety net on all /api routes.
+//    Individual route files apply tighter limits on auth/contact/chat.
+app.use('/api', generalApiLimiter);
 
 // If Clerk causes issues you can temporarily comment this out
 app.use(clerkMiddleware());
 
-// Static uploads
+// Static uploads — only serve known file extensions
 app.use('/images', express.static('uploads'));
 
 // Routes

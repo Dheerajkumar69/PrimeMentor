@@ -6,16 +6,16 @@ import React, { useState, useRef, useEffect } from 'react';
 const ChatbotWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { 
-      id: Date.now(), 
-      text: "Hi there! I'm PrimeMentor, your virtual assistant. Ask me anything about classes, teachers, or payments!", 
-      sender: 'bot' 
+    {
+      id: Date.now(),
+      text: "Hi there! I'm PrimeMentor, your virtual assistant. Ask me anything about classes, teachers, or payments!",
+      sender: 'bot'
     }
   ]);
   const [input, setInput] = useState('');
   const [isBotTyping, setIsBotTyping] = useState(false); // New state for typing indicator
   const messagesEndRef = useRef(null);
-  
+
   // Use a stable, unique ID for the session. 
   // For a basic bot, a local storage key works. For a logged-in user, use their Clerk ID.
   const CHAT_USER_ID = localStorage.getItem('chatUserId') || `guest-${Date.now()}`;
@@ -33,7 +33,8 @@ const ChatbotWidget = () => {
   const sendToAI = async (userMessage) => {
     setIsBotTyping(true); // Show typing indicator
     try {
-      const response = await fetch('/api/chat/message', {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/chat/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -65,7 +66,7 @@ const ChatbotWidget = () => {
     if (input.trim() === '' || isBotTyping) return;
 
     const userMessage = input.trim();
-    
+
     // 1. Add user message
     setMessages(prev => [...prev, { id: Date.now() + 1, text: userMessage, sender: 'user' }]);
     setInput('');
@@ -85,51 +86,50 @@ const ChatbotWidget = () => {
         className="fixed bottom-24 right-7 z-50 p-4 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition duration-300 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"
         aria-label={isOpen ? "Close Chatbot" : "Open Chatbot"}
       >
-        <span className="text-2xl"><img src="https://img.icons8.com/?size=100&id=9inONWn9EvfI&format=png&color=000000" alt="" height={35} width={35}  /></span> 
+        <span className="text-2xl"><img src="https://img.icons8.com/?size=100&id=9inONWn9EvfI&format=png&color=000000" alt="" height={35} width={35} /></span>
       </button>
 
       {/* --- Chat Window (Fixed Position: bottom-32, remains same) --- */}
       {isOpen && (
         <div className="fixed bottom-42 right-6 w-80 h-96 bg-white border border-gray-200 rounded-lg shadow-2xl flex flex-col z-50">
-          
+
           {/* Header */}
           <div className="p-4 bg-indigo-600 text-white rounded-t-lg flex justify-between items-center">
             <h3 className="text-lg font-semibold">PrimeMentor AI</h3>
             <button onClick={() => setIsOpen(false)} className="text-white hover:text-indigo-200" aria-label="Close Chat">
-                <span className="text-xl">✕</span>
+              <span className="text-xl">✕</span>
             </button>
           </div>
 
           {/* Messages Area */}
           <div className="flex-1 p-4 space-y-3 overflow-y-auto custom-scrollbar">
             {messages.map((message) => (
-              <div 
-                key={message.id} 
+              <div
+                key={message.id}
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div 
-                  className={`max-w-[75%] px-3 py-2 rounded-xl text-sm shadow-md ${
-                    message.sender === 'user' 
-                      ? 'bg-indigo-500 text-white rounded-br-none' 
+                <div
+                  className={`max-w-[75%] px-3 py-2 rounded-xl text-sm shadow-md ${message.sender === 'user'
+                      ? 'bg-indigo-500 text-white rounded-br-none'
                       : 'bg-gray-100 text-gray-800 rounded-tl-none'
-                  }`}
+                    }`}
                 >
                   {message.text}
                 </div>
               </div>
             ))}
-            
+
             {/* New: Typing Indicator */}
             {isBotTyping && (
-                <div className="flex justify-start">
-                    <div className="bg-gray-100 text-gray-800 rounded-xl rounded-tl-none px-3 py-2 text-sm max-w-[75%] shadow-md">
-                        <div className="flex space-x-1">
-                            <span className="animate-bounce-dot text-lg">.</span>
-                            <span className="animate-bounce-dot text-lg animation-delay-200">.</span>
-                            <span className="animate-bounce-dot text-lg animation-delay-400">.</span>
-                        </div>
-                    </div>
+              <div className="flex justify-start">
+                <div className="bg-gray-100 text-gray-800 rounded-xl rounded-tl-none px-3 py-2 text-sm max-w-[75%] shadow-md">
+                  <div className="flex space-x-1">
+                    <span className="animate-bounce-dot text-lg">.</span>
+                    <span className="animate-bounce-dot text-lg animation-delay-200">.</span>
+                    <span className="animate-bounce-dot text-lg animation-delay-400">.</span>
+                  </div>
                 </div>
+              </div>
             )}
 
             <div ref={messagesEndRef} /> {/* For auto-scrolling */}

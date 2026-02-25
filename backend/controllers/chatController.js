@@ -7,10 +7,29 @@ import { knowledgeBase } from '../utils/chatKnowledge.js'; // See Step 4
 // It automatically looks for the GEMINI_API_KEY in process.env
 const ai = new GoogleGenAI({});
 
-// ⚠️ LIMITATION: Chat sessions are stored in-memory and will be LOST on server
-// restart or crash. This is an accepted trade-off for simplicity.
-// For persistence, migrate to Redis or MongoDB-backed sessions.
-const chatSessions = {};
+// ── In-memory session store ──────────────────────────────────────────────────
+// Sessions are keyed by userId. Each entry holds { chat, lastUsed } so we can
+// enforce both a hard cap (MAX_SESSIONS) and an idle TTL (SESSION_TTL_MS).
+//
+// ⚠️ Sessions are lost on server restart — an accepted trade-off for simplicity.
+//    For persistence across restarts, migrate to Redis-backed sessions.
+
+const MAX_SESSIONS   = 500;              // Hard cap: prevents RAM exhaustion DoS
+const SESSION_TTL_MS = 30 * 60 * 1000;  // 30-minute idle timeout per session
+
+/** Map<userId, { chat, lastUsed: number }> */
+const chatSessions = new Map();
+
+// Purge sessions that have been idle longer than SESSION_TTL_MS.
+// .unref() ensures this timer doesn't keep the process alive during shutdown.
+setInterval(() => {
+    const now = Date.now();
+    for (const [userId, session] of chatSessions) {
+        if (now - session.lastUsed > SESSION_TTL_MS) {
+            chatSessions.delete(userId);
+        }
+    }
+}, 10 * 60 * 1000).unref(); // runs every 10 minutes
 
 // A system instruction to define the bot's persona and rules
 const systemInstruction = `
@@ -43,19 +62,28 @@ export const sendMessage = async (req, res) => {
 
   try {
     // 1. Get or Create Chat Session
-    if (!chatSessions[userId]) {
+    if (!chatSessions.has(userId)) {
+      // Evict the oldest (first-inserted) session when we hit the cap.
+      // Map insertion order is guaranteed in JS, so .keys().next() is the LRU entry.
+      if (chatSessions.size >= MAX_SESSIONS) {
+        const oldestKey = chatSessions.keys().next().value;
+        chatSessions.delete(oldestKey);
+      }
+
       // Start a new chat session with defined configuration
       const chat = ai.chats.create({
-        model: "gemini-2.5-flash", // Use a fast model for chat
+        model: "gemini-2.5-flash",
         config: {
           systemInstruction: systemInstruction,
           temperature: 0.7,
         }
       });
-      chatSessions[userId] = chat;
+      chatSessions.set(userId, { chat, lastUsed: Date.now() });
     }
 
-    const chat = chatSessions[userId];
+    const session = chatSessions.get(userId);
+    session.lastUsed = Date.now(); // Refresh idle TTL on every message
+    const chat = session.chat;
 
     // 2. Send Message and Stream Response
     const response = await chat.sendMessage({ message });

@@ -128,8 +128,8 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
                                                 key={index}
                                                 onClick={() => handleSlotSelect(time, period)}
                                                 className={`w-full text-center py-3 px-4 rounded-xl transition text-base font-semibold border-2 shadow-md hover:scale-[1.02] hover:shadow-lg focus:outline-none focus:ring-4 ring-offset-2 ring-blue-300 ${isSelected
-                                                        ? 'bg-blue-600 text-white border-blue-700 shadow-xl'
-                                                        : 'bg-white text-gray-800 border-gray-300 hover:bg-blue-50'
+                                                    ? 'bg-blue-600 text-white border-blue-700 shadow-xl'
+                                                    : 'bg-white text-gray-800 border-gray-300 hover:bg-blue-50'
                                                     }`}
                                             >
                                                 {time}
@@ -714,7 +714,9 @@ const Step2Schedule = ({
                     type="text"
                     id="postcode"
                     value={postcode}
-                    onChange={(e) => setPostcode(e.target.value)}
+                    onChange={(e) => setPostcode(e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''))}
+                    maxLength={10}
+                    placeholder="e.g., 3977"
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm sm:text-base"
                 />
             </div>

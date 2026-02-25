@@ -33,11 +33,13 @@ import {
 } from '../controllers/adminController.js';
 import { getPricing, updatePricing } from '../controllers/pricingController.js';
 import { adminOnlyMiddleware } from '../middlewares/adminMiddleware.js';
+import { authLimiter } from '../middlewares/rateLimiters.js';
 
 const router = express.Router();
 
 // --- PUBLIC ROUTES (No Middleware) ---
-router.post('/login', adminLogin);
+// authLimiter: max 10 failed login attempts per IP per 15 min to block brute-force
+router.post('/login', authLimiter, adminLogin);
 router.get('/pricing', getPricing);
 
 // 🛑 All Admin routes MUST be protected by the admin-only check. 🛑

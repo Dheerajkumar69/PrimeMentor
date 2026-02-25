@@ -13,7 +13,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@primementor.com.au';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Adminprime@315';
+// ❌ NO FALLBACK: Script will fail if ADMIN_PASSWORD is not set in .env
+// Set it with: ADMIN_PASSWORD=your_strong_password node seedAdmin.js
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+    console.error('❌ FATAL: ADMIN_PASSWORD environment variable is not set.');
+    console.error('   Run: ADMIN_PASSWORD=your_strong_password node seedAdmin.js');
+    process.exit(1);
+}
 
 const adminSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },

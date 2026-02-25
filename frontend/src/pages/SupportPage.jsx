@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 // Added Loader to show sending state
-import { Mail, Phone, HelpCircle, User, Loader } from 'lucide-react'; 
+import { Mail, Phone, HelpCircle, User, Loader } from 'lucide-react';
 
 // Import Header and Footer based on your folder structure
 import Header from '../components/Home/Header.jsx';
@@ -18,7 +18,7 @@ const supportTopics = [
     {
         title: "Tutoring Support",
         description: "Have questions about subjects or lessons? We're happy to provide more details.",
-        
+
     },
     {
         title: "Technical Issues",
@@ -34,7 +34,7 @@ const supportTopics = [
 const SupportTextBlock = ({ title, content }) => (
     <div className="bg-white/95 p-6 rounded-xl shadow-2xl border-l-8 border-orange-500 hover:shadow-orange-300/50 transition duration-300 transform hover:scale-[1.01]">
         <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-start gap-3">
-            <span className="text-orange-500 font-extrabold text-2xl flex-shrink-0">•</span> 
+            <span className="text-orange-500 font-extrabold text-2xl flex-shrink-0">•</span>
             {title}
         </h3>
         <div className="text-gray-600 pl-8 pt-2 border-l border-gray-300 ml-4 leading-relaxed">
@@ -47,26 +47,26 @@ const SupportPage = () => {
     // State for user feedback messages
     const [formMessage, setFormMessage] = useState('');
     // State for loading/disabling the button
-    const [loading, setLoading] = useState(false); 
+    const [loading, setLoading] = useState(false);
     // State for error feedback
-    const [error, setError] = useState(null);     
+    const [error, setError] = useState(null);
 
     // Endpoint: REUSE THE CONTACT API
-    const CONTACT_API_URL = '/api/contact'; 
+    const CONTACT_API_URL = '/api/contact';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         setLoading(true);
         setFormMessage('');
         setError(null);
-        
+
         // 1. Capture form data and include the source field
         const formData = {
-            name: e.target.fullName.value, 
+            name: e.target.fullName.value,
             email: e.target.email.value,
             // phone is not an input here, so we don't include it in formData.
-            message: e.target.message.value, 
+            message: e.target.message.value,
             source: 'Support Page', // 💡 KEY: Identifies the form source
         };
 
@@ -80,7 +80,7 @@ const SupportPage = () => {
             });
 
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to send support request.');
             }
@@ -88,7 +88,7 @@ const SupportPage = () => {
             // Success
             setFormMessage("Your support request has been submitted successfully! We will be in touch shortly.");
             e.target.reset();
-            
+
         } catch (err) {
             console.error("Submission error:", err);
             setError(err.message || "An unexpected error occurred. Please try again.");
@@ -97,7 +97,7 @@ const SupportPage = () => {
             setTimeout(() => {
                 setFormMessage('');
                 setError(null);
-            }, 8000); 
+            }, 8000);
         }
     };
 
@@ -108,9 +108,9 @@ const SupportPage = () => {
         backgroundAttachment: 'fixed',
         backgroundPosition: 'center center',
     };
-    
+
     // Placeholder image for the tutor on the right side of the form
-    const tutorImageUrl = "https://images.pexels.com/photos/5905711/pexels-photo-5905711.jpeg?auto=compress&cs=tinysrgb&w=600"; 
+    const tutorImageUrl = "https://images.pexels.com/photos/5905711/pexels-photo-5905711.jpeg?auto=compress&cs=tinysrgb&w=600";
 
     return (
         <div style={backgroundStyle} className="min-h-screen">
@@ -118,7 +118,7 @@ const SupportPage = () => {
                 <Header />
 
                 <main className="flex-grow">
-                    
+
                     {/* Page Banner / Title Section (Like FaqPage) */}
                     <div className="relative pt-40 text-white flex items-center justify-center border-b border-gray-700/50">
                         <h1 className="text-5xl sm:text-7xl font-extrabold tracking-widest uppercase animate-in fade-in duration-1000">
@@ -128,7 +128,7 @@ const SupportPage = () => {
 
                     {/* Main Content Area */}
                     <div className="container mx-auto px-4 py-16 max-w-5xl">
-                        
+
                         {/* 1. Support Center Introduction and Topics (Modular blocks like FAQ) */}
                         <div className="text-center mb-12 space-y-4 text-white">
                             <h2 className="text-4xl font-bold text-teal-400 flex items-center justify-center">
@@ -138,19 +138,19 @@ const SupportPage = () => {
                                 Welcome to Prime Mentor's Support Center! We're here to assist with any questions or issues you may have. Here's how we can help:
                             </p>
                         </div>
-                        
+
                         <div className="space-y-6 mb-16">
                             <h3 className="text-2xl font-bold text-orange-400">Common Support Topics:</h3>
                             {supportTopics.map((item, index) => (
-                                <SupportTextBlock 
-                                    key={index} 
-                                    title={item.title} 
-                                    content={item.description} 
+                                <SupportTextBlock
+                                    key={index}
+                                    title={item.title}
+                                    content={item.description}
                                 />
                             ))}
-                            
+
                             {/* Contact Us Block (Also structured like a 'part') */}
-                            <SupportTextBlock 
+                            <SupportTextBlock
                                 title="Contact Us"
                                 content={
                                     <ul className="space-y-2 list-none pl-0">
@@ -167,12 +167,12 @@ const SupportPage = () => {
                         {/* 2. Submit a Request Section (Form and Image) - UPDATED FORM */}
                         <div className="pt-8 border-t border-gray-700/50">
                             <h2 className="text-4xl font-extrabold text-center text-white mb-12">Submit a Request</h2>
-                            
+
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                                
+
                                 {/* Form Section (Styled for visibility against the background) */}
                                 <div className="bg-white/95 p-8 rounded-xl shadow-2xl border-l-8 border-blue-500">
-                                    
+
                                     {/* Success/Error Messages */}
                                     {formMessage && (
                                         <div className="mb-6 p-4 bg-green-100 text-green-800 rounded-lg font-medium text-center">
@@ -184,31 +184,35 @@ const SupportPage = () => {
                                             {error}
                                         </div>
                                     )}
-                                    
+
                                     <form onSubmit={handleSubmit} className="space-y-6">
-                                        
+
                                         {/* Full Name Input */}
                                         <div className="relative">
                                             <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                                             <input type="text" id="fullName" name="fullName" required
                                                 placeholder="Full Name"
+                                                maxLength={100}
+                                                onInput={(e) => { e.target.value = e.target.value.replace(/[^a-zA-Z\s'-]/g, ''); }}
                                                 className="w-full p-4 pl-12 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                                             />
                                         </div>
-                                        
+
                                         {/* Email Address Input */}
                                         <div className="relative">
                                             <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                                             <input type="email" id="email" name="email" required
                                                 placeholder="Email Address"
+                                                maxLength={254}
                                                 className="w-full p-4 pl-12 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                                             />
                                         </div>
-                                        
+
                                         {/* 💡 ADDED: Message/Details Input for Support Request */}
                                         <div className="relative">
-                                            <textarea 
+                                            <textarea
                                                 id="message" name="message" rows="5" required
+                                                maxLength={500}
                                                 placeholder="Describe your issue or request in detail..."
                                                 className="w-full p-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 resize-none bg-gray-50 text-gray-900"
                                             ></textarea>
@@ -216,7 +220,7 @@ const SupportPage = () => {
 
 
                                         {/* Submit Button */}
-                                        <button 
+                                        <button
                                             type="submit"
                                             disabled={loading} // Disable button while loading
                                             className={`w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg transition duration-300 shadow-xl shadow-blue-500/50 uppercase tracking-wider text-lg 
@@ -227,11 +231,11 @@ const SupportPage = () => {
                                         </button>
                                     </form>
                                 </div>
-                                
+
                                 {/* Image Section */}
                                 <div className="hidden lg:block">
-                                    <img 
-                                        src={tutorImageUrl} 
+                                    <img
+                                        src={tutorImageUrl}
                                         alt="Tutor helping a student online"
                                         className="rounded-xl shadow-2xl object-cover w-full h-full max-h-[300px]"
                                     />

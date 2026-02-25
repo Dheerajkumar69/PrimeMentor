@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import useCountdown from "../../utils/useCountdown.js"
 // Added Zap for the link status/display
 import { Book, Clock, User, ArrowRight, Calendar, Video, Zap } from "lucide-react"
+import toast from "react-hot-toast"
 import { motion } from "framer-motion"
 // CRITICAL IMPORT: Use formatDate and getMeetingTime utilities
 import { formatDate, getMeetingTime } from "../../utils/dateUtils.js"
@@ -120,12 +121,10 @@ const CourseCard = ({ course }) => {
             window.open(zoomLink, "_blank")
         } else if (zoomLink) {
             // If link is present but inactive, provide instructional feedback
-            alert(
-                `The meeting link is ready, but the class is currently inactive. Please tap the button when the countdown ends or during the 15-minute activation window.`,
-            )
+            toast("The meeting link is ready, but the class is currently inactive. Please tap the button when the countdown ends or during the 15-minute activation window.", { icon: "⏳", duration: 5000 })
         } else if (buttonState === "Link Pending") {
             // If link is completely missing
-            alert("The Administrator has not yet scheduled the Zoom link. Please check back later!")
+            toast("The Administrator has not yet scheduled the Zoom link. Please check back later!", { icon: "⏳", duration: 4000 })
         }
     }
 
@@ -171,15 +170,10 @@ const CourseCard = ({ course }) => {
             <div className="p-3">
                 <p className="text-gray-600 text-xs mb-3 line-clamp-2">{course.description}</p>
 
-                <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-gray-500 text-xs mb-3">
-                    <div className="flex items-center gap-1">
-                        <User size={11} className="text-gray-400" />
-                        <span className="font-medium truncate">{course.teacher}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <Clock size={11} className="text-gray-400" />
-                        <span className="truncate">{course.duration}</span>
-                    </div>
+                {/* Removed duplicate teacher from metadata grid. Now only duration is shown here. */}
+                <div className="flex items-center gap-1 text-gray-500 text-xs mb-3">
+                    <Clock size={11} className="text-gray-400" />
+                    <span className="truncate">{course.duration}</span>
                 </div>
 
                 {/* Displaying enrollment and session details */}
@@ -193,7 +187,7 @@ const CourseCard = ({ course }) => {
                     <div className="flex items-center gap-1 text-gray-600 mb-1">
                         <Clock size={11} className="text-gray-400" />
                         <p className="text-xs font-semibold">
-                            {isWeekly ? "Session Date:" : "Session Date:"}
+                            Session Date:
                             <span className={`font-normal ${isWeekly ? "text-blue-700" : "text-orange-700"} ml-1`}>
                                 {formatDate(sessionDate)} at {sessionTime || "TBD"}
                             </span>

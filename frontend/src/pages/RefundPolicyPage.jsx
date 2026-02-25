@@ -1,6 +1,6 @@
 // frontend/src/pages/RefundPolicyPage.jsx
 
-import React, { useState } from 'react'; 
+import React, { useState } from 'react';
 import { Shield, DollarSign, CreditCard, Mail, User, Phone, Send, Loader } from 'lucide-react'; // Added Loader
 
 // Import Header and Footer based on your folder structure
@@ -57,24 +57,24 @@ const refundPolicyContent = [
 // --- Refund Request Form Component with API Logic ---
 const RefundRequestForm = () => {
     const [formMessage, setFormMessage] = useState('');
-    const [loading, setLoading] = useState(false); 
-    const [error, setError] = useState(null); 
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
-    const CONTACT_API_URL = '/api/contact'; 
+    const CONTACT_API_URL = '/api/contact';
 
     const handleSubmit = async (e) => {
-        e.preventDefault(); 
-        
+        e.preventDefault();
+
         // 1. Client-side validation check
         if (!e.target.checkValidity()) {
-            e.target.reportValidity(); 
+            e.target.reportValidity();
             return;
         }
 
         setLoading(true);
         setFormMessage('');
         setError(null);
-        
+
         // 2. Capture ALL form data
         const formData = {
             name: e.target.name.value,
@@ -102,15 +102,15 @@ const RefundRequestForm = () => {
             });
 
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to submit refund request.');
             }
 
             // Success
             setFormMessage("Your refund request has been submitted successfully! We will process it within 5-7 business days.");
-            e.target.reset(); 
-            
+            e.target.reset();
+
         } catch (err) {
             console.error("Submission error:", err);
             setError(err.message || "An unexpected error occurred. Please try again.");
@@ -135,8 +135,8 @@ const RefundRequestForm = () => {
                     {formMessage}
                 </div>
             )}
-             {/* Error Message */}
-             {error && (
+            {/* Error Message */}
+            {error && (
                 <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg font-medium border border-red-200">
                     {error}
                 </div>
@@ -145,22 +145,25 @@ const RefundRequestForm = () => {
             <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                 {/* 1. Personal Details */}
                 <h3 className="text-xl font-semibold text-gray-800 pt-4 border-t">Personal Details <span className="text-red-500">*</span></h3>
-                
+
                 {/* Name */}
                 <div className="relative">
-                    <input 
+                    <input
                         type="text" id="name" name="name" required
                         placeholder="Full Name"
+                        maxLength={100}
+                        onInput={(e) => { e.target.value = e.target.value.replace(/[^a-zA-Z\s'-]/g, ''); }}
                         className="w-full p-4 pl-12 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
                     <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 </div>
-                
+
                 {/* Email Address */}
                 <div className="relative">
-                    <input 
+                    <input
                         type="email" id="email" name="email" required
                         placeholder="Email Address"
+                        maxLength={254}
                         className="w-full p-4 pl-12 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
                     <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -168,66 +171,77 @@ const RefundRequestForm = () => {
 
                 {/* Phone Number - MANDATORY */}
                 <div className="relative">
-                    <input 
-                        type="tel" id="phone" name="phone" required 
+                    <input
+                        type="tel" id="phone" name="phone" required
                         placeholder="Phone Number"
+                        maxLength={20}
+                        onInput={(e) => { e.target.value = e.target.value.replace(/[^\d+\s()-]/g, ''); }}
                         className="w-full p-4 pl-12 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
                     <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 </div>
-                
+
                 {/* Address */}
                 <div className="relative">
-                    <textarea 
+                    <textarea
                         id="address" name="address" rows="2" required
                         placeholder="Full Address"
+                        maxLength={300}
                         className="w-full p-4 pt-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 resize-none bg-gray-50 text-gray-900"
                     ></textarea>
                 </div>
 
                 {/* 2. Banking Details */}
                 <h3 className="text-xl font-semibold text-gray-800 pt-4 border-t">Banking Details (For EFT Refund) <span className="text-red-500">*</span></h3>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Account Name */}
-                    <input 
+                    <input
                         type="text" id="accountName" name="accountName" required
                         placeholder="Account Name"
+                        maxLength={100}
+                        onInput={(e) => { e.target.value = e.target.value.replace(/[^a-zA-Z\s'-]/g, ''); }}
                         className="p-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
-                    
+
                     {/* Bank */}
-                    <input 
+                    <input
                         type="text" id="bank" name="bank" required
                         placeholder="Bank Name"
+                        maxLength={100}
                         className="p-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Account Number */}
-                    <input 
+                    <input
                         type="text" id="accountNumber" name="accountNumber" required
                         placeholder="Account Number"
+                        maxLength={20}
+                        onInput={(e) => { e.target.value = e.target.value.replace(/[^\d-]/g, ''); }}
                         className="p-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
-                    
+
                     {/* BSB - MANDATORY */}
-                    <input 
-                        type="text" id="bsb" name="bsb" required 
-                        placeholder="BSB"
+                    <input
+                        type="text" id="bsb" name="bsb" required
+                        placeholder="BSB (e.g. 062-000)"
+                        maxLength={7}
+                        onInput={(e) => { e.target.value = e.target.value.replace(/[^\d-]/g, ''); }}
                         className="p-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
                 </div>
-                
+
                 {/* 3. Payment/Request Details */}
                 <h3 className="text-xl font-semibold text-gray-800 pt-4 border-t">Payment & Refund Details <span className="text-red-500">*</span></h3>
-                
+
                 {/* Amount Paid */}
                 <div className="relative">
-                    <input 
+                    <input
                         type="number" id="amountPaid" name="amountPaid" required
-                        placeholder="Original Amount Paid (e.g., $150)"
+                        placeholder="Original Amount Paid (e.g., 150)"
+                        min="0" step="0.01"
                         className="w-full p-4 pl-12 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
                     />
                     <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -235,7 +249,7 @@ const RefundRequestForm = () => {
 
                 {/* Date of Payment */}
                 <div className="relative">
-                    <input 
+                    <input
                         type="date" id="paymentDate" name="paymentDate" required
                         placeholder="Date of Original Payment"
                         className="w-full p-4 pl-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-gray-900"
@@ -244,24 +258,25 @@ const RefundRequestForm = () => {
 
                 {/* Reason for Refund */}
                 <div className="relative">
-                    <textarea 
+                    <textarea
                         id="reason" name="reason" rows="4" required
                         placeholder="Reason for Refund Request (Max 250 characters)"
                         maxLength="250"
+                        onInput={(e) => { e.target.nextElementSibling.textContent = `${e.target.value.length}/250`; }}
                         className="w-full p-4 pt-4 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 resize-none bg-gray-50 text-gray-900"
                     ></textarea>
                     <span className="absolute bottom-3 right-4 text-xs text-gray-400">0/250</span>
                 </div>
 
                 {/* Submit Button */}
-                <button 
+                <button
                     type="submit"
                     disabled={loading}
                     className={`w-full bg-orange-600 text-white font-bold py-4 px-6 rounded-lg transition duration-300 shadow-xl shadow-orange-500/50 uppercase tracking-wider mt-8 flex items-center justify-center 
                         ${loading ? 'bg-gray-400 cursor-not-allowed' : 'hover:bg-orange-700'}`
                     }
                 >
-                    {loading ? <Loader className="w-5 h-5 mr-2 animate-spin"/> : <Send className="w-5 h-5 mr-2"/>} 
+                    {loading ? <Loader className="w-5 h-5 mr-2 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}
                     {loading ? 'Submitting...' : 'Submit Refund Request'}
                 </button>
             </form>
@@ -316,12 +331,12 @@ const RefundPolicyPage = () => {
                         {/* Refund Policy List Section */}
                         <div className="space-y-6">
                             {refundPolicyContent.map((item) => (
-                                <div 
-                                    key={item.id} 
+                                <div
+                                    key={item.id}
                                     className="bg-white/95 p-6 rounded-xl shadow-2xl border-l-8 border-orange-500 hover:shadow-orange-300/50 transition duration-300 transform hover:scale-[1.01]"
                                 >
                                     <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-start gap-3">
-                                        <span className="text-orange-500 font-extrabold text-2xl flex-shrink-0">{item.id}.</span> 
+                                        <span className="text-orange-500 font-extrabold text-2xl flex-shrink-0">{item.id}.</span>
                                         {item.title}
                                     </h3>
                                     <div className="text-gray-600 pl-8 pt-2 border-l border-gray-300 ml-4 leading-relaxed text-base">
@@ -330,7 +345,7 @@ const RefundPolicyPage = () => {
                                 </div>
                             ))}
                         </div>
-                        
+
                         {/* Refund Request Form Component (Added just below the content) */}
                         <RefundRequestForm />
 

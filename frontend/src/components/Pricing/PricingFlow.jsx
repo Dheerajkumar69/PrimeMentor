@@ -30,7 +30,8 @@ const StepContact = ({ onSelect, contactNumber, setContactNumber, isParent }) =>
                     id="contactNumber"
                     placeholder="e.g., +61 412 345 678"
                     value={contactNumber}
-                    onChange={(e) => setContactNumber(e.target.value)}
+                    onChange={(e) => setContactNumber(e.target.value.replace(/[^\d+\s()-]/g, ''))}
+                    maxLength={20}
                     className="w-full p-2 pl-9 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none transition text-sm"
                 />
             </div>
@@ -244,14 +245,16 @@ const StepName = ({ onSelect, name, setName, isClerkUser, clerkName }) => (
                     type="text"
                     placeholder="First name"
                     value={name.firstName || (isClerkUser ? clerkName.firstName : '')}
-                    onChange={(e) => setName({ ...name, firstName: e.target.value })}
+                    onChange={(e) => setName({ ...name, firstName: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
+                    maxLength={50}
                     className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none transition text-sm"
                 />
                 <input
                     type="text"
                     placeholder="Last name"
                     value={name.lastName || (isClerkUser ? clerkName.lastName : '')}
-                    onChange={(e) => setName({ ...name, lastName: e.target.value })}
+                    onChange={(e) => setName({ ...name, lastName: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
+                    maxLength={50}
                     className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none transition text-sm"
                 />
             </div>
@@ -493,8 +496,27 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
                 return <StepNeeds key="needs" onSelect={(n) => handleNext('state', 'needs', n)} subject={subject || 'Primary'} />;
 
             case 'state':
-                // Flow: state -> name
-                return <StepState key="state" onSelect={(s) => handleNext('name', 'state', s)} />;
+                // Flow: state -> name (guests) OR state -> loading (signed-in Clerk users)
+                return <StepState key="state" onSelect={(s) => {
+                    if (isClerkUser) {
+                        // Signed-in user: auto-fill personal info from Clerk and skip to loading
+                        setData(prev => ({
+                            ...prev,
+                            state: s,
+                            name: { firstName: clerkFirstName, lastName: clerkLastName },
+                            email: clerkEmail,
+                            contactNumber: contactInput || '',
+                            isParent: prev.isParent,
+                        }));
+                        setNameInput({ firstName: clerkFirstName, lastName: clerkLastName });
+                        setEmailInput(clerkEmail);
+                        setHistory(prev => [...prev, 'loading']);
+                        setStep('loading');
+                        setDirection(1);
+                    } else {
+                        handleNext('name', 'state', s);
+                    }
+                }} />;
 
             case 'name':
                 // Flow: name -> email
@@ -577,7 +599,7 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
                             {/* Simple Progress Indicator */}
                             {step !== 'loading' && (
                                 <div className="text-xs font-medium text-gray-500">
-                                    Step {history.length}/{8}
+                                    Step {history.length}/{isClerkUser ? 5 : 8}
                                 </div>
                             )}
                         </div>

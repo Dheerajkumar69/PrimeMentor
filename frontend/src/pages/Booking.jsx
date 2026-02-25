@@ -2,6 +2,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Check, Mail, Share2, Star, Loader } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { AppContext } from '../context/AppContext.jsx';
 import { assets } from '../assets/assets.js';
 import axios from 'axios';
@@ -385,8 +386,8 @@ const Booking = () => {
                                     navigator.share(shareData).catch(() => { });
                                 } else {
                                     navigator.clipboard.writeText(window.location.href)
-                                        .then(() => alert('Link copied to clipboard!'))
-                                        .catch(() => alert('Could not copy link.'));
+                                        .then(() => toast.success('Link copied to clipboard!'))
+                                        .catch(() => toast.error('Could not copy link.'));
                                 }
                             }}
                         >
@@ -401,7 +402,7 @@ const Booking = () => {
                     <span className="font-semibold">Prime Mentor PTY Ltd.</span>
                 </div>
                 <p className='px-4'>Office 1, Floor 1, 105a High Street Cranbourne Vic 3977</p>
-                <p className="mt-2">© All right are reserved by Prime Mentor PTY Ltd Australia.</p>
+                <p className="mt-2">© All rights are reserved by Prime Mentor PTY Ltd Australia.</p>
             </footer>
         </div>
     );

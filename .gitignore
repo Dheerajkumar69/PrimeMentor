@@ -11,3 +11,5 @@ frontend/.env
 
 # Dependencies
 node_modules/
+# Deployment workflow (contains secrets — local only)
+.agent/workflows/deploy.md

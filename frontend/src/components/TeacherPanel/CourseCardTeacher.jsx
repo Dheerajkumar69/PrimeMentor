@@ -116,7 +116,7 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
                     <p className="text-xs text-gray-500">{course.courseId ? `Course ID: ${course.courseId}` : ''}</p>
                 </div>
                 <div className={`text-xs text-white px-2 py-1 rounded-full font-medium ${isPast ? 'bg-red-500' : 'bg-green-500'}`}>
-                    <p>{isPast ? 'COMPLETED' : course.status.toUpperCase()}</p>
+                    <p>{isPast ? 'COMPLETED' : (course.status || 'active').toUpperCase()}</p>
                 </div>
             </div>
 

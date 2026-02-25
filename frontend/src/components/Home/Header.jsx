@@ -1,7 +1,7 @@
 // frontend/src/components/Home/Header.jsx
 
-import { Menu } from 'lucide-react';
-import { useState } from 'react';
+import { Menu, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useClerk, UserButton, useUser, SignInButton, SignedIn, SignedOut } from '@clerk/clerk-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
@@ -11,6 +11,26 @@ import { assets } from '../../assets/assets';
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoginHovered, setIsLoginHovered] = useState(false);
+  const menuRef = useRef(null);
+
+  // Fix #16: Close mobile menu on outside click or scroll
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    const handleScroll = () => setIsMenuOpen(false);
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [isMenuOpen]);
 
   const navigate = useNavigate();
 
@@ -26,7 +46,7 @@ const Header = () => {
     <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-all duration-300">
       {/* Container: Added mobile/tablet padding, reduced py for a compact header */}
       <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        
+
         {/* Logo and Brand Text - Optimized for Mobile */}
         <Link to="/" className="flex items-center gap-2 sm:gap-4 group">
           {/* Logo Container: Reduced size for mobile, w-14 h-14, up to w-20 h-20 on desktop */}
@@ -106,17 +126,17 @@ const Header = () => {
 
       {/* Mobile Menu (Updated with Clerk components) - Visible below md breakpoint */}
       {isMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-200">
+        <div ref={menuRef} className="md:hidden bg-white border-t border-gray-200">
           <nav className="container mx-auto px-4 py-4 flex flex-col items-start gap-2">
             <a href="#why" onClick={() => setIsMenuOpen(false)} className="w-full text-gray-700 hover:text-orange-500 transition py-2 font-medium border-b border-gray-100">Why Prime Mentor</a>
             {/* ⭐ UPDATE: Courses Link (Mobile) - Changed to Link component ⭐ */}
             <Link to="/courses" onClick={() => setIsMenuOpen(false)} className="w-full text-gray-700 hover:text-orange-500 transition py-2 font-medium border-b border-gray-100">Courses</Link>
             <a href="#how" onClick={() => setIsMenuOpen(false)} className="w-full text-gray-700 hover:text-orange-500 transition py-2 font-medium border-b border-gray-100">How It Works</a>
             <a href="#testimonials" onClick={() => setIsMenuOpen(false)} className="w-full text-gray-700 hover:text-orange-500 transition py-2 font-medium border-b border-gray-100">Testimonials</a>
-            <a href="#contact" onClick={() => setIsMenuOpen(false)} className="w-full text-gray-700 hover:text-orange-500 transition py-2 font-medium">Contact Us</a>
-            
+            <Link to="/contact" onClick={() => setIsMenuOpen(false)} className="w-full text-gray-700 hover:text-orange-500 transition py-2 font-medium">Contact Us</Link>
+
             <div className="w-full border-t border-gray-200 my-2"></div>
-            
+
             {user && (
               <Link to="/my-courses" onClick={() => setIsMenuOpen(false)} className="w-full py-2 text-orange-600 font-semibold text-left border-b border-gray-100">
                 My Courses
@@ -124,14 +144,14 @@ const Header = () => {
             )}
 
             <SignedOut>
-              <button 
+              <button
                 onClick={e => { e.preventDefault(); setShowTeacherLogin(true); setIsMenuOpen(false); }}
                 className="w-full py-3 text-gray-700 font-semibold text-left hover:text-orange-500 transition border-b border-gray-100"
               >
                 Teacher Login
               </button>
               <SignInButton mode="modal">
-                <button 
+                <button
                   onClick={() => setIsMenuOpen(false)}
                   className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-center hover:shadow-lg transition mt-2"
                 >
@@ -139,7 +159,7 @@ const Header = () => {
                 </button>
               </SignInButton>
             </SignedOut>
-            
+
             <SignedIn>
               <div className="flex items-center justify-between w-full pt-2">
                 <p className="font-medium text-gray-700">Account</p>

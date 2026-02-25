@@ -25,6 +25,13 @@ const classRequestSchema = new mongoose.Schema(
 
         subject: { type: String, default: 'Unassigned' },
 
+        // Student details snapshot — stored at payment time for admin display
+        studentDetails: {
+            firstName: { type: String, default: '' },
+            lastName: { type: String, default: '' },
+            email: { type: String, default: '' },
+        },
+
         status: { type: String, enum: ["pending", "accepted", "rejected"], default: "pending" },
 
         enrollmentDate: { type: Date, default: Date.now },
@@ -57,6 +64,7 @@ const classRequestSchema = new mongoose.Schema(
         amountPaid: { type: Number, default: 0 },
         promoCodeUsed: { type: String, default: null },
         discountApplied: { type: Number, default: 0 },
+        currency: { type: String, default: 'AUD' },
     },
     { timestamps: true }
 );

@@ -35,6 +35,13 @@ export default function PaymentRecords() {
         try {
             setIsLoading(true);
             const token = localStorage.getItem('adminToken');
+            if (!token) {
+                setFetchError('No admin session found. Please log in again.');
+                setPayments([]);
+                setSummary(null);
+                setIsLoading(false);
+                return;
+            }
             const res = await axios.get(`${BACKEND_URL}/api/admin/payments`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -43,10 +50,19 @@ export default function PaymentRecords() {
             setFetchError(null);
         } catch (error) {
             console.error('Failed to fetch payments:', error);
-            const msg = error?.response?.data?.message || error?.message || 'Failed to load payment records';
+            const status = error?.response?.status;
+            let msg;
+            if (status === 401 || status === 403) {
+                msg = 'Session expired or unauthorized. Please log out and log in again.';
+            } else if (status === 404) {
+                msg = 'Payments endpoint not found. The server may need to be redeployed.';
+            } else if (!error.response) {
+                msg = 'Cannot reach the server. Please check your connection.';
+            } else {
+                msg = error?.response?.data?.message || error?.message || 'Failed to load payment records';
+            }
             toast.error(msg);
             setFetchError(msg);
-            // Still set empty defaults so UI doesn't crash
             setPayments([]);
             setSummary(null);
         } finally {

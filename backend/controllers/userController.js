@@ -422,10 +422,15 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                 scheduleTime: preferredTime, // Australian Time Slot
                 postcode: postcode,
                 subject: courseDetails.subject || 'N/A',
+                studentDetails: {
+                    firstName: studentDetails?.first || '',
+                    lastName: studentDetails?.last || '',
+                    email: emailToUse || '',
+                },
                 paymentStatus: 'paid',
                 transactionId: transactionID,
                 amountPaid: paymentAmount,
-                // 🚨 ADD PROMO CODE INFO 🚨
+                currency: 'AUD',
                 promoCodeUsed: promoCode,
                 discountApplied: appliedDiscountAmount,
             });
@@ -484,15 +489,16 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                     preferredTimeSaturday: preferredTimeSaturday,
                     postcode: postcode,
                     subject: courseDetails.subject || 'N/A',
+                    studentDetails: {
+                        firstName: studentDetails?.first || '',
+                        lastName: studentDetails?.last || '',
+                        email: emailToUse || '',
+                    },
                     paymentStatus: 'paid',
                     transactionId: transactionID,
                     amountPaid: perSessionCost,
-                    // 🚨 ADD PROMO CODE INFO 🚨
+                    currency: 'AUD',
                     promoCodeUsed: promoCode,
-                    // Note: Discount is only recorded on the first session's ClassRequest for simplicity,
-                    // or calculated proportionally, but since the `amountPaid` is already discounted, 
-                    // recording the total `appliedDiscountAmount` on all records is redundant.
-                    // We record the total discount on the User's main course record below.
                 });
             }
 

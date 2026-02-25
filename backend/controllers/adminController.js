@@ -797,6 +797,24 @@ export const getAllPayments = asyncHandler(async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
+        // 🛡️ Collect unique studentIds (clerkIds) for records missing studentDetails
+        const clerkIdsToLookup = [...new Set(
+            payments
+                .filter(p => !p.studentDetails?.email && p.studentId)
+                .map(p => p.studentId)
+        )];
+
+        // Batch lookup students from User model
+        let studentMap = {};
+        if (clerkIdsToLookup.length > 0) {
+            const students = await User.find({ clerkId: { $in: clerkIdsToLookup } })
+                .select('clerkId studentName email')
+                .lean();
+            for (const s of students) {
+                studentMap[s.clerkId] = s;
+            }
+        }
+
         // 🛡️ Safe aggregation with NaN guards
         const totalRevenue = payments.reduce((sum, p) => {
             const amount = Number(p.amountPaid);
@@ -807,21 +825,43 @@ export const getAllPayments = asyncHandler(async (req, res) => {
         const trialCount = payments.filter(p => p.purchaseType === 'TRIAL').length;
         const starterPackCount = payments.filter(p => p.purchaseType === 'STARTER_PACK').length;
 
-        // 🛡️ Normalize each payment record to ensure consistent shape for frontend
-        const normalizedPayments = payments.map(p => ({
-            ...p,
-            amountPaid: Number(p.amountPaid) || 0,
-            transactionId: p.transactionId || 'N/A',
-            courseTitle: p.courseTitle || 'Unknown Course',
-            studentName: p.studentName || 'Unknown Student',
-            studentDetails: p.studentDetails || {},
-            subject: p.subject || 'N/A',
-            purchaseType: p.purchaseType || 'UNKNOWN',
-            currency: p.currency || 'AUD',
-            promoCodeUsed: p.promoCodeUsed || null,
-            discountApplied: Number(p.discountApplied) || 0,
-            createdAt: p.createdAt || new Date(),
-        }));
+        // 🛡️ Normalize each payment record — enrich with User data if studentDetails is missing
+        const normalizedPayments = payments.map(p => {
+            let enrichedDetails = p.studentDetails || {};
+
+            // If no embedded studentDetails, try to fill from User model
+            if (!enrichedDetails.email && p.studentId && studentMap[p.studentId]) {
+                const user = studentMap[p.studentId];
+                const nameParts = (user.studentName || '').split(' ');
+                enrichedDetails = {
+                    firstName: nameParts[0] || '',
+                    lastName: nameParts.slice(1).join(' ') || '',
+                    email: user.email || '',
+                };
+            }
+
+            // Last resort: use studentName from the ClassRequest itself
+            if (!enrichedDetails.firstName && p.studentName) {
+                const parts = p.studentName.split(' ');
+                enrichedDetails.firstName = parts[0] || '';
+                enrichedDetails.lastName = parts.slice(1).join(' ') || '';
+            }
+
+            return {
+                ...p,
+                amountPaid: Number(p.amountPaid) || 0,
+                transactionId: p.transactionId || 'N/A',
+                courseTitle: p.courseTitle || 'Unknown Course',
+                studentName: p.studentName || 'Unknown Student',
+                studentDetails: enrichedDetails,
+                subject: p.subject || 'N/A',
+                purchaseType: p.purchaseType || 'UNKNOWN',
+                currency: p.currency || 'AUD',
+                promoCodeUsed: p.promoCodeUsed || null,
+                discountApplied: Number(p.discountApplied) || 0,
+                createdAt: p.createdAt || new Date(),
+            };
+        });
 
         res.json({
             payments: normalizedPayments,

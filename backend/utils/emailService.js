@@ -619,7 +619,7 @@ export const sendPasswordResetEmail = async (recipientEmail, recipientName, rese
             </div>
             <div class="content">
                 <p>Dear <strong>${recipientName}</strong>,</p>
-                <p>We received a request to reset your password for your Prime Mentor teacher account. Click the button below to create a new password:</p>
+                <p>We received a request to reset your password for your Prime Mentor account. Click the button below to create a new password:</p>
 
                 <div class="reset-box">
                     <a href="${resetUrl}">Reset My Password</a>
@@ -645,7 +645,7 @@ export const sendPasswordResetEmail = async (recipientEmail, recipientName, rese
     const resp = await sendWithRetry(client, {
       from: `Prime Mentor <${senderEmail}>`,
       to: [recipientEmail],
-      subject: `🔐 Password Reset — Prime Mentor Teacher Account`,
+      subject: `🔐 Password Reset — Prime Mentor Account`,
       html: htmlContent,
     });
 

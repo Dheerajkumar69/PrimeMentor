@@ -1,6 +1,6 @@
 // frontend/src/pages/MyCourses.jsx
-import { useState, useEffect, useCallback } from "react"
-import { useUser, useAuth } from "@clerk/clerk-react"
+import { useState, useEffect, useCallback, useContext } from "react"
+import { AppContext } from "../context/AppContext.jsx"
 import axios from "axios"
 import toast from "react-hot-toast"
 import { motion } from "framer-motion"
@@ -39,8 +39,7 @@ const isSessionPast = (session) => {
 
 
 const MyCourses = () => {
-    const { user, isLoaded } = useUser()
-    const { isSignedIn, getToken } = useAuth()
+    const { studentToken, studentData, isSignedIn } = useContext(AppContext)
     const location = useLocation()
     const navigate = useNavigate()
 
@@ -57,16 +56,15 @@ const MyCourses = () => {
 
     useEffect(() => {
         const fetchCourses = async () => {
-            if (!isLoaded || !isSignedIn) {
+            if (!isSignedIn || !studentToken) {
                 setIsLoading(false)
                 setCourses([])
                 return
             }
             try {
-                const token = await getToken()
                 const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
                 const response = await axios.get(`${backendUrl}/api/user/courses`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                    headers: { Authorization: `Bearer ${studentToken}` },
                 })
 
 
@@ -186,7 +184,7 @@ const MyCourses = () => {
         }
 
         fetchCourses()
-    }, [isLoaded, isSignedIn, getToken, location.search])
+    }, [isSignedIn, studentToken, location.search])
 
     // 🛑 NEW HANDLER: Update local state after successful submission
     const handleFeedbackSubmission = useCallback((courseId, feedbackData) => {
@@ -212,15 +210,15 @@ const MyCourses = () => {
 
 
 
-    if (isLoading || !isLoaded) {
+    if (isLoading) {
         return (
             <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
-                <p className="text-xl text-gray-700">Loading user profile and courses...</p>
+                <p className="text-xl text-gray-700">Loading your courses...</p>
             </div>
         )
     }
 
-    if (!user) {
+    if (!isSignedIn || !studentData) {
         return (
             <div className="flex justify-center items-center min-h-screen bg-gray-50 pt-20">
                 <p className="text-xl text-red-500">Authentication required. Please log in.</p>
@@ -228,7 +226,7 @@ const MyCourses = () => {
         )
     }
 
-    const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress.split("@")[0] || "Learner"
+    const userName = studentData?.name || studentData?.email?.split("@")[0] || "Learner"
 
     return (
         <>

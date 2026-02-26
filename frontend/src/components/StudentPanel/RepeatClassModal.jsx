@@ -1,8 +1,8 @@
 // frontend/src/components/StudentPanel/RepeatClassModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { X, Repeat, Calendar, Clock, Hash, Loader2, CheckCircle2, DollarSign, CreditCard } from 'lucide-react';
 import axios from 'axios';
-import { useAuth } from '@clerk/clerk-react';
+import { AppContext } from '../../context/AppContext.jsx';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -50,7 +50,7 @@ function getSessionPriceForYear(classRanges, yearLevel) {
 }
 
 const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
-    const { getToken } = useAuth();
+    const { studentToken } = useContext(AppContext);
 
     // Pre-fill day from the past session's date
     const getInitialDay = () => {
@@ -123,17 +123,10 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
 
         setIsSubmitting(true);
         try {
-            const token = await getToken();
-
             const res = await axios.post(
                 `${BACKEND_URL}/api/user/initiate-repeat-payment`,
-                {
-                    courseId: course._id,
-                    dayOfWeek,
-                    timeSlot,
-                    repeatWeeks,
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
+                { courseId: course._id, dayOfWeek, timeSlot, repeatWeeks },
+                { headers: { Authorization: `Bearer ${studentToken}` } }
             );
 
             if (res.data.success && res.data.redirectUrl) {

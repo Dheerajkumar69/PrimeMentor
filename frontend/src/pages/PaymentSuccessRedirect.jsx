@@ -1,8 +1,8 @@
-// frontend/src/pages/PaymentSuccessRedirect.jsx (No change needed)
+// frontend/src/pages/PaymentSuccessRedirect.jsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@clerk/clerk-react';
+import { AppContext } from '../context/AppContext.jsx';
 import axios from 'axios';
 import { Loader2, CheckCircle, AlertTriangle, CreditCard } from 'lucide-react';
 
@@ -16,7 +16,7 @@ const EWAY_PRODUCT_DETAILS_KEY = 'eway_product_details';
 
 const PaymentSuccessRedirect = () => {
     const navigate = useNavigate();
-    const { getToken } = useAuth();
+    const { studentToken } = useContext(AppContext);
     const [searchParams] = useSearchParams();
 
     const [status, setStatus] = useState('loading'); // 'loading', 'success', 'error'
@@ -24,12 +24,12 @@ const PaymentSuccessRedirect = () => {
 
     useEffect(() => {
         const accessCode = searchParams.get('AccessCode');
-        const clerkId = searchParams.get('clerkId');
+        const studentId = searchParams.get('studentId');
 
         // --- 1. Basic Validation ---
-        if (!accessCode || !clerkId) {
+        if (!accessCode || !studentId) {
             setStatus('error');
-            setMessage("Invalid payment return link. Missing essential transaction details (AccessCode/ClerkID).");
+            setMessage("Invalid payment return link. Missing essential transaction details (AccessCode/StudentID).");
             return;
         }
 
@@ -52,18 +52,16 @@ const PaymentSuccessRedirect = () => {
         // --- 3. Finalize Payment and Booking ---
         const finishPayment = async () => {
             try {
-                const token = await getToken();
-
                 const response = await axios.post(
                     FINISH_PAYMENT_API_ENDPOINT,
                     {
                         accessCode: accessCode,
-                        clerkId: clerkId,
+                        studentId: studentId,
                         bookingPayload: storedPayload,
                     },
                     {
                         headers: {
-                            Authorization: `Bearer ${token}`,
+                            Authorization: `Bearer ${studentToken}`,
                             'Content-Type': 'application/json',
                         },
                     }
@@ -96,7 +94,7 @@ const PaymentSuccessRedirect = () => {
 
         finishPayment();
 
-    }, [searchParams, getToken, navigate]);
+    }, [searchParams, studentToken, navigate]);
 
     const displayIcon = {
         loading: <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />,

@@ -1,16 +1,16 @@
 // frontend/src/components/Enrollment/Step1Account.jsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useContext } from 'react';
+import { AppContext } from '../../context/AppContext.jsx';
 
 const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setGuardianDetails, onNext, quizData, enrollmentDataKey }) => {
+    const { studentData } = useContext(AppContext);
 
+    // Pre-fill from quizData (PricingFlow answers)
     useEffect(() => {
-        // ... (Initialization logic remains the same for the first load) ...
-
         if (quizData) {
             const { isParent, name, email, contactNumber } = quizData;
 
             if (isParent === true) {
-                // User is the Parent/Guardian -> Autofill Guardian details
                 setGuardianDetails(prev => ({
                     ...prev,
                     first: name?.firstName || '',
@@ -21,30 +21,35 @@ const Step1Account = ({ studentDetails, setStudentDetails, guardianDetails, setG
                 setStudentDetails({ first: '', last: '', email: '' });
 
             } else if (isParent === false) {
-                // User is the Student -> Autofill Student details
                 setStudentDetails(prev => ({
                     ...prev,
                     first: name?.firstName || '',
                     last: name?.lastName || '',
                     email: email || ''
                 }));
-                // Autofill Guardian Phone ONLY (as it's the primary contact)
                 setGuardianDetails(prev => ({
                     ...prev,
                     phone: contactNumber || ''
                 }));
-
-                if (guardianDetails.first && guardianDetails.email) {
-                    setGuardianDetails(prev => ({
-                        ...prev,
-                        first: '',
-                        last: '',
-                        email: ''
-                    }));
-                }
             }
         }
     }, [quizData, setStudentDetails, setGuardianDetails]);
+
+    // Pre-fill student fields from logged-in account if still empty
+    useEffect(() => {
+        if (!studentData) return;
+        const parts = (studentData.name || '').trim().split(' ');
+        const firstName = parts[0] || '';
+        const lastName = parts.slice(1).join(' ') || '';
+
+        setStudentDetails(prev => ({
+            ...prev,
+            first: prev.first || firstName,
+            last: prev.last || lastName,
+            email: prev.email || studentData.email || '',
+        }));
+    }, [studentData]); // eslint-disable-line
+
 
 
     // Helper for basic email validation

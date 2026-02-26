@@ -9,9 +9,11 @@ const feedbackSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
+    // Student identification — studentId is the MongoDB _id for new auth, clerkId for legacy
     studentClerkId: {
-        type: String, // Store Clerk ID for easy student lookups
-        required: true,
+        type: String,
+        required: false, // optional — only set for legacy Clerk accounts
+        default: null,
     },
     studentName: { type: String, required: true },
     studentEmail: { type: String, required: true },
@@ -19,7 +21,7 @@ const feedbackSchema = new mongoose.Schema({
     // Course / Class Details (From the course data)
     courseName: { type: String, required: true },
     teacherName: { type: String, required: true },
-    
+
     // Use combined date/time for easy querying of the specific past session
     sessionDate: { type: String, required: true }, // Format YYYY-MM-DD
     sessionTime: { type: String, required: true }, // Format HH:MM (e.g., "15:00")
@@ -29,7 +31,7 @@ const feedbackSchema = new mongoose.Schema({
     engagingRating: { type: Number, min: 1, max: 5, required: true },
     contentRating: { type: Number, min: 1, max: 5, required: true },
     // Slider rating 0-100
-    overallSatisfaction: { type: Number, min: 0, max: 100, required: true }, 
+    overallSatisfaction: { type: Number, min: 0, max: 100, required: true },
 
     // Text Feedback Boxes
     likes: { type: String, default: '' },

@@ -1,8 +1,8 @@
 // frontend/src/components/Enrollment/Step2Schedule.jsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, X, ChevronLeft, ChevronRight, Check, ArrowLeft, Tag, Loader2, XCircle, CheckCircle } from 'lucide-react'; // 🚨 Added Tag, Loader2, XCircle, CheckCircle
-import axios from 'axios'; // 🚨 Added axios
-import { useAuth } from '@clerk/clerk-react'; // 🚨 Added useAuth
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import { Calendar, X, ChevronLeft, ChevronRight, Check, ArrowLeft, Tag, Loader2, XCircle, CheckCircle } from 'lucide-react';
+import axios from 'axios';
+import { AppContext } from '../../context/AppContext.jsx';
 
 // 🚨 NEW: API Endpoint for Promo Validation 🚨
 const PROMO_VALIDATE_API = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/user/promo/validate`;
@@ -172,7 +172,7 @@ const Step2Schedule = ({
     finalPaymentAmount // 🚨 NEW PROP 🚨
 }) => {
     // 🚨 PROMO CODE HOOKS 🚨
-    const { getToken } = useAuth();
+    const { studentToken } = useContext(AppContext);
     const [promoInput, setPromoInput] = useState(promoCodeData.code || '');
     const [promoMessage, setPromoMessage] = useState(null);
     const [isPromoLoading, setIsPromoLoading] = useState(false);
@@ -425,11 +425,10 @@ const Step2Schedule = ({
         }
 
         try {
-            const token = await getToken();
             const response = await axios.post(
                 PROMO_VALIDATE_API,
                 { code: codeToValidate },
-                { headers: { Authorization: `Bearer ${token}` } }
+                { headers: { Authorization: `Bearer ${studentToken}` } }
             );
 
             // Success: Apply discount

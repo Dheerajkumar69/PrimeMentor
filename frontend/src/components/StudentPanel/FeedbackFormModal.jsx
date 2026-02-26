@@ -1,7 +1,7 @@
 // frontend/src/components/StudentPanel/FeedbackFormModal.jsx
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import axios from 'axios';
-import { useAuth } from '@clerk/clerk-react';
+import { AppContext } from '../../context/AppContext.jsx';
 import { X, CheckCircle, MessageSquare, Star, Zap } from 'lucide-react';
 
 const StarRating = ({ value, onChange }) => (
@@ -20,7 +20,7 @@ const StarRating = ({ value, onChange }) => (
 );
 
 const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
-    const { getToken } = useAuth();
+    const { studentToken } = useContext(AppContext);
 
     // Pre-fill form data from the passed course object
     const [formData, setFormData] = useState({
@@ -77,8 +77,6 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
         setError('');
 
         try {
-            const token = await getToken();
-
             const payload = {
                 ...formData,
                 likes: formData.likes || '',
@@ -88,7 +86,7 @@ const FeedbackFormModal = ({ course, onClose, onSubmissionSuccess }) => {
 
             const response = await axios.post(`${BACKEND_URL}/api/user/feedback`, payload, {
                 headers: {
-                    Authorization: `Bearer ${token}`,
+                    Authorization: `Bearer ${studentToken}`,
                     'Content-Type': 'application/json'
                 }
             });

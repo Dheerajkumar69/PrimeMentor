@@ -2,17 +2,21 @@
 
 # PrimeMentor - Run Frontend & Backend simultaneously
 
+# Get the directory where this script lives
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "🚀 Starting PrimeMentor..."
+echo "   Root: $ROOT_DIR"
 echo ""
 
 # Start backend
 echo "📦 Starting Backend (Express + Nodemon)..."
-cd backend && npm run dev &
+cd "$ROOT_DIR/backend" && npm run dev &
 BACKEND_PID=$!
 
 # Start frontend
 echo "⚡ Starting Frontend (Vite)..."
-cd frontend && npm run dev &
+cd "$ROOT_DIR/frontend" && npm run dev &
 FRONTEND_PID=$!
 
 echo ""

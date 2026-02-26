@@ -233,7 +233,7 @@ const StepState = ({ onSelect }) => {
 };
 
 // --- StepName: Asks for the student's name ---
-const StepName = ({ onSelect, name, setName, isClerkUser, clerkName }) => (
+const StepName = ({ onSelect, name, setName, isLoggedIn, prefillName }) => (
     <>
         <div className="text-center mb-6 sm:mb-8">
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">To finalise your learning program, what is the student's name?</h2>
@@ -244,7 +244,7 @@ const StepName = ({ onSelect, name, setName, isClerkUser, clerkName }) => (
                 <input
                     type="text"
                     placeholder="First name"
-                    value={name.firstName || (isClerkUser ? clerkName.firstName : '')}
+                    value={name.firstName || (isLoggedIn ? prefillName.firstName : '')}
                     onChange={(e) => setName({ ...name, firstName: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
                     maxLength={50}
                     className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none transition text-sm"
@@ -252,7 +252,7 @@ const StepName = ({ onSelect, name, setName, isClerkUser, clerkName }) => (
                 <input
                     type="text"
                     placeholder="Last name"
-                    value={name.lastName || (isClerkUser ? clerkName.lastName : '')}
+                    value={name.lastName || (isLoggedIn ? prefillName.lastName : '')}
                     onChange={(e) => setName({ ...name, lastName: e.target.value.replace(/[^a-zA-Z\s'-]/g, '') })}
                     maxLength={50}
                     className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 outline-none transition text-sm"
@@ -270,7 +270,7 @@ const StepName = ({ onSelect, name, setName, isClerkUser, clerkName }) => (
 );
 
 // --- StepEmail: No changes required (except for data handling below) ---
-const StepEmail = ({ onSelect, email, setEmail, isClerkUser, clerkEmail }) => (
+const StepEmail = ({ onSelect, email, setEmail, isLoggedIn, prefillEmail }) => (
     <>
         <div className="text-center mb-6 sm:mb-8">
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Where can we send your quote and learning program?</h2>
@@ -280,16 +280,16 @@ const StepEmail = ({ onSelect, email, setEmail, isClerkUser, clerkEmail }) => (
             <input
                 type="email"
                 placeholder="youremail@example.com"
-                value={email || (isClerkUser ? clerkEmail : '')}
+                value={email || (isLoggedIn ? prefillEmail : '')}
                 onChange={(e) => setEmail(e.target.value)}
-                readOnly={isClerkUser}
-                className={`w-full p-2 border-2 rounded-lg outline-none transition text-sm ${isClerkUser ? 'bg-gray-100 border-gray-200 cursor-not-allowed' : 'border-gray-300 focus:border-orange-500'}`}
+                readOnly={isLoggedIn}
+                className={`w-full p-2 border-2 rounded-lg outline-none transition text-sm ${isLoggedIn ? 'bg-gray-100 border-gray-200 cursor-not-allowed' : 'border-gray-300 focus:border-orange-500'}`}
             />
             <p className="text-xs text-gray-500 mt-1">You consent to receive emails from us.</p>
             <button
                 className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition text-sm sm:text-base"
-                onClick={() => onSelect(email || (isClerkUser ? clerkEmail : ''))}
-                disabled={!(email || clerkEmail)?.includes('@') || !(email || clerkEmail)?.includes('.')}
+                onClick={() => onSelect(email || (isLoggedIn ? prefillEmail : ''))}
+                disabled={!(email || prefillEmail)?.includes('@') || !(email || prefillEmail)?.includes('.')}
             >
                 Continue
             </button>
@@ -378,16 +378,18 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
     // ... (rest of the PricingFlow component remains the same)
     // ... (omitted for brevity, only StepLoading was modified for clarity)
     // ...
-    const { user, backendUrl } = useContext(AppContext);
-    const isClerkUser = !!user;
+    const { studentData, backendUrl } = useContext(AppContext);
+    const isLoggedIn = !!studentData;
 
     // Destructure initialClassRange and basePrice from the new prop
     const initialClassRange = initialClassFlowData?.initialClassRange;
     const basePrice = initialClassFlowData?.basePrice;
 
-    const clerkFirstName = user?.firstName || user?.fullName?.split(' ')?.[0] || '';
-    const clerkLastName = user?.lastName || user?.fullName?.split(' ')?.[1] || '';
-    const clerkEmail = user?.primaryEmailAddress?.emailAddress || '';
+    // Derive first/last name from studentData.name (single string, e.g. "dheeraj kumar")
+    const nameParts = (studentData?.name || '').trim().split(' ');
+    const studentFirstName = nameParts[0] || '';
+    const studentLastName = nameParts.slice(1).join(' ') || '';
+    const studentEmail = studentData?.email || '';
 
     // Change initial step from 'role' to 'year' since initialClassRange is already set
     const [step, setStep] = useState('year');
@@ -395,8 +397,8 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
     const [data, setData] = useState({});
     const navigate = useNavigate();
 
-    const [nameInput, setNameInput] = useState({ firstName: clerkFirstName, lastName: clerkLastName });
-    const [emailInput, setEmailInput] = useState(clerkEmail);
+    const [nameInput, setNameInput] = useState({ firstName: studentFirstName, lastName: studentLastName });
+    const [emailInput, setEmailInput] = useState(studentEmail);
     const [contactInput, setContactInput] = useState('');
 
     // Framer Motion variants for the modal and step content
@@ -429,22 +431,22 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
 
     useEffect(() => {
         if (isOpen && initialClassRange && basePrice) {
-            setStep('year'); // Start at 'year' since the class range is already set
+            setStep('year');
             setData({
                 initialClassRange: initialClassRange,
-                basePrice: basePrice, // NEW: Store the base price here
+                basePrice: basePrice,
                 isParent: null,
-                name: { firstName: clerkFirstName, lastName: clerkLastName },
-                email: clerkEmail,
+                name: { firstName: studentFirstName, lastName: studentLastName },
+                email: studentEmail,
                 contactNumber: ''
             });
             setHistory(['year']);
-            setNameInput({ firstName: clerkFirstName, lastName: clerkLastName });
-            setEmailInput(clerkEmail);
+            setNameInput({ firstName: studentFirstName, lastName: studentLastName });
+            setEmailInput(studentEmail);
             setContactInput('');
-            setDirection(1); // Reset direction
+            setDirection(1);
         }
-    }, [isOpen, initialClassRange, basePrice, clerkFirstName, clerkLastName, clerkEmail]);
+    }, [isOpen, initialClassRange, basePrice, studentFirstName, studentLastName, studentEmail]);
 
     const handleNext = (newStep, key, value) => {
         setData(prev => ({ ...prev, [key]: value }));
@@ -488,28 +490,26 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
                 return <StepIsParent key="isParent" onSelect={(ip) => handleNext('subject', 'isParent', ip)} />;
 
             case 'subject':
-                // Flow: subject -> needs
-                return <StepSubject key="subject" onSelect={(s) => handleNext('needs', 'subject', s)} year={year} />;
+                // Flow: subject -> state (needs step removed)
+                return <StepSubject key="subject" onSelect={(s) => handleNext('state', 'subject', s)} year={year} />;
 
-            case 'needs':
-                // Flow: needs -> state
-                return <StepNeeds key="needs" onSelect={(n) => handleNext('state', 'needs', n)} subject={subject || 'Primary'} />;
+
 
             case 'state':
-                // Flow: state -> name (guests) OR state -> loading (signed-in Clerk users)
+                // Flow: state -> name (guests) OR state -> loading (signed-in users)
                 return <StepState key="state" onSelect={(s) => {
-                    if (isClerkUser) {
-                        // Signed-in user: auto-fill personal info from Clerk and skip to loading
+                    if (isLoggedIn) {
+                        // Signed-in student: auto-fill personal info and skip to loading
                         setData(prev => ({
                             ...prev,
                             state: s,
-                            name: { firstName: clerkFirstName, lastName: clerkLastName },
-                            email: clerkEmail,
+                            name: { firstName: studentFirstName, lastName: studentLastName },
+                            email: studentEmail,
                             contactNumber: contactInput || '',
                             isParent: prev.isParent,
                         }));
-                        setNameInput({ firstName: clerkFirstName, lastName: clerkLastName });
-                        setEmailInput(clerkEmail);
+                        setNameInput({ firstName: studentFirstName, lastName: studentLastName });
+                        setEmailInput(studentEmail);
                         setHistory(prev => [...prev, 'loading']);
                         setStep('loading');
                         setDirection(1);
@@ -525,8 +525,8 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
                     onSelect={(n) => handleNext('email', 'name', n)}
                     name={nameInput}
                     setName={setNameInput}
-                    isClerkUser={isClerkUser}
-                    clerkName={{ firstName: clerkFirstName, lastName: clerkLastName }}
+                    isLoggedIn={isLoggedIn}
+                    prefillName={{ firstName: studentFirstName, lastName: studentLastName }}
                 />;
 
             case 'email':
@@ -536,8 +536,8 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
                     onSelect={(e) => handleNext('contact', 'email', e)}
                     email={emailInput}
                     setEmail={setEmailInput}
-                    isClerkUser={isClerkUser}
-                    clerkEmail={clerkEmail}
+                    isLoggedIn={isLoggedIn}
+                    prefillEmail={studentEmail}
                 />;
 
             case 'contact':
@@ -599,7 +599,7 @@ const PricingFlow = ({ isOpen, onClose, initialClassFlowData }) => {
                             {/* Simple Progress Indicator */}
                             {step !== 'loading' && (
                                 <div className="text-xs font-medium text-gray-500">
-                                    Step {history.length}/{isClerkUser ? 5 : 8}
+                                    Step {history.length}/{isLoggedIn ? 4 : 7}
                                 </div>
                             )}
                         </div>

@@ -564,7 +564,18 @@ export const assignTeacher = asyncHandler(async (req, res) => {
     }
 
     // 5. Update the Student's course entry
-    const student = await User.findOne({ clerkId: request.studentId });
+    // studentId is now a MongoDB _id (not a Clerk ID)
+    let student = null;
+    try {
+        student = await User.findById(request.studentId);
+    } catch (_) {
+        // If studentId isn't a valid ObjectId, fall back to clerkId for legacy records
+        student = await User.findOne({ clerkId: request.studentId });
+    }
+    if (!student) {
+        // Final fallback: try clerkId lookup for old records
+        student = await User.findOne({ clerkId: request.studentId });
+    }
 
     if (student) {
         const courseIndex = student.courses.findIndex(c =>
@@ -590,7 +601,7 @@ export const assignTeacher = asyncHandler(async (req, res) => {
             console.warn(`Could not find pending course for student ${student.studentName} with title ${request.courseTitle}`);
         }
     } else {
-        console.error(`Student with Clerk ID ${request.studentId} not found.`);
+        console.error(`Student with ID ${request.studentId} not found in DB.`);
     }
 
     // 6. Send notification emails with Zoom links (or without if Zoom failed)
@@ -619,15 +630,19 @@ export const assignTeacher = asyncHandler(async (req, res) => {
             zoomStartLink: zoomData.startUrl,
         };
 
-        // Email to student (join link)
-        if (student && student.email) {
+        // Email to student (join link) — use student object or fall back to studentDetails in ClassRequest
+        const studentEmail = student?.email || request.studentDetails?.email;
+        const studentEmailName = request.studentName || student?.studentName || 'Student';
+        if (studentEmail) {
             try {
-                await sendPaidClassZoomEmail(student.email, request.studentName, 'student', emailDetails);
-                console.log('✅ Student paid class zoom email sent to:', student.email);
+                await sendPaidClassZoomEmail(studentEmail, studentEmailName, 'student', emailDetails);
+                console.log('✅ Student paid class zoom email sent to:', studentEmail);
             } catch (emailErr) {
                 console.error('⚠️ Failed to send student paid class zoom email:', emailErr.message);
             }
             await new Promise(r => setTimeout(r, 600)); // Rate-limit buffer
+        } else {
+            console.error('⚠️ Could not send student email — no email address found for studentId:', request.studentId);
         }
 
         // Email to teacher (host/start link)
@@ -651,13 +666,16 @@ export const assignTeacher = asyncHandler(async (req, res) => {
             scheduleTime: request.scheduleTime,
         };
 
-        if (student && student.email) {
+        const studentEmailFallback = student?.email || request.studentDetails?.email;
+        if (studentEmailFallback) {
             try {
-                await sendClassAssignmentEmail(student.email, request.studentName, 'student', emailDetails);
-                console.log('✅ Student class assignment email sent to:', student.email);
+                await sendClassAssignmentEmail(studentEmailFallback, request.studentName, 'student', emailDetails);
+                console.log('✅ Student class assignment email sent to:', studentEmailFallback);
             } catch (emailErr) {
                 console.error('⚠️ Failed to send student class assignment email:', emailErr.message);
             }
+        } else {
+            console.error('⚠️ No student email found for assignment notification. studentId:', request.studentId);
         }
         if (teacher.email) {
             try {
@@ -720,26 +738,31 @@ export const addZoomLink = asyncHandler(async (req, res) => {
     request.zoomMeetingLink = zoomMeetingLink;
     const updatedRequest = await request.save();
 
-    // 3. Update the Student's corresponding course entry (CRITICAL STEP)
-    const student = await User.findOne({ clerkId: request.studentId });
+    // 3. Update the Student's corresponding course entry
+    // studentId is now a MongoDB _id (not a Clerk ID) for new registrations
+    let studentForZoom = null;
+    try {
+        studentForZoom = await User.findById(request.studentId);
+    } catch (_) { }
+    if (!studentForZoom) {
+        studentForZoom = await User.findOne({ clerkId: request.studentId });
+    }
 
-    if (student) {
-        // Find the course based on the course name and active status
-        const courseIndex = student.courses.findIndex(c =>
+    if (studentForZoom) {
+        const courseIndex = studentForZoom.courses.findIndex(c =>
             c.name === request.courseTitle && c.status === 'active'
         );
 
         if (courseIndex !== -1) {
             try {
-                // Update the zoomMeetingUrl in the Student's course
-                student.courses[courseIndex].zoomMeetingUrl = zoomMeetingLink;
-                student.markModified('courses');
-                await student.save();
+                studentForZoom.courses[courseIndex].zoomMeetingUrl = zoomMeetingLink;
+                studentForZoom.markModified('courses');
+                await studentForZoom.save();
             } catch (studentSaveError) {
-                console.error(`Error saving student ${student.studentName} course update with Zoom link:`, studentSaveError);
+                console.error(`Error saving student ${studentForZoom.studentName} course update with Zoom link:`, studentSaveError);
             }
         } else {
-            console.warn(`Could not find active course for student ${student.studentName} with title ${request.courseTitle} to update Zoom link.`);
+            console.warn(`Could not find active course for student ${studentForZoom.studentName} with title ${request.courseTitle} to update Zoom link.`);
         }
     }
 
@@ -797,22 +820,27 @@ export const getAllPayments = asyncHandler(async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        // 🛡️ Collect unique studentIds (clerkIds) for records missing studentDetails
-        const clerkIdsToLookup = [...new Set(
+        // 🛡️ Collect unique studentIds for records missing studentDetails
+        const studentIdsToLookup = [...new Set(
             payments
                 .filter(p => !p.studentDetails?.email && p.studentId)
                 .map(p => p.studentId)
         )];
 
-        // Batch lookup students from User model
+        // Batch lookup: try by MongoDB _id first (new auth), fall back to clerkId for legacy records
         let studentMap = {};
-        if (clerkIdsToLookup.length > 0) {
-            const students = await User.find({ clerkId: { $in: clerkIdsToLookup } })
-                .select('clerkId studentName email')
+        if (studentIdsToLookup.length > 0) {
+            // Try _id lookup (new JWT-auth students)
+            const byId = await User.find({ _id: { $in: studentIdsToLookup.filter(id => id?.match(/^[0-9a-f]{24}$/i)) } })
+                .select('_id studentName name email')
                 .lean();
-            for (const s of students) {
-                studentMap[s.clerkId] = s;
-            }
+            for (const s of byId) { studentMap[String(s._id)] = s; }
+
+            // Also try clerkId lookup for legacy Clerk-registered students
+            const byClerk = await User.find({ clerkId: { $in: studentIdsToLookup } })
+                .select('clerkId studentName name email')
+                .lean();
+            for (const s of byClerk) { studentMap[s.clerkId] = s; }
         }
 
         // 🛡️ Safe aggregation with NaN guards — revenue only from paid records
@@ -835,7 +863,7 @@ export const getAllPayments = asyncHandler(async (req, res) => {
             // If no embedded studentDetails, try to fill from User model
             if (!enrichedDetails.email && p.studentId && studentMap[p.studentId]) {
                 const user = studentMap[p.studentId];
-                const nameParts = (user.studentName || '').split(' ');
+                const nameParts = (user.studentName || user.name || '').split(' ');
                 enrichedDetails = {
                     firstName: nameParts[0] || '',
                     lastName: nameParts.slice(1).join(' ') || '',

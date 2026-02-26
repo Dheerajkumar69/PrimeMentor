@@ -1,7 +1,7 @@
 // frontend/src/components/StudentPanel/UserProfileCard.jsx
 
-import React, { useMemo } from 'react';
-import { useUser, useAuth } from '@clerk/clerk-react';
+import React, { useMemo, useContext } from 'react';
+import { AppContext } from '../../context/AppContext.jsx';
 import { motion } from 'framer-motion';
 import { User, Zap } from 'lucide-react';
 // 🚨 New: Import the assets structure for a local image fallback 🚨
@@ -71,8 +71,7 @@ const calculateMonthlyStats = (courses, currentMonthStart) => {
 
 
 const UserProfileCard = ({ studentCourses }) => {
-    const { user } = useUser();
-    const { signOut } = useAuth();
+    const { studentData, logoutStudent } = useContext(AppContext);
 
     const today = new Date();
     const currentMonthStart = getStartOfMonth(today);
@@ -147,10 +146,9 @@ const UserProfileCard = ({ studentCourses }) => {
         return Array.from(mentorsMap.values());
     }, [studentCourses]);
 
-    // --- USER DATA FROM CLERK ---
-    const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress.split('@')[0] || 'Student';
-    // 🚨 FIX: Prioritize Clerk's own image URL 🚨
-    const userProfileImageUrl = user?.imageUrl || assets.PRIMEMENTOR; // Use Clerk image or PRIMEMENTOR logo as fallback
+    // --- USER DATA ---
+    const userName = studentData?.name || studentData?.email?.split('@')[0] || 'Student';
+    const userProfileImageUrl = `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(userName)}&backgroundColor=f97316&fontFamily=Arial&color=ffffff`;
 
     const cardVariants = {
         hidden: { opacity: 0, x: 20 },
@@ -277,7 +275,7 @@ const UserProfileCard = ({ studentCourses }) => {
 
             {/* Action Button */}
             <button
-                onClick={() => signOut({ redirectUrl: '/' })}
+                onClick={logoutStudent}
                 className="w-full mt-4 bg-gray-200 text-gray-700 font-semibold py-2 rounded-full hover:bg-gray-300 transition"
             >
                 Sign Out

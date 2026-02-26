@@ -1,8 +1,7 @@
-// frontend/src/components/Enrollment/Step3Payment.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { CreditCard, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@clerk/clerk-react';
+import { AppContext } from '../../context/AppContext.jsx';
 import axios from 'axios';
 
 // Using the new API endpoint for payment initiation
@@ -16,33 +15,32 @@ const EWAY_PRODUCT_DETAILS_KEY = 'eway_product_details';
 // 🚨 UPDATED PROPS 🚨
 const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, promoCodeData }) => {
     const navigate = useNavigate();
-    const { getToken } = useAuth();
+    const { studentToken } = useContext(AppContext);
     const [searchParams] = useSearchParams();
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
-    
+
     // State to manage the payload across redirects
     const [persistedPayload, setPersistedPayload] = useState(bookingPayload);
     const [persistedProductDetails, setPersistedProductDetails] = useState(productDetails);
-    
+
     // --- 🛑 MODIFICATION: Handle Payment Return Here (Redirect to status page) 🛑 ---
     useEffect(() => {
         const accessCode = searchParams.get('AccessCode');
-        const clerkId = searchParams.get('clerkId');
-        
-        // If we detect the return parameters, redirect to the dedicated PaymentSuccessRedirect page
-        if (accessCode && clerkId) {
-            navigate(`/payment-status?AccessCode=${accessCode}&clerkId=${clerkId}`, { replace: true });
+        const studentId = searchParams.get('studentId');
+
+        if (accessCode && studentId) {
+            navigate(`/payment-status?AccessCode=${accessCode}&studentId=${studentId}`, { replace: true });
             return;
-        } 
-        
+        }
+
         // If no accessCode is present, this is a clean step 3 page load.
         localStorage.removeItem(EWAY_ACCESS_CODE_KEY);
         setPersistedPayload(bookingPayload);
         setPersistedProductDetails(productDetails);
-        
+
     }, [searchParams, navigate, bookingPayload, productDetails]);
     // --- 🛑 END MODIFICATION 🛑 ---
 
@@ -51,15 +49,15 @@ const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, prom
         e.preventDefault();
         setError(null);
         setIsLoading(true);
-        
+
         // Use current payload from props/parent state
         const payloadToSend = {
-             // Spread the original payload
-             ...persistedPayload, 
-             // 🚨 OVERWRITE PAYMENT DATA WITH FINAL CALCULATED VALUES 🚨
-             paymentAmount: finalPaymentAmount,
-             promoCode: promoCodeData.code,
-             appliedDiscountAmount: promoCodeData.discountAmount
+            // Spread the original payload
+            ...persistedPayload,
+            // 🚨 OVERWRITE PAYMENT DATA WITH FINAL CALCULATED VALUES 🚨
+            paymentAmount: finalPaymentAmount,
+            promoCode: promoCodeData.code,
+            appliedDiscountAmount: promoCodeData.discountAmount
         };
 
         try {
@@ -68,13 +66,12 @@ const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, prom
             localStorage.setItem(EWAY_PRODUCT_DETAILS_KEY, JSON.stringify(productDetails));
 
             // 2. Call backend to create the Shared Payment URL
-            const token = await getToken();
             const response = await axios.post(
                 INITIATE_PAYMENT_API_ENDPOINT,
-                { bookingPayload: payloadToSend }, // Send the updated payload with the final amount
+                { bookingPayload: payloadToSend },
                 {
                     headers: {
-                        Authorization: `Bearer ${token}`,
+                        Authorization: `Bearer ${studentToken}`,
                         'Content-Type': 'application/json',
                     },
                 }
@@ -108,7 +105,7 @@ const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, prom
     const currentProductDetails = persistedProductDetails || productDetails;
 
     if (currentPayload === null) {
-         return <div className="text-red-500 p-6">Loading payment details... Please wait or go back to Step 2.</div>;
+        return <div className="text-red-500 p-6">Loading payment details... Please wait or go back to Step 2.</div>;
     }
 
 
@@ -124,7 +121,7 @@ const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, prom
             <div className={`p-4 rounded-lg mb-6 ${promoCodeData.code ? 'bg-red-100 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
                 <p className="font-semibold text-base">Amount Due: <span className='text-lg font-bold'>${finalPaymentAmount.toFixed(2)} AUD</span></p>
                 {promoCodeData.code && (
-                     <p className="text-sm font-semibold">Discount applied: {promoCodeData.code} (${promoCodeData.discountAmount.toFixed(2)} off)</p>
+                    <p className="text-sm font-semibold">Discount applied: {promoCodeData.code} (${promoCodeData.discountAmount.toFixed(2)} off)</p>
                 )}
                 <p className="text-sm">You are paying for the <b>{currentProductDetails.name}</b>.</p>
             </div>
@@ -145,7 +142,7 @@ const Step3Payment = ({ bookingPayload, productDetails, finalPaymentAmount, prom
                         </span>
                     </div>
                 )}
-                
+
                 <button
                     type="submit"
                     disabled={isButtonDisabled}

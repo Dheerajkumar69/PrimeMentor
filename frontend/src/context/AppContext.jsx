@@ -1,95 +1,115 @@
 // src/context/AppContext.jsx
 import React, { createContext, useState, useEffect } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
 import axios from 'axios';
 
 export const AppContext = createContext();
 
 export const AppContextProvider = (props) => {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-    const { isLoaded, isSignedIn, userId, sessionId, getToken } = useAuth();
-    const { user } = useUser();
-
+    // ── Teacher state (unchanged) ──
     const [showTeacherLogin, setShowTeacherLogin] = useState(false);
-    const [teacherToken, setTeacherToken] = useState(
-        localStorage.getItem('teacherToken') || null
-    );
+    const [teacherToken, setTeacherToken] = useState(localStorage.getItem('teacherToken') || null);
     const [teacherData, setTeacherData] = useState(null);
 
-    // ✅ make adminToken stateful & synced with localStorage
-    const [adminToken, setAdminToken] = useState(
-        () => localStorage.getItem('adminToken') || null
-    );
+    // ── Admin state (unchanged) ──
+    const [adminToken, setAdminToken] = useState(() => localStorage.getItem('adminToken') || null);
 
-    useEffect(() => {
-        console.log('🧩 Backend URL from env:', backendUrl);
-    }, [backendUrl]);
+    // ── Student state (replaces Clerk) ──
+    const [showStudentLogin, setShowStudentLogin] = useState(false);
+    const [studentToken, setStudentToken] = useState(localStorage.getItem('studentToken') || null);
+    const [studentData, setStudentData] = useState(null);
+    // true while we're verifying an existing token on page load
+    const [studentLoading, setStudentLoading] = useState(!!localStorage.getItem('studentToken'));
 
-    // ✅ whenever adminToken changes, sync it to localStorage
+    // isSignedIn derived from studentToken
+    const isSignedIn = !!studentToken && !!studentData;
+
+    // Sync adminToken to localStorage
     useEffect(() => {
-        if (adminToken) {
-            localStorage.setItem('adminToken', adminToken);
-        } else {
-            localStorage.removeItem('adminToken');
-        }
+        if (adminToken) { localStorage.setItem('adminToken', adminToken); }
+        else { localStorage.removeItem('adminToken'); }
     }, [adminToken]);
 
-    // ✅ Re-hydrate teacherData from backend on every page load / token change
+    // Sync studentToken to localStorage
     useEffect(() => {
-        if (!teacherToken || !backendUrl) {
-            setTeacherData(null);
-            return;
-        }
-        // If we already have teacher data in state, skip the fetch (only needed on fresh load)
-        if (teacherData) return;
+        if (studentToken) { localStorage.setItem('studentToken', studentToken); }
+        else { localStorage.removeItem('studentToken'); }
+    }, [studentToken]);
 
-        const fetchTeacherProfile = async () => {
+    // Re-hydrate teacher session
+    useEffect(() => {
+        if (!teacherToken || !backendUrl) { setTeacherData(null); return; }
+        if (teacherData) return;
+        const fetchTeacher = async () => {
             try {
                 const { data } = await axios.get(`${backendUrl}/api/teacher/me`, {
                     headers: { Authorization: `Bearer ${teacherToken}` },
                 });
-                if (data.success) {
-                    setTeacherData(data.teacher);
-                } else {
-                    // Token was rejected by the server – clear it
-                    setTeacherToken(null);
-                    setTeacherData(null);
-                    localStorage.removeItem('teacherToken');
-                }
-            } catch (err) {
-                // 401 / network error – clear stale token
-                console.error('Failed to re-hydrate teacher session:', err.message);
-                setTeacherToken(null);
-                setTeacherData(null);
-                localStorage.removeItem('teacherToken');
+                if (data.success) { setTeacherData(data.teacher); }
+                else { setTeacherToken(null); setTeacherData(null); localStorage.removeItem('teacherToken'); }
+            } catch {
+                setTeacherToken(null); setTeacherData(null); localStorage.removeItem('teacherToken');
             }
         };
+        fetchTeacher();
+    }, [teacherToken, backendUrl]); // eslint-disable-line
 
-        fetchTeacherProfile();
-    }, [teacherToken, backendUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Re-hydrate student session
+    useEffect(() => {
+        if (!studentToken || !backendUrl) {
+            setStudentData(null);
+            setStudentLoading(false);
+            return;
+        }
+        if (studentData) {
+            setStudentLoading(false);
+            return;
+        }
+        const fetchStudent = async () => {
+            try {
+                const { data } = await axios.get(`${backendUrl}/api/student/me`, {
+                    headers: { Authorization: `Bearer ${studentToken}` },
+                });
+                if (data.success) { setStudentData(data.student); }
+                else { setStudentToken(null); setStudentData(null); localStorage.removeItem('studentToken'); }
+            } catch {
+                setStudentToken(null); setStudentData(null); localStorage.removeItem('studentToken');
+            } finally {
+                setStudentLoading(false);
+            }
+        };
+        fetchStudent();
+    }, [studentToken, backendUrl]); // eslint-disable-line
+
+    const logoutStudent = () => {
+        setStudentToken(null);
+        setStudentData(null);
+        setStudentLoading(false);
+        localStorage.removeItem('studentToken');
+    };
 
     return (
-        <AppContext.Provider
-            value={{
-                showTeacherLogin,
-                setShowTeacherLogin,
-                backendUrl,
-                teacherToken,
-                setTeacherToken,
-                teacherData,
-                setTeacherData,
-                adminToken,
-                setAdminToken,   // <- IMPORTANT: expose setter
-                isLoaded,
-                isSignedIn,
-                user,
-                userId,
-                getToken,
-            }}
-        >
+        <AppContext.Provider value={{
+            backendUrl,
+            // Teacher
+            showTeacherLogin, setShowTeacherLogin,
+            teacherToken, setTeacherToken,
+            teacherData, setTeacherData,
+            // Admin
+            adminToken, setAdminToken,
+            // Student
+            showStudentLogin, setShowStudentLogin,
+            studentToken, setStudentToken,
+            studentData, setStudentData,
+            studentLoading,
+            logoutStudent,
+            isSignedIn,
+            // For legacy compatibility — some components use user/userId
+            user: studentData,
+            userId: studentData?._id || null,
+        }}>
             {props.children}
         </AppContext.Provider>
     );
 };
-

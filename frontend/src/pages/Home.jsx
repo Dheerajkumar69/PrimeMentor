@@ -6,9 +6,7 @@ import TestimonialsSection from '../components/Home/TestimonialsSection.jsx';
 import SocialProofSection from '../components/Home/SocialProofSection.jsx';
 import ContactSection from '../components/Home/ContactSection.jsx';
 import CookieBanner from '../components/Home/CookieBanner.jsx';
-import PricingSection from '../components/Home/PricingSection.jsx';
 import NewsletterSection from '../components/Home/NewsLetter.jsx';
-import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/clerk-react';
 import Footer from '../components/Home/Footer.jsx'; // Assuming Footer is in this directory
 
 /**
@@ -26,7 +24,6 @@ const Home = ({ setIsAssessmentModalOpen }) => {
       <HeroSection setIsAssessmentModalOpen={setIsAssessmentModalOpen} />
 
       {/* Other components of the Home page */}
-      <PricingSection />
       <ReasonsSection />
       <HowItWorksSection />
       <TestimonialsSection />

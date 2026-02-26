@@ -3,12 +3,11 @@
 import React, { useState, useContext, useEffect } from 'react';
 import PricingFlow from '../Pricing/PricingFlow.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
-import { SignInButton } from '@clerk/clerk-react';
 import { Sparkles, TrendingUp, Loader } from 'lucide-react';
 import axios from 'axios';
 
 export default function PricingSection() {
-    const { isSignedIn, backendUrl } = useContext(AppContext);
+    const { isSignedIn, backendUrl, setShowStudentLogin } = useContext(AppContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [initialClassFlowData, setInitialClassFlowData] = useState(null);
     const [buttons, setButtons] = useState([]);

@@ -1,164 +1,225 @@
-import React from 'react';
-import { Play } from 'lucide-react';
+import React, { useState, useContext, useEffect } from 'react';
+import { TrendingUp, Loader } from 'lucide-react';
+import { AppContext } from '../../context/AppContext.jsx';
+import PricingFlow from '../Pricing/PricingFlow.jsx';
+import axios from 'axios';
 
-// Define the keyframes for more complex, continuous motion
 const animations = `
-/* Keyframes for complex background element movements */
-@keyframes move-circle {
-  0% { transform: translate(0, 0); opacity: 0.6; }
-  25% { transform: translate(150px, -50px); opacity: 0.7; }
-  50% { transform: translate(250px, 0); opacity: 0.8; }
-  75% { transform: translate(100px, 50px); opacity: 0.7; }
-  100% { transform: translate(0, 0); opacity: 0.6; }
-}
-
-@keyframes move-dot {
-  0% { transform: translate(0, 0); opacity: 0.8; }
-  25% { transform: translate(50px, -30px); opacity: 0.9; }
-  50% { transform: translate(100px, 0); opacity: 1; }
-  75% { transform: translate(50px, 30px); opacity: 0.9; }
-  100% { transform: translate(0, 0); opacity: 0.8; }
-}
-
-/* Base entry and stylistic keyframes */
 @keyframes fade-in-up {
   0% { opacity: 0; transform: translateY(20px); }
   100% { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes fade-in-right {
   0% { opacity: 0; transform: translateX(20px); }
   100% { opacity: 1; transform: translateX(0); }
 }
-
 @keyframes float {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-5px) scale(1.05); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
-
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 0.8; }
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 12px rgba(249,115,22,0.6), 0 0 24px rgba(249,115,22,0.4); }
+  50% { box-shadow: 0 0 28px rgba(255,100,0,1), 0 0 48px rgba(249,115,22,0.7); }
+  100% { box-shadow: 0 0 12px rgba(249,115,22,0.6), 0 0 24px rgba(249,115,22,0.4); }
 }
-
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 @keyframes background-pan {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+@keyframes move-dot {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(40px, -20px); }
+  100% { transform: translate(0, 0); }
+}
 `;
 
-/**
- * HeroSection component is updated to trigger a modal on button click.
- * @param {object} props
- * @param {function} props.setIsAssessmentModalOpen - Function to control the modal's visibility.
- */
 export default function HeroSection({ setIsAssessmentModalOpen }) {
-  const getRandomDelay = () => `${Math.random() * 5}s`;
+  const { isSignedIn, backendUrl, setShowStudentLogin } = useContext(AppContext);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [initialClassFlowData, setInitialClassFlowData] = useState(null);
+  const [pendingFlowData, setPendingFlowData] = useState(null);
+  const [buttons, setButtons] = useState([]);
+  const [loadingPrices, setLoadingPrices] = useState(true);
+
+  // Fetch pricing
+  useEffect(() => {
+    const fetchPricing = async () => {
+      try {
+        const apiBase = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+        const response = await axios.get(`${apiBase}/api/admin/pricing`);
+        const { classRanges } = response.data;
+        setButtons([
+          { label: 'Class 2-6', range: '2-6', price: classRanges['2-6'].sessionPrice },
+          { label: 'Class 7-9', range: '7-9', price: classRanges['7-9'].sessionPrice },
+          { label: 'Class 10-12', range: '10-12', price: classRanges['10-12'].sessionPrice },
+        ]);
+      } catch {
+        setButtons([
+          { label: 'Class 2-6', range: '2-6', price: 22 },
+          { label: 'Class 7-9', range: '7-9', price: 25 },
+          { label: 'Class 10-12', range: '10-12', price: 27 },
+        ]);
+      } finally {
+        setLoadingPrices(false);
+      }
+    };
+    fetchPricing();
+  }, [backendUrl]);
+
+  // Resume flow after sign-in
+  useEffect(() => {
+    if (isSignedIn && pendingFlowData) {
+      setInitialClassFlowData(pendingFlowData);
+      setIsModalOpen(true);
+      setPendingFlowData(null);
+    }
+  }, [isSignedIn, pendingFlowData]);
+
+  const handleButtonClick = (classRange, price) => {
+    if (isSignedIn) {
+      setInitialClassFlowData({ initialClassRange: classRange, basePrice: price });
+      setIsModalOpen(true);
+    } else {
+      setPendingFlowData({ initialClassRange: classRange, basePrice: price });
+      setShowStudentLogin(true);
+    }
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setInitialClassFlowData(null);
+  };
+
+  const lowestPrice = buttons.length > 0 ? Math.min(...buttons.map(b => b.price)) : '...';
 
   return (
-    // min-h-screen for desktop, min-h-[80vh] for mobile to account for a taller header/UI
-    <section className="relative min-h-[80vh] md:min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden pt-28 md:pt-20">
+    <section className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden flex flex-col">
       <style>{animations}</style>
 
-      {/* Animated background shapes with more subtle motion - Hiding complex shapes on mobile for performance/simplicity */}
-      <div className="hidden md:block absolute inset-0 opacity-60">
-        <div
-          className="absolute top-[10%] left-[10%] w-40 h-40 border-2 border-fuchsia-400 rounded-full animate-[spin-slow_15s_linear_infinite,move-circle_10s_ease-in-out_infinite_alternate]"
-          style={{ animationDelay: getRandomDelay() }}
-        ></div>
-        <div
-          className="absolute top-[20%] right-[15%] w-4 h-4 bg-teal-400 rounded-full animate-[move-dot_8s_ease-in-out_infinite_alternate]"
-          style={{ animationDelay: getRandomDelay() }}
-        ></div>
-        <div
-          className="absolute bottom-[25%] left-[20%] w-6 h-6 bg-rose-500 rounded-full animate-[move-dot_10s_ease-in-out_infinite_alternate]"
-          style={{ animationDelay: getRandomDelay() }}
-        ></div>
-        <div
-          className="absolute top-[40%] right-[30%] w-5 h-5 bg-yellow-300 rounded-full animate-[spin-slow_20s_linear_infinite_reverse,move-dot_12s_ease-in-out_infinite_alternate]"
-          style={{ animationDelay: getRandomDelay() }}
-        ></div>
-        <div
-          className="absolute bottom-[15%] right-[5%] w-3 h-3 bg-cyan-400 rounded-full animate-[move-dot_9s_ease-in-out_infinite_alternate]"
-          style={{ animationDelay: getRandomDelay() }}
-        ></div>
+      {/* Subtle background dots */}
+      <div className="hidden md:block absolute inset-0 opacity-50 pointer-events-none">
+        <div className="absolute top-[15%] left-[5%] w-4 h-4 bg-teal-400 rounded-full animate-[move-dot_8s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[20%] right-[8%] w-3 h-3 bg-rose-400 rounded-full animate-[move-dot_10s_ease-in-out_infinite_reverse]" />
+        <div className="absolute top-[50%] left-[50%] w-2 h-2 bg-yellow-300 rounded-full animate-[move-dot_12s_ease-in-out_infinite]" />
       </div>
 
-      {/* Adjusted padding for mobile/desktop */}
-      <div className="container mx-auto px-4 md:px-6 py-10 md:py-20 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="relative z-10 animate-[fade-in-up_1s_ease-out_forwards] text-center lg:text-left">
-            {/* Badges with responsive text size */}
-            <div className="flex flex-wrap gap-2 sm:gap-4 mb-4 sm:mb-6 justify-center lg:justify-start">
-              <div className="bg-white/10 backdrop-blur-sm px-3 py-1 sm:px-4 sm:py-2 rounded-lg text-white text-xs sm:text-sm transition-all duration-300 ease-in-out hover:bg-white/20 hover:scale-105 animate-[float_4s_ease-in-out_infinite]">
-                ✓ <a href="#pricing"><span className="font-semibold">One-on-One tutoring</span></a>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm px-3 py-1 sm:px-4 sm:py-2 rounded-lg text-white text-xs sm:text-sm transition-all duration-300 ease-in-out hover:bg-white/20 hover:scale-105 animate-[float_4s_ease-in-out_infinite_1s]">
-                ✓ <a href="#pricing"><span className="font-semibold">Classes 2-12</span></a>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm px-3 py-1 sm:px-4 sm:py-2 rounded-lg text-white text-xs sm:text-sm transition-all duration-300 ease-in-out hover:bg-white/20 hover:scale-105 animate-[float_4s_ease-in-out_infinite_2s]">
-                ✓ <a href="#tutors"><span className="font-semibold">Expert tutors matched</span></a>
-              </div>
+      <div className="container mx-auto px-4 md:px-8 relative z-10 flex-1 flex items-center py-24 md:py-28">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-20 items-center w-full">
+
+          {/* ── LEFT: Hero Text ── */}
+          <div className="animate-[fade-in-up_0.8s_ease-out_forwards] text-center lg:text-left">
+            {/* Badges */}
+            <div className="flex flex-wrap gap-2 sm:gap-3 mb-5 justify-center lg:justify-start">
+              {[
+                { text: 'One-on-One tutoring', href: '#pricing' },
+                { text: 'Classes 2-12', href: '#pricing' },
+                { text: 'Expert tutors matched', href: '#tutors' },
+              ].map((badge, i) => (
+                <a
+                  key={i}
+                  href={badge.href}
+                  className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg text-white text-sm sm:text-base font-semibold transition hover:bg-white/20 hover:scale-105 animate-[float_4s_ease-in-out_infinite]"
+                  style={{ animationDelay: `${i * 0.5}s` }}
+                >
+                  ✓ {badge.text}
+                </a>
+              ))}
             </div>
 
-            {/* Title with responsive font size */}
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 sm:mb-6 leading-tight max-w-2xl mx-auto lg:mx-0">
+            {/* Headline */}
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
               Build confidence with one-on-one, online school tutoring that's personalised to your child
             </h1>
 
-            {/* Trust badge with responsive font size */}
-            <div className="flex items-center gap-2 mb-6 sm:mb-8 animate-[fade-in-up_1s_ease-out_forwards_0.5s] justify-center lg:justify-start">
+            {/* Trust */}
+            <div className="flex items-center gap-3 mb-10 justify-center lg:justify-start animate-[fade-in-up_1s_ease-out_forwards_0.4s]">
               <div className="flex -space-x-2">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-orange-400 border-2 border-white transform transition-transform duration-300 hover:scale-110 hover:z-10 cursor-pointer"></div>
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-cyan-400 border-2 border-white transform transition-transform duration-300 hover:scale-110 hover:z-10 cursor-pointer"></div>
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-lime-400 border-2 border-white transform transition-transform duration-300 hover:scale-110 hover:z-10 cursor-pointer"></div>
+                <div className="w-11 h-11 rounded-full bg-orange-400 border-2 border-white" />
+                <div className="w-11 h-11 rounded-full bg-cyan-400 border-2 border-white" />
+                <div className="w-11 h-11 rounded-full bg-lime-400 border-2 border-white" />
               </div>
-              <p className="text-white text-base sm:text-lg animate-[float_4s_ease-in-out_infinite_0.5s]">
+              <p className="text-white text-base sm:text-lg">
                 Trusted by <span className="font-bold">a growing community of</span> families
               </p>
             </div>
 
-            {/* Buttons with responsive padding and font size */}
-            <div className="flex flex-wrap gap-4 justify-center lg:justify-start animate-[fade-in-up_1s_ease-out_forwards_1s]">
+            {/* CTA Buttons */}
+            <div className="flex flex-wrap gap-4 justify-center lg:justify-start animate-[fade-in-up_1s_ease-out_forwards_0.8s]">
               <button
                 onClick={() => setIsAssessmentModalOpen(true)}
-                className="relative px-6 py-3 sm:px-8 sm:py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-sm sm:text-base overflow-hidden transition transform hover:scale-105 shadow-xl"
+                className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-base sm:text-lg transition transform hover:scale-105 shadow-xl"
               >
-                <span className="relative z-10">Book a Free Assessment</span>
-                <span className="absolute inset-0 bg-[length:200%_auto] opacity-0 transition-opacity duration-500 ease-in-out animate-[background-pan_5s_linear_infinite] hover:opacity-100"></span>
+                Book a Free Assessment
               </button>
               <button
-                onClick={() => document.getElementById('how')?.scrollIntoView({ behavior: 'smooth' }) || window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
-                className="px-6 py-3 sm:px-8 sm:py-4 border-2 border-white text-white rounded-full font-semibold text-sm sm:text-base transition hover:bg-white hover:text-gray-900"
+                onClick={() => document.getElementById('how')?.scrollIntoView({ behavior: 'smooth' })}
+                className="px-8 py-4 border-2 border-white text-white rounded-full font-semibold text-base sm:text-lg transition hover:bg-white hover:text-gray-900"
               >
                 Learn More
               </button>
             </div>
           </div>
 
-          {/* Image Section - Hidden on mobile, visible on tablet/desktop */}
-          <div className="hidden lg:block relative animate-[fade-in-right_1s_ease-out_forwards]">
-            <img
-              src="https://images.pexels.com/photos/4145153/pexels-photo-4145153.jpeg?auto=compress&cs=tinysrgb&w=800"
-              alt="Student learning with Prime Mentor"
-              className="relative rounded-3xl w-full max-w-sm lg:max-w-md mx-auto shadow-2xl opacity-90 z-10"
-            />
+          {/* ── RIGHT: Pricing Box ── */}
+          <div className="animate-[fade-in-right_0.9s_ease-out_forwards] relative">
+            <div className="relative p-8 sm:p-10 md:p-12 rounded-2xl bg-white/5 border border-gray-600 backdrop-blur-md animate-[pulse-glow_4s_infinite_ease-in-out]">
+
+              {/* Price circle */}
+              <div className="absolute -top-6 -right-4 sm:-top-8 sm:-right-5
+                              w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36
+                              bg-gradient-to-br from-orange-500 to-red-600
+                              rounded-full flex flex-col items-center justify-center
+                              text-white font-extrabold text-center
+                              shadow-2xl border-4 border-white/70 z-10
+                              transition-transform hover:scale-105">
+                <span className="text-xs sm:text-sm font-semibold">Starts from</span>
+                <span className="text-3xl sm:text-4xl md:text-5xl font-black leading-none">${lowestPrice}</span>
+                <span className="text-sm font-bold">onwards</span>
+                <TrendingUp className="w-3 h-3 text-green-300 mt-0.5" />
+              </div>
+
+              {/* Title */}
+              <h2 className="text-white text-2xl sm:text-3xl md:text-4xl font-bold mb-3 pr-20">
+                Unlock Your Personalized Pricing
+              </h2>
+              <p className="text-gray-300 text-base sm:text-lg mb-8">
+                Complete a quick questionnaire (less than 1 minute) to find your ideal learning package.
+              </p>
+
+              {/* Pricing Buttons */}
+              <div className="flex flex-col gap-4">
+                {loadingPrices ? (
+                  <Loader className="w-7 h-7 text-orange-400 animate-spin mx-auto" />
+                ) : (
+                  buttons.map((button) => (
+                    <button
+                      key={button.range}
+                      onClick={() => handleButtonClick(button.range, button.price)}
+                      className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-4 px-6 rounded-full shadow-lg transition-all duration-300 hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wide"
+                    >
+                      View Pricing for {button.label}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
 
-      {/* Wave divider at the bottom */}
-      <div className="absolute bottom-0 left-0 right-0 animate-[fade-in-up_1.5s_ease-out_forwards_1.5s]">
-        <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
-          <path d="M0 120L1440 120L1440 0C1440 0 1080 80 720 80C360 80 0 0 0 0L0 120Z" fill="white" />
+      {/* Wave divider */}
+      <div className="absolute bottom-0 left-0 right-0">
+        <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+          <path d="M0 80L1440 80L1440 0C1440 0 1080 60 720 60C360 60 0 0 0 0L0 80Z" fill="white" />
         </svg>
       </div>
+
+      {isModalOpen && (
+        <PricingFlow isOpen={isModalOpen} onClose={closeModal} initialClassFlowData={initialClassFlowData} />
+      )}
     </section>
   );
 }

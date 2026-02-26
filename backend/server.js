@@ -12,7 +12,7 @@ import assessmentRoutes from './routes/assessmentRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
-import { clerkMiddleware } from '@clerk/express';
+
 import { generalApiLimiter } from './middlewares/rateLimiters.js';
 
 dotenv.config();
@@ -100,8 +100,7 @@ connectDB();
 //    Individual route files apply tighter limits on auth/contact/chat.
 app.use('/api', generalApiLimiter);
 
-// If Clerk causes issues you can temporarily comment this out
-app.use(clerkMiddleware());
+// Clerk removed — using custom JWT auth
 
 // Static uploads — only serve known file extensions
 app.use('/images', express.static('uploads'));
@@ -111,7 +110,8 @@ console.log('✅ Registering teacher routes...');
 app.use('/api/teacher', teacherRouter);
 
 console.log('✅ Registering student/user routes...');
-app.use('/api/user', userRoutes);
+app.use('/api/user', userRoutes);    // keeps legacy /api/user/* working
+app.use('/api/student', userRoutes); // new: /api/student/login|register|me|...
 
 console.log('✅ Registering assessment routes...');
 app.use('/api/assessments', assessmentRoutes);
@@ -135,15 +135,6 @@ app.get('/', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('💥 Error middleware caught:', err.message || err);
 
-  if (err?.clerkError || err?.httpStatus) {
-    const status = err.httpStatus || err.statusCode || 401;
-    return res
-      .status(status)
-      .json({ message: err.message || 'Unauthorized' });
-  }
-
-  // Respect the status code set by controllers (e.g., res.status(400) before throw)
-  // If res.statusCode was already set to a 4xx/5xx, use it; otherwise default to 500
   const statusCode = res.statusCode && res.statusCode >= 400 ? res.statusCode : 500;
   res.status(statusCode).json({ message: err.message || 'Internal Server Error' });
 });

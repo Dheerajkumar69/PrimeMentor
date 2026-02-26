@@ -642,7 +642,7 @@ export default function StudentManagement({ students: initialStudents }) {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {students.length > 0 ? (
                                     students.map((student) => (
-                                        <StudentRow key={student.clerkId} student={student} />
+                                        <StudentRow key={student._id} student={student} />
                                     ))
                                 ) : (
                                     <tr>

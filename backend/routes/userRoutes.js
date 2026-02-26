@@ -1,7 +1,12 @@
-// backend/routes/userRoutes.js (MODIFIED)
+// backend/routes/userRoutes.js
 
 import express from 'express';
 import {
+    registerStudent,
+    loginStudent,
+    forgotStudentPassword,
+    resetStudentPassword,
+    getStudentProfile,
     getUserCourses,
     createBooking,
     initiatePaymentAndBooking,
@@ -17,29 +22,36 @@ import { getPricing } from '../controllers/pricingController.js';
 
 const userRouter = express.Router();
 
-// Promo code validation — auth + rate-limit (20 attempts/hour) prevents enumeration
+// ── Public Auth Routes ──
+userRouter.post('/register', registerStudent);
+userRouter.post('/login', loginStudent);
+userRouter.post('/forgot-password', forgotStudentPassword);
+userRouter.post('/reset-password', resetStudentPassword);
+
+// ── Authenticated Student Profile ──
+userRouter.get('/me', protect, getStudentProfile);
+
+// ── Promo code validation ──
 userRouter.post('/promo/validate', protect, promoLimiter, validatePromoCode);
 
-// eWAY payment routes — require authenticated user
+// ── eWAY payment routes ──
 userRouter.post('/initiate-payment', protect, initiatePaymentAndBooking);
 userRouter.post('/finish-eway-payment', protect, finishEwayPaymentAndBooking);
 
-// The old booking endpoint is deprecated — keep auth to prevent anonymous abuse
+// ── Booking ──
 userRouter.post('/book', protect, createBooking);
 
-// Requires auth: only let signed-in students see their own courses
+// ── Student courses ──
 userRouter.get('/courses', protect, getUserCourses);
 
-// 🟢 NEW ROUTE FOR STUDENT FEEDBACK 🟢
+// ── Feedback ──
 userRouter.post('/feedback', protect, submitFeedback);
 
-// 🔁 Repeat/Recurring Classes
+// ── Repeat Classes ──
 userRouter.post('/repeat-classes', protect, requestRepeatClasses);
-
-// 💳 Repeat Classes Payment
 userRouter.post('/initiate-repeat-payment', protect, initiateRepeatPayment);
 
-// 💰 Public pricing endpoint (no auth needed)
+// ── Public pricing endpoint ──
 userRouter.get('/pricing', getPricing);
 
 export default userRouter;

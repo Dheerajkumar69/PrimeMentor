@@ -39,6 +39,14 @@ const sendWithRetry = async (client, emailPayload) => {
   for (let attempt = 1; attempt <= RETRY_MAX; attempt++) {
     try {
       const resp = await client.emails.send(emailPayload);
+
+      // Resend SDK v2+ returns { data: { id }, error: { ... } }
+      if (resp?.error) {
+        const errMsg = resp.error.message || JSON.stringify(resp.error);
+        console.error(`❌ Resend API returned error: ${errMsg}`);
+        throw new Error(`Resend API error: ${errMsg}`);
+      }
+
       return resp;
     } catch (err) {
       lastError = err;
@@ -649,7 +657,7 @@ export const sendPasswordResetEmail = async (recipientEmail, recipientName, rese
       html: htmlContent,
     });
 
-    console.log(`Password reset email sent to ${recipientEmail}. Resend ID:`, resp?.id || '[no id]');
+    console.log(`Password reset email sent to ${recipientEmail}. Resend ID:`, resp?.data?.id || resp?.id || '[no id]');
     return resp;
   } catch (err) {
     console.error('Error sending password reset email:', err?.message || err);

@@ -14,6 +14,14 @@ const safeDate = (d) => {
     } catch { return 'N/A'; }
 };
 
+const safeTime = (d) => {
+    try {
+        if (!d) return '';
+        const date = new Date(d);
+        return isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch { return ''; }
+};
+
 const safeCurrency = (amount) => {
     const num = Number(amount);
     return Number.isFinite(num) ? `$${num.toFixed(2)}` : '$0.00';
@@ -74,12 +82,13 @@ export default function PaymentRecords() {
     const handleExportCSV = () => {
         if (!payments || payments.length === 0) return;
 
-        const headers = ['Date', 'Student', 'Student Email', 'Course', 'Type', 'Status', 'Amount', 'Currency', 'Transaction ID', 'Promo Code', 'Discount Applied', 'Failure Reason'];
+        const headers = ['Date', 'Time', 'Student', 'Student Email', 'Course', 'Type', 'Status', 'Amount', 'Currency', 'Transaction ID', 'Promo Code', 'Discount Applied', 'Failure Reason'];
         const csvRows = [headers.join(',')];
 
         payments.forEach(p => {
             const row = [
                 new Date(p.createdAt).toLocaleDateString(),
+                new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
                 `"${p.studentDetails?.firstName || ''} ${p.studentDetails?.lastName || ''}"`,
                 `"${p.studentDetails?.email || ''}"`,
                 `"${p.courseTitle || ''}"`,
@@ -254,7 +263,7 @@ export default function PaymentRecords() {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
@@ -268,8 +277,9 @@ export default function PaymentRecords() {
                         {filteredPayments.length > 0 ? (
                             filteredPayments.map((payment) => (
                                 <tr key={payment._id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {safeDate(payment.createdAt)}
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-gray-900">{safeDate(payment.createdAt)}</div>
+                                        <div className="text-xs text-gray-500">{safeTime(payment.createdAt)}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm font-medium text-gray-900">
@@ -289,8 +299,8 @@ export default function PaymentRecords() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${payment.paymentStatus === 'failed'
-                                                ? 'bg-red-100 text-red-800'
-                                                : 'bg-green-100 text-green-800'
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-green-100 text-green-800'
                                             }`}>
                                             {payment.paymentStatus === 'failed' ? '❌ Failed' : '✅ Paid'}
                                         </span>
@@ -326,7 +336,7 @@ export default function PaymentRecords() {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan="8" className="px-6 py-10 text-center text-gray-500">
+                                <td colSpan="9" className="px-6 py-10 text-center text-gray-500">
                                     <CreditCard className="mx-auto h-12 w-12 text-gray-300 mb-3" />
                                     <p className="text-lg font-medium">No payments found</p>
                                     <p className="text-sm">Try adjusting your search or filters.</p>

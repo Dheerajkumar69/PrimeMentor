@@ -370,15 +370,10 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             }
         );
 
-        // Check for existing course enrollment (UNCHANGED)
+        // Check for existing course enrollment — still create ClassRequests & send emails
         const courseExists = student.courses.some(c => c.name === courseDetails.courseTitle);
         if (courseExists) {
-            console.warn(`User ${clerkId} already has course ${courseDetails.courseTitle}. Email not resent.`);
-            return res.status(200).json({
-                success: true,
-                message: 'Payment successful. Course already enrolled.',
-                course: student.courses.find(c => c.name === courseDetails.courseTitle)
-            });
+            console.warn(`⚠️ User ${clerkId} already has course ${courseDetails.courseTitle}. Will skip duplicate on User model, but still creating ClassRequests and sending emails.`);
         }
 
         const isTrial = purchaseType === 'TRIAL';
@@ -492,28 +487,34 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
         console.log(`Successfully created ${classRequestsToSave.length} ClassRequest(s) for admin.`);
 
         // --- 4. Add ONE Course Record to Student (User Model) ---
-        const newCourse = {
-            name: courseDetails.courseTitle,
-            description: isTrial ? `Trial session for ${courseDetails.courseTitle}` : `Starter Pack for ${courseDetails.courseTitle}`,
-            teacher: 'Pending Teacher',
-            duration: isTrial ? '1 hour trial' : `${numberOfSessions} sessions total`,
-            preferredDate: isTrial ? preferredDate : preferredWeekStart,
-            preferredTime: initialPreferredTime,
-            status: 'pending',
-            enrollmentDate: new Date(),
-            zoomMeetingUrl: '',
-            preferredTimeMonFri: isTrial ? null : preferredTimeMonFri,
-            preferredTimeSaturday: isTrial ? null : preferredTimeSaturday,
-            sessionsRemaining: isTrial ? 1 : numberOfSessions,
-            paymentStatus: 'paid',
-            transactionId: transactionID,
-            amountPaid: paymentAmount,
-            // 🚨 ADD PROMO CODE FIELDS HERE 🚨
-            promoCodeUsed: promoCode,
-            discountApplied: appliedDiscountAmount,
-        };
-        student.courses.push(newCourse);
-        await student.save();
+        // Skip if course with same name already exists (avoid duplicates on User model)
+        let newCourse = null;
+        if (!courseExists) {
+            newCourse = {
+                name: courseDetails.courseTitle,
+                description: isTrial ? `Trial session for ${courseDetails.courseTitle}` : `Starter Pack for ${courseDetails.courseTitle}`,
+                teacher: 'Pending Teacher',
+                duration: isTrial ? '1 hour trial' : `${numberOfSessions} sessions total`,
+                preferredDate: isTrial ? preferredDate : preferredWeekStart,
+                preferredTime: initialPreferredTime,
+                status: 'pending',
+                enrollmentDate: new Date(),
+                zoomMeetingUrl: '',
+                preferredTimeMonFri: isTrial ? null : preferredTimeMonFri,
+                preferredTimeSaturday: isTrial ? null : preferredTimeSaturday,
+                sessionsRemaining: isTrial ? 1 : numberOfSessions,
+                paymentStatus: 'paid',
+                transactionId: transactionID,
+                amountPaid: paymentAmount,
+                // 🚨 ADD PROMO CODE FIELDS HERE 🚨
+                promoCodeUsed: promoCode,
+                discountApplied: appliedDiscountAmount,
+            };
+            student.courses.push(newCourse);
+            await student.save();
+        } else {
+            console.log(`📝 Skipping duplicate course push to User model for ${courseDetails.courseTitle}. ClassRequests and emails will still be created.`);
+        }
 
 
 
@@ -581,8 +582,10 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
         // Final successful response
         res.status(201).json({
             success: true,
-            message: 'Payment successful. Booking submitted to admin for assignment. Confirmation email sent.',
-            course: newCourse
+            message: courseExists
+                ? 'Payment successful. Booking submitted to admin for assignment. Confirmation email sent. (Course was already in your profile.)'
+                : 'Payment successful. Booking submitted to admin for assignment. Confirmation email sent.',
+            course: newCourse || student.courses.find(c => c.name === courseDetails.courseTitle)
         });
 
     } catch (error) {

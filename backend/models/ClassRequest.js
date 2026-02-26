@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 
 const classRequestSchema = new mongoose.Schema(
     {
-        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
+        courseId: { type: String, required: true },
         courseTitle: { type: String, required: true },
         studentId: { type: String, required: true },
         studentName: { type: String, required: true },

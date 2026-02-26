@@ -512,7 +512,7 @@ const Step2Schedule = ({
 
         const payloadForNextStep = {
             courseDetails: {
-                courseId: quizData?.courseId || 'unknown_id', // Handle potential undefined if state was lost
+                courseId: quizData?.courseId || `course-${Date.now()}`,
                 courseTitle: `${quizData?.subject || 'Default Subject'} - Year ${quizData?.year || 'K'}`,
                 classRange: quizData?.initialClassRange,
             },

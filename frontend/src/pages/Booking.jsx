@@ -7,15 +7,7 @@ import { AppContext } from '../context/AppContext.jsx';
 import { assets } from '../assets/assets.js';
 import axios from 'axios';
 
-// Function to generate a random ObjectId-like string
-const generateObjectId = () => {
-    const hexChars = '0123456789abcdef';
-    let objectId = '';
-    for (let i = 0; i < 24; i++) {
-        objectId += hexChars[Math.floor(Math.random() * 16)];
-    }
-    return objectId;
-};
+
 
 // Updated function to handle all pricing and session text logic — NOW USES DYNAMIC PRICING
 const getRecommendedProgram = (data, pricingConfig) => {
@@ -95,7 +87,7 @@ const getRecommendedProgram = (data, pricingConfig) => {
             numberOfSessions: numberOfSessions,
             fixedDiscountAmount: fixedDiscountAmount
         },
-        courseId: `pending-${Date.now()}`,
+        courseId: `year${year}-${subject.toLowerCase().replace(/\s+/g, '_')}-${initialClassRange}-${Date.now()}`,
     };
 };
 

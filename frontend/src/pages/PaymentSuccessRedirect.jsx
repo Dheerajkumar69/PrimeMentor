@@ -33,23 +33,21 @@ const PaymentSuccessRedirect = () => {
             return;
         }
 
-        // --- 2. Retrieve Stored Payload ---
+        // --- 2. Retrieve Stored Payload (best-effort — backend has MongoDB fallback) ---
         const storedPayloadJSON = localStorage.getItem(EWAY_BOOKING_PAYLOAD_KEY);
         const storedAccessCode = localStorage.getItem(EWAY_ACCESS_CODE_KEY);
 
-        if (storedAccessCode !== accessCode) {
-            setStatus('error');
-            setMessage("Payment integrity check failed: Access code mismatch. Please contact support.");
-            return;
+        // Warn but DO NOT block — backend has PendingPayload in MongoDB as fallback
+        if (storedAccessCode && storedAccessCode !== accessCode) {
+            console.warn('⚠️ Access code mismatch — localStorage may be stale. Proceeding with backend fallback.');
         }
 
         if (!storedPayloadJSON) {
-            setStatus('error');
-            setMessage("Payment succeeded, but booking details were lost. Please contact support with your transaction ID.");
-            return;
+            console.warn('⚠️ localStorage booking payload missing (cleared during eWAY redirect). Backend will use MongoDB-cached PendingPayload.');
         }
 
-        const storedPayload = JSON.parse(storedPayloadJSON);
+        // Parse if available, otherwise pass null — backend resolves from PendingPayload
+        const storedPayload = storedPayloadJSON ? JSON.parse(storedPayloadJSON) : null;
 
         // --- 3. Finalize Payment and Booking ---
         const finishPayment = async () => {

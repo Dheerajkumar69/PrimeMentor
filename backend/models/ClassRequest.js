@@ -57,11 +57,12 @@ const classRequestSchema = new mongoose.Schema(
         // Payment Fields
         paymentStatus: {
             type: String,
-            enum: ['unpaid', 'paid', 'refunded'],
+            enum: ['unpaid', 'paid', 'refunded', 'failed'],
             default: 'paid'
         },
         transactionId: { type: String, default: null },
         amountPaid: { type: Number, default: 0 },
+        failureReason: { type: String, default: null },
         promoCodeUsed: { type: String, default: null },
         discountApplied: { type: Number, default: 0 },
         currency: { type: String, default: 'AUD' },

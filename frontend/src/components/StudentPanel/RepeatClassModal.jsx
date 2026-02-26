@@ -1,10 +1,12 @@
 // frontend/src/components/StudentPanel/RepeatClassModal.jsx
-import React, { useState } from 'react';
-import { X, Repeat, Calendar, Clock, Hash, Loader2, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Repeat, Calendar, Clock, Hash, Loader2, CheckCircle2, DollarSign, CreditCard } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const DAYS_OF_WEEK = [
     { value: 1, label: 'Monday' },
@@ -29,6 +31,24 @@ const TIME_SLOTS = [
     '7:00 PM - 8:00 PM',
 ];
 
+// Extract year level from course name like "All - Year 3" or "Maths (Year 10)"
+function extractYearLevel(courseName) {
+    const match = (courseName || '').match(/Year\s*(\d+)/i);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+// Get session price for a given year level from pricing ranges
+function getSessionPriceForYear(classRanges, yearLevel) {
+    if (!yearLevel || !classRanges) return null;
+    for (const [range, prices] of Object.entries(classRanges)) {
+        const [low, high] = range.split('-').map(Number);
+        if (yearLevel >= low && yearLevel <= high) {
+            return prices.sessionPrice;
+        }
+    }
+    return null;
+}
+
 const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
     const { getToken } = useAuth();
 
@@ -38,13 +58,12 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
         const parts = course.preferredDate.split('-').map(Number);
         const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
         const day = dateObj.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-        return day === 0 ? 1 : day; // Default to Monday if Sunday
+        return day === 0 ? 1 : day;
     };
 
     // Pre-fill time from the past session
     const getInitialTime = () => {
         if (!course?.preferredTime) return TIME_SLOTS[0];
-        // Find a matching time slot from our list
         const match = TIME_SLOTS.find(slot => slot.startsWith(course.preferredTime.split(' - ')[0]));
         return match || course.preferredTime || TIME_SLOTS[0];
     };
@@ -53,17 +72,61 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
     const [timeSlot, setTimeSlot] = useState(getInitialTime());
     const [repeatWeeks, setRepeatWeeks] = useState(4);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isSuccess, setIsSuccess] = useState(false);
-    const [resultDates, setResultDates] = useState([]);
+
+    // Pricing state
+    const [sessionPrice, setSessionPrice] = useState(null);
+    const [pricingError, setPricingError] = useState(null);
+    const [pricingLoading, setPricingLoading] = useState(true);
+
+    // Fetch pricing on mount
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const fetchPricing = async () => {
+            setPricingLoading(true);
+            setPricingError(null);
+            try {
+                const res = await axios.get(`${BACKEND_URL}/api/user/pricing`);
+                const classRanges = res.data?.classRanges;
+                const yearLevel = extractYearLevel(course?.name);
+
+                if (!yearLevel) {
+                    setPricingError('Could not determine year level for pricing.');
+                    return;
+                }
+
+                const price = getSessionPriceForYear(classRanges, yearLevel);
+                if (!price || price <= 0) {
+                    setPricingError(`No pricing found for Year ${yearLevel}.`);
+                    return;
+                }
+
+                setSessionPrice(price);
+            } catch (err) {
+                console.error('Failed to fetch pricing:', err);
+                setPricingError('Could not load pricing. Please try again.');
+            } finally {
+                setPricingLoading(false);
+            }
+        };
+
+        fetchPricing();
+    }, [isOpen, course?.name]);
+
+    const totalAmount = sessionPrice ? sessionPrice * repeatWeeks : 0;
 
     const handleSubmit = async () => {
+        if (!sessionPrice || totalAmount <= 0) {
+            toast.error('Unable to calculate pricing. Please try again.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const token = await getToken();
-            const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
             const res = await axios.post(
-                `${backendUrl}/api/user/repeat-classes`,
+                `${BACKEND_URL}/api/user/initiate-repeat-payment`,
                 {
                     courseId: course._id,
                     dayOfWeek,
@@ -73,14 +136,15 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            if (res.data.success) {
-                setIsSuccess(true);
-                setResultDates(res.data.dates || []);
-                toast.success(res.data.message);
-                if (onSuccess) onSuccess();
+            if (res.data.success && res.data.redirectUrl) {
+                toast.success('Redirecting to payment...');
+                // Redirect to eWAY payment page
+                window.location.href = res.data.redirectUrl;
+            } else {
+                toast.error(res.data.message || 'Failed to initiate payment.');
             }
         } catch (err) {
-            const msg = err.response?.data?.message || 'Failed to create repeat classes. Please try again.';
+            const msg = err.response?.data?.message || 'Failed to initiate payment. Please try again.';
             toast.error(msg);
         } finally {
             setIsSubmitting(false);
@@ -90,6 +154,7 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
     if (!isOpen) return null;
 
     const courseName = course?.name?.split('(')[0]?.trim() || 'Class';
+    const yearLevel = extractYearLevel(course?.name);
 
     return (
         <AnimatePresence>
@@ -122,119 +187,124 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
 
                     {/* Body */}
                     <div className="p-5 space-y-5">
-                        {isSuccess ? (
-                            /* Success State */
-                            <div className="text-center py-4">
-                                <CheckCircle2 size={48} className="text-green-500 mx-auto mb-3" />
-                                <h3 className="text-lg font-bold text-gray-800 mb-2">Repeat Classes Created!</h3>
-                                <p className="text-sm text-gray-600 mb-4">
-                                    {resultDates.length} class request(s) submitted. Your admin will assign a teacher and you'll receive Zoom links via email.
-                                </p>
-                                <div className="bg-gray-50 rounded-lg p-3 text-left max-h-40 overflow-y-auto">
-                                    <p className="text-xs font-semibold text-gray-500 mb-2">Scheduled Dates:</p>
-                                    {resultDates.map((date, i) => (
-                                        <p key={i} className="text-sm text-gray-700 flex items-center gap-2 py-0.5">
-                                            <Calendar size={12} className="text-indigo-400" />
-                                            {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', {
-                                                weekday: 'long', day: 'numeric', month: 'short', year: 'numeric'
-                                            })}
-                                        </p>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={onClose}
-                                    className="mt-5 w-full py-2.5 px-4 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition"
-                                >
-                                    Done
-                                </button>
-                            </div>
-                        ) : (
-                            /* Form State */
-                            <>
-                                {/* Day of Week */}
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                                        <Calendar size={16} className="text-indigo-500" />
-                                        Day of Week
-                                    </label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {DAYS_OF_WEEK.map(d => (
-                                            <button
-                                                key={d.value}
-                                                onClick={() => setDayOfWeek(d.value)}
-                                                className={`py-2 px-3 rounded-lg text-sm font-medium transition border ${dayOfWeek === d.value
-                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                                                        : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
-                                                    }`}
-                                            >
-                                                {d.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Time Slot */}
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                                        <Clock size={16} className="text-indigo-500" />
-                                        Time Slot
-                                    </label>
-                                    <select
-                                        value={timeSlot}
-                                        onChange={(e) => setTimeSlot(e.target.value)}
-                                        className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                        {/* Day of Week */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                                <Calendar size={16} className="text-indigo-500" />
+                                Day of Week
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {DAYS_OF_WEEK.map(d => (
+                                    <button
+                                        key={d.value}
+                                        onClick={() => setDayOfWeek(d.value)}
+                                        className={`py-2 px-3 rounded-lg text-sm font-medium transition border ${dayOfWeek === d.value
+                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                                            : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+                                            }`}
                                     >
-                                        {TIME_SLOTS.map(slot => (
-                                            <option key={slot} value={slot}>{slot}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                        {d.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-                                {/* Number of Weeks */}
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                                        <Hash size={16} className="text-indigo-500" />
-                                        Number of Weeks
-                                    </label>
-                                    <div className="flex items-center gap-3">
-                                        <input
-                                            type="range"
-                                            min={1}
-                                            max={12}
-                                            value={repeatWeeks}
-                                            onChange={(e) => setRepeatWeeks(parseInt(e.target.value, 10))}
-                                            className="flex-1 accent-indigo-600"
-                                        />
-                                        <span className="text-lg font-bold text-indigo-600 w-10 text-center">
-                                            {repeatWeeks}
-                                        </span>
+                        {/* Time Slot */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                                <Clock size={16} className="text-indigo-500" />
+                                Time Slot
+                            </label>
+                            <select
+                                value={timeSlot}
+                                onChange={(e) => setTimeSlot(e.target.value)}
+                                className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            >
+                                {TIME_SLOTS.map(slot => (
+                                    <option key={slot} value={slot}>{slot}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Number of Weeks */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                                <Hash size={16} className="text-indigo-500" />
+                                Number of Weeks
+                            </label>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={12}
+                                    value={repeatWeeks}
+                                    onChange={(e) => setRepeatWeeks(parseInt(e.target.value, 10))}
+                                    className="flex-1 accent-indigo-600"
+                                />
+                                <span className="text-lg font-bold text-indigo-600 w-10 text-center">
+                                    {repeatWeeks}
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {repeatWeeks} {repeatWeeks === 1 ? 'class' : 'classes'} will be scheduled, one per week on{' '}
+                                {DAYS_OF_WEEK.find(d => d.value === dayOfWeek)?.label || 'your chosen day'}.
+                            </p>
+                        </div>
+
+                        {/* Payment Summary */}
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <DollarSign size={18} className="text-green-600" />
+                                <span className="text-sm font-bold text-green-800">Payment Summary</span>
+                            </div>
+                            {pricingLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-gray-500">
+                                    <Loader2 size={14} className="animate-spin" />
+                                    Loading pricing...
+                                </div>
+                            ) : pricingError ? (
+                                <p className="text-sm text-red-500">{pricingError}</p>
+                            ) : (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-sm text-gray-600">
+                                        <span>Session price {yearLevel ? `(Year ${yearLevel})` : ''}</span>
+                                        <span>${sessionPrice?.toFixed(2)} AUD</span>
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        {repeatWeeks} {repeatWeeks === 1 ? 'class' : 'classes'} will be requested, one per week on{' '}
-                                        {DAYS_OF_WEEK.find(d => d.value === dayOfWeek)?.label || 'your chosen day'}.
-                                    </p>
+                                    <div className="flex justify-between text-sm text-gray-600">
+                                        <span>Number of sessions</span>
+                                        <span>× {repeatWeeks}</span>
+                                    </div>
+                                    <hr className="border-green-200 my-2" />
+                                    <div className="flex justify-between text-base font-bold text-green-800">
+                                        <span>Total</span>
+                                        <span>${totalAmount.toFixed(2)} AUD</span>
+                                    </div>
                                 </div>
+                            )}
+                        </div>
 
-                                {/* Submit */}
-                                <button
-                                    onClick={handleSubmit}
-                                    disabled={isSubmitting}
-                                    className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <Loader2 size={18} className="animate-spin" />
-                                            Creating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Repeat size={18} />
-                                            Set {repeatWeeks} Repeat {repeatWeeks === 1 ? 'Class' : 'Classes'}
-                                        </>
-                                    )}
-                                </button>
-                            </>
-                        )}
+                        {/* Submit Button */}
+                        <button
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || pricingLoading || !!pricingError || totalAmount <= 0}
+                            className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 size={18} className="animate-spin" />
+                                    Redirecting to payment...
+                                </>
+                            ) : (
+                                <>
+                                    <CreditCard size={18} />
+                                    Pay ${totalAmount > 0 ? totalAmount.toFixed(2) : '...'} & Set {repeatWeeks} Repeat {repeatWeeks === 1 ? 'Class' : 'Classes'}
+                                </>
+                            )}
+                        </button>
+
+                        <p className="text-xs text-center text-gray-400">
+                            You'll be redirected to our secure payment gateway (eWAY) to complete payment.
+                        </p>
                     </div>
                 </motion.div>
             </div>

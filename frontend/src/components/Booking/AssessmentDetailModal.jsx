@@ -450,6 +450,9 @@ const AssessmentDetailModal = ({ isOpen, onClose, booking, approvalMode = false,
                             {booking.country && (
                                 <ContactItem icon={User} title="Country" value={booking.country} />
                             )}
+                            {booking.state && (
+                                <ContactItem icon={User} title="State / Province" value={booking.state} />
+                            )}
                             {booking.postalCode && (
                                 <ContactItem icon={User} title="Postal Code" value={booking.postalCode} />
                             )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DollarSign, Search, Calendar, CreditCard, ShoppingBag, Download, TrendingUp, Users } from 'lucide-react';
+import { DollarSign, Search, Calendar, CreditCard, ShoppingBag, Download, TrendingUp, Users, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -26,6 +26,7 @@ export default function PaymentRecords() {
     const [fetchError, setFetchError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('ALL');
+    const [filterStatus, setFilterStatus] = useState('ALL');
 
     useEffect(() => {
         fetchPayments();
@@ -73,7 +74,7 @@ export default function PaymentRecords() {
     const handleExportCSV = () => {
         if (!payments || payments.length === 0) return;
 
-        const headers = ['Date', 'Student', 'Student Email', 'Course', 'Type', 'Amount', 'Currency', 'Transaction ID', 'Promo Code', 'Discount Applied'];
+        const headers = ['Date', 'Student', 'Student Email', 'Course', 'Type', 'Status', 'Amount', 'Currency', 'Transaction ID', 'Promo Code', 'Discount Applied', 'Failure Reason'];
         const csvRows = [headers.join(',')];
 
         payments.forEach(p => {
@@ -83,11 +84,13 @@ export default function PaymentRecords() {
                 `"${p.studentDetails?.email || ''}"`,
                 `"${p.courseTitle || ''}"`,
                 p.purchaseType,
+                p.paymentStatus || 'paid',
                 p.amountPaid,
                 p.currency || 'AUD',
                 p.transactionId,
                 p.promoCodeUsed || 'None',
-                p.discountApplied || 0
+                p.discountApplied || 0,
+                `"${p.failureReason || ''}"`,
             ];
             csvRows.push(row.join(','));
         });
@@ -105,9 +108,8 @@ export default function PaymentRecords() {
     const filteredPayments = (payments || []).filter(p => {
         if (!p) return false;
         const term = (searchTerm || '').toLowerCase();
-        if (!term) return filterType === 'ALL' || p.purchaseType === filterType;
 
-        const matchesSearch =
+        const matchesSearch = !term ||
             (p.studentDetails?.firstName || '').toLowerCase().includes(term) ||
             (p.studentDetails?.lastName || '').toLowerCase().includes(term) ||
             (p.studentDetails?.email || '').toLowerCase().includes(term) ||
@@ -116,8 +118,9 @@ export default function PaymentRecords() {
             (p.courseTitle || '').toLowerCase().includes(term);
 
         const matchesType = filterType === 'ALL' || p.purchaseType === filterType;
+        const matchesStatus = filterStatus === 'ALL' || p.paymentStatus === filterStatus;
 
-        return matchesSearch && matchesType;
+        return matchesSearch && matchesType && matchesStatus;
     });
 
     if (isLoading) {
@@ -200,6 +203,17 @@ export default function PaymentRecords() {
                             <h3 className="text-2xl font-bold text-purple-800">{summary.starterPackCount}</h3>
                         </div>
                     </div>
+                    {summary.failedCount > 0 && (
+                        <div className="bg-red-50 rounded-xl p-4 border border-red-100 flex items-center">
+                            <div className="rounded-full bg-red-100 p-3 mr-4">
+                                <AlertTriangle className="w-6 h-6 text-red-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-red-600 font-medium">Failed Payments</p>
+                                <h3 className="text-2xl font-bold text-red-800">{summary.failedCount}</h3>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -224,6 +238,15 @@ export default function PaymentRecords() {
                     <option value="TRIAL">Trial Sessions</option>
                     <option value="STARTER_PACK">Starter Packs</option>
                 </select>
+                <select
+                    className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                    <option value="ALL">All Statuses</option>
+                    <option value="paid">✅ Paid</option>
+                    <option value="failed">❌ Failed</option>
+                </select>
             </div>
 
             {/* Payments Table */}
@@ -235,6 +258,7 @@ export default function PaymentRecords() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Promo</th>
@@ -264,6 +288,19 @@ export default function PaymentRecords() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${payment.paymentStatus === 'failed'
+                                                ? 'bg-red-100 text-red-800'
+                                                : 'bg-green-100 text-green-800'
+                                            }`}>
+                                            {payment.paymentStatus === 'failed' ? '❌ Failed' : '✅ Paid'}
+                                        </span>
+                                        {payment.paymentStatus === 'failed' && payment.failureReason && (
+                                            <div className="text-xs text-red-500 mt-1 max-w-[200px] truncate" title={payment.failureReason}>
+                                                {payment.failureReason}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm font-bold text-gray-900">{safeCurrency(payment.amountPaid)} {payment.currency || 'AUD'}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
@@ -289,7 +326,7 @@ export default function PaymentRecords() {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan="7" className="px-6 py-10 text-center text-gray-500">
+                                <td colSpan="8" className="px-6 py-10 text-center text-gray-500">
                                     <CreditCard className="mx-auto h-12 w-12 text-gray-300 mb-3" />
                                     <p className="text-lg font-medium">No payments found</p>
                                     <p className="text-sm">Try adjusting your search or filters.</p>

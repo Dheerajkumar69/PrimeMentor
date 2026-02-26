@@ -9,9 +9,11 @@ import {
     validatePromoCode,
     submitFeedback,
     requestRepeatClasses,
+    initiateRepeatPayment,
 } from '../controllers/userController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { promoLimiter } from '../middlewares/rateLimiters.js';
+import { getPricing } from '../controllers/pricingController.js';
 
 const userRouter = express.Router();
 
@@ -33,5 +35,11 @@ userRouter.post('/feedback', protect, submitFeedback);
 
 // 🔁 Repeat/Recurring Classes
 userRouter.post('/repeat-classes', protect, requestRepeatClasses);
+
+// 💳 Repeat Classes Payment
+userRouter.post('/initiate-repeat-payment', protect, initiateRepeatPayment);
+
+// 💰 Public pricing endpoint (no auth needed)
+userRouter.get('/pricing', getPricing);
 
 export default userRouter;

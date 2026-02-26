@@ -778,3 +778,105 @@ export const sendNewPurchaseNotification = async (purchaseDetails = {}, classReq
   }
 };
 
+
+
+/**
+ * Sends a payment failure notification email to the customer.
+ * @param {string} recipientEmail - Customer email address
+ * @param {object} details - Payment failure details
+ */
+export const sendPaymentFailureEmail = async (recipientEmail, details = {}) => {
+  const client = getResendClient();
+  if (!client) {
+    console.error('Skipping sendPaymentFailureEmail(): Resend client not configured.');
+    return;
+  }
+
+  const {
+    studentName = 'Valued Customer',
+    courseTitle = 'Course',
+    amountAttempted = '0.00',
+    currency = 'AUD',
+    failureReason = 'Transaction was declined.',
+    transactionId = 'N/A',
+  } = details;
+
+  const retryUrl = process.env.FRONTEND_URL || 'https://primementor.com.au';
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Payment Could Not Be Processed</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+            .header { background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
+            .header h2 { margin: 0; font-size: 22px; }
+            .content { padding: 20px; }
+            .details-box { background-color: #fef2f2; padding: 15px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #dc2626; }
+            .retry-box { background-color: #eff6ff; padding: 15px; border-radius: 6px; margin-top: 15px; text-align: center; border: 2px solid #3b82f6; }
+            .retry-box a { display: inline-block; background: #3b82f6; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px; }
+            ul { list-style-type: none; padding: 0; }
+            li { margin-bottom: 8px; padding: 5px 0; border-bottom: 1px dashed #eee; }
+            .footer { text-align: center; margin-top: 20px; color: #888; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>⚠️ Payment Could Not Be Processed</h2>
+            </div>
+            <div class="content">
+                <p>Dear <strong>${studentName}</strong>,</p>
+                <p>Unfortunately, your payment for <strong>${courseTitle}</strong> could not be processed. Don't worry — no charges have been applied to your account.</p>
+
+                <div class="details-box">
+                    <h3 style="margin-top: 0; color: #dc2626;">❌ Payment Details</h3>
+                    <ul>
+                        <li><strong>Course:</strong> ${courseTitle}</li>
+                        <li><strong>Amount Attempted:</strong> $${amountAttempted} ${currency}</li>
+                        <li><strong>Reason:</strong> ${failureReason}</li>
+                        ${transactionId !== 'N/A' ? `<li><strong>Reference:</strong> ${transactionId}</li>` : ''}
+                    </ul>
+                </div>
+
+                <div class="retry-box">
+                    <p style="margin-top: 0; font-weight: bold; color: #1e40af;">🔄 Want to try again?</p>
+                    <a href="${retryUrl}">Visit Prime Mentor</a>
+                </div>
+
+                <p style="margin-top: 20px;">Common reasons for payment failure include:</p>
+                <ul style="list-style: disc; padding-left: 20px;">
+                    <li>Insufficient funds</li>
+                    <li>Incorrect card details</li>
+                    <li>Card issuer declined the transaction</li>
+                    <li>Expired card</li>
+                </ul>
+
+                <p>If this issue persists, please contact us at <a href="mailto:info@primementor.com.au">info@primementor.com.au</a> and we'll be happy to help.</p>
+                <p>Best regards,<br><strong>The Prime Mentor Team</strong></p>
+            </div>
+            <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} Prime Mentor. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const resp = await sendWithRetry(client, {
+      from: `Prime Mentor <${senderEmail}>`,
+      to: [recipientEmail],
+      subject: `⚠️ Payment Failed: ${courseTitle} — Please Try Again`,
+      html: htmlContent,
+    });
+
+    console.log(`Payment failure email sent to ${recipientEmail}. Resend ID:`, resp?.id || '[no id]');
+    return resp;
+  } catch (err) {
+    console.error('Error sending payment failure email:', err?.message || err);
+    // Non-blocking — don't throw
+  }
+};

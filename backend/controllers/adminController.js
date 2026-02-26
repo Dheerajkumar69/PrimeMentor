@@ -792,7 +792,7 @@ export const getAllFeedback = asyncHandler(async (req, res) => {
 export const getAllPayments = asyncHandler(async (req, res) => {
     try {
         // Fetch all ClassRequests that have been paid, sorted newest first
-        const payments = await ClassRequest.find({ paymentStatus: 'paid' })
+        const payments = await ClassRequest.find({ paymentStatus: { $in: ['paid', 'failed'] } })
             .populate('teacherId', 'name email')
             .sort({ createdAt: -1 })
             .lean();
@@ -815,15 +815,18 @@ export const getAllPayments = asyncHandler(async (req, res) => {
             }
         }
 
-        // 🛡️ Safe aggregation with NaN guards
-        const totalRevenue = payments.reduce((sum, p) => {
+        // 🛡️ Safe aggregation with NaN guards — revenue only from paid records
+        const paidPayments = payments.filter(p => p.paymentStatus === 'paid');
+        const totalRevenue = paidPayments.reduce((sum, p) => {
             const amount = Number(p.amountPaid);
             return sum + (Number.isFinite(amount) ? amount : 0);
         }, 0);
 
         const totalCount = payments.length;
-        const trialCount = payments.filter(p => p.purchaseType === 'TRIAL').length;
-        const starterPackCount = payments.filter(p => p.purchaseType === 'STARTER_PACK').length;
+        const paidCount = paidPayments.length;
+        const failedCount = payments.filter(p => p.paymentStatus === 'failed').length;
+        const trialCount = paidPayments.filter(p => p.purchaseType === 'TRIAL').length;
+        const starterPackCount = paidPayments.filter(p => p.purchaseType === 'STARTER_PACK').length;
 
         // 🛡️ Normalize each payment record — enrich with User data if studentDetails is missing
         const normalizedPayments = payments.map(p => {
@@ -856,6 +859,8 @@ export const getAllPayments = asyncHandler(async (req, res) => {
                 studentDetails: enrichedDetails,
                 subject: p.subject || 'N/A',
                 purchaseType: p.purchaseType || 'UNKNOWN',
+                paymentStatus: p.paymentStatus || 'paid',
+                failureReason: p.failureReason || null,
                 currency: p.currency || 'AUD',
                 promoCodeUsed: p.promoCodeUsed || null,
                 discountApplied: Number(p.discountApplied) || 0,
@@ -868,16 +873,18 @@ export const getAllPayments = asyncHandler(async (req, res) => {
             summary: {
                 totalRevenue: parseFloat(totalRevenue.toFixed(2)),
                 totalCount,
+                paidCount,
+                failedCount,
                 trialCount,
                 starterPackCount,
-                averagePayment: totalCount > 0 ? parseFloat((totalRevenue / totalCount).toFixed(2)) : 0,
+                averagePayment: paidCount > 0 ? parseFloat((totalRevenue / paidCount).toFixed(2)) : 0,
             }
         });
     } catch (error) {
         console.error('❌ Error fetching payment records:', error?.message || error);
         res.status(500).json({
             payments: [],
-            summary: { totalRevenue: 0, totalCount: 0, trialCount: 0, starterPackCount: 0, averagePayment: 0 },
+            summary: { totalRevenue: 0, totalCount: 0, paidCount: 0, failedCount: 0, trialCount: 0, starterPackCount: 0, averagePayment: 0 },
             message: 'Failed to fetch payment records.'
         });
     }

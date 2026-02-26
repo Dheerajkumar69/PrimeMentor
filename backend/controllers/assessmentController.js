@@ -13,7 +13,7 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
         studentFirstName, studentLastName, studentEmail, studentPhone,
         parentFirstName, parentLastName, parentEmail,
         contactNumber, subject, class: studentClass,
-        postalCode, country,
+        postalCode, country, state,
     } = req.body;
 
     // Comprehensive validation for all required fields
@@ -42,6 +42,7 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
         subject: String(subject).trim(),
         postalCode: postalCode ? String(postalCode).trim() : null,
         country: country ? String(country).trim() : null,
+        state: state ? String(state).trim() : null,
     };
 
     // Validate trimmed required fields aren't empty

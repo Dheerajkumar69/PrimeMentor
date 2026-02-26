@@ -40,6 +40,7 @@ const assessmentSchema = mongoose.Schema(
         // Student location & timezone
         postalCode: { type: String, default: null },
         country: { type: String, default: null },
+        state: { type: String, default: null },
         studentTimezone: { type: String, default: 'UTC' },
 
         // CRITICAL: New Field to confirm it's a free assessment request

@@ -10,7 +10,7 @@ import { clerkClient } from '@clerk/express';
 import rapid from 'eway-rapid';
 import FeedbackModel from '../models/FeedbackModel.js';
 import PendingPayload from '../models/PendingPayload.js';
-import { sendCourseConfirmationEmail, sendNewPurchaseNotification } from '../utils/emailService.js';
+import { sendCourseConfirmationEmail, sendNewPurchaseNotification, sendPaymentFailureEmail } from '../utils/emailService.js';
 
 // 🚨 NEW IMPORT 🚨
 import PromoCode from '../models/PromoCodeModel.js';
@@ -272,15 +272,85 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                 });
             }
         } else {
-            // Handle payment failure
+            // Handle payment failure — NOW creates a tracking record
             const responseMessage = transaction.ResponseMessage || '';
             const errorCodes = responseMessage.split(', ').filter(Boolean).map(errorCode => {
                 try { return rapid.getMessage(errorCode, "en"); } catch { return errorCode; }
             });
-            errorDetails = `Payment declined by eWAY. Messages: ${errorCodes.join(' | ')}`;
+            const failureReason = errorCodes.join(' | ') || 'Transaction declined by bank.';
+            errorDetails = `Payment declined by eWAY. Messages: ${failureReason}`;
+            transactionID = String(transaction.TransactionID || 'N/A');
             console.error(`eWAY Transaction Failed: ${errorDetails}`);
 
-            throw new Error(`Payment declined. Reason: ${errorCodes[0] || 'Transaction declined by bank.'}`);
+            // --- CREATE FAILED PAYMENT RECORD FOR TRACKING ---
+            try {
+                // Retrieve booking payload for the failed record
+                const cachedEntry = await PendingPayload.findOneAndDelete({ accessCode });
+                const failedPayload = cachedEntry ? cachedEntry.payload : bookingPayload;
+
+                if (failedPayload) {
+                    const courseDetails = failedPayload.courseDetails || {};
+                    const studentDetails = failedPayload.studentDetails || {};
+                    const guardianDetails = failedPayload.guardianDetails || {};
+                    const rawAmount = failedPayload.paymentAmount;
+                    const amount = (typeof rawAmount === 'number' && Number.isFinite(rawAmount) && rawAmount > 0) ? rawAmount : 0;
+
+                    // Create a single ClassRequest with paymentStatus: 'failed'
+                    await ClassRequest.create({
+                        courseId: courseDetails.courseId || 'unknown',
+                        courseTitle: courseDetails.courseTitle || 'Unknown Course',
+                        studentId: clerkId,
+                        studentName: studentDetails.first && studentDetails.last
+                            ? `${studentDetails.first} ${studentDetails.last}` : 'Unknown Student',
+                        purchaseType: failedPayload.scheduleDetails?.purchaseType || 'TRIAL',
+                        preferredDate: failedPayload.scheduleDetails?.preferredDate || null,
+                        scheduleTime: failedPayload.scheduleDetails?.preferredTime || null,
+                        subject: courseDetails.subject || 'N/A',
+                        studentDetails: {
+                            firstName: studentDetails.first || '',
+                            lastName: studentDetails.last || '',
+                            email: studentDetails.email || guardianDetails.email || '',
+                        },
+                        paymentStatus: 'failed',
+                        transactionId: transactionID,
+                        amountPaid: amount,
+                        failureReason: failureReason,
+                        currency: 'AUD',
+                        status: 'rejected',
+                    });
+                    console.log(`📝 Failed payment record created for tracking. TransactionID: ${transactionID}`);
+
+                    // Send failure notification email to customer (non-blocking)
+                    const customerEmail = studentDetails.email || guardianDetails.email;
+                    if (customerEmail && customerEmail.includes('@')) {
+                        try {
+                            await sendPaymentFailureEmail(customerEmail, {
+                                studentName: studentDetails.first
+                                    ? `${studentDetails.first} ${studentDetails.last || ''}`.trim()
+                                    : 'Valued Customer',
+                                courseTitle: courseDetails.courseTitle || 'Course',
+                                amountAttempted: amount > 0 ? amount.toFixed(2) : '0.00',
+                                currency: 'AUD',
+                                failureReason: failureReason,
+                                transactionId: transactionID,
+                            });
+                            console.log(`📧 Payment failure email sent to: ${customerEmail}`);
+                        } catch (emailErr) {
+                            console.error(`⚠️ Failed to send payment failure email:`, emailErr?.message || emailErr);
+                        }
+                    }
+                } else {
+                    console.warn('⚠️ No booking payload available to create failed payment record.');
+                }
+            } catch (trackingErr) {
+                console.error('⚠️ Failed to create failed payment tracking record:', trackingErr?.message || trackingErr);
+                // Non-blocking — still return the error to the user
+            }
+
+            return res.status(400).json({
+                success: false,
+                message: `Payment declined. Reason: ${errorCodes[0] || 'Transaction declined by bank.'}`,
+            });
         }
 
         // --- 2. Finalize Booking (Booking Logic) ---
@@ -297,6 +367,82 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
         if (!resolvedPayload) {
             throw new Error("Payment successful, but booking data was lost during redirect. Please contact support.");
+        }
+
+
+        // --- REPEAT CLASS HANDLING ---
+        // If the payload is a repeat booking, create paid ClassRequests and return early
+        if (resolvedPayload.type === 'REPEAT') {
+            console.log(`🔁 Processing REPEAT payment. ${resolvedPayload.repeatWeeks} sessions for ${resolvedPayload.courseName}`);
+
+            const repeatRequests = (resolvedPayload.sessionDates || []).map((dateStr, i) => new ClassRequest({
+                courseId: resolvedPayload.courseId || 'unknown',
+                courseTitle: `${(resolvedPayload.courseName || 'Course').split('(')[0].trim()} (Repeat ${i + 1}/${resolvedPayload.repeatWeeks})`,
+                studentId: clerkId,
+                studentName: resolvedPayload.studentName || 'Unknown Student',
+                purchaseType: 'TRIAL',
+                preferredDate: dateStr,
+                scheduleTime: resolvedPayload.timeSlot || 'N/A',
+                subject: resolvedPayload.courseSubject || 'N/A',
+                studentDetails: {
+                    firstName: (resolvedPayload.studentName || '').split(' ')[0] || '',
+                    lastName: (resolvedPayload.studentName || '').split(' ').slice(1).join(' ') || '',
+                    email: resolvedPayload.studentEmail || '',
+                },
+                status: 'pending',
+                paymentStatus: 'paid',
+                transactionId: transactionID,
+                amountPaid: resolvedPayload.sessionPrice || 0,
+                currency: resolvedPayload.currency || 'AUD',
+            }));
+
+            await ClassRequest.insertMany(repeatRequests);
+            console.log(`✅ Created ${repeatRequests.length} PAID repeat ClassRequest(s). TransactionID: ${transactionID}`);
+
+            // Send confirmation email for repeat booking
+            const emailRecipient = resolvedPayload.studentEmail;
+            if (emailRecipient && emailRecipient.includes('@')) {
+                try {
+                    await sendCourseConfirmationEmail(
+                        emailRecipient,
+                        {
+                            courseTitle: resolvedPayload.courseName || 'Course',
+                            transactionId: transactionID,
+                            amountPaid: resolvedPayload.paymentAmount || 0,
+                            currency: resolvedPayload.currency || 'AUD',
+                        },
+                        {
+                            name: resolvedPayload.studentName || 'Student',
+                        },
+                        repeatRequests
+                    );
+                    console.log(`📧 Repeat booking confirmation email sent to: ${emailRecipient}`);
+                } catch (emailErr) {
+                    console.error('⚠️ Failed to send repeat booking confirmation:', emailErr?.message || emailErr);
+                }
+            }
+
+            // Send company notification
+            try {
+                await sendNewPurchaseNotification({
+                    studentName: resolvedPayload.studentName,
+                    studentEmail: resolvedPayload.studentEmail,
+                    courseTitle: resolvedPayload.courseName,
+                    amountPaid: resolvedPayload.paymentAmount,
+                    transactionId: transactionID,
+                    purchaseType: `REPEAT (${resolvedPayload.repeatWeeks} sessions)`,
+                }, repeatRequests);
+            } catch (notifErr) {
+                console.error('⚠️ Failed to send company notification for repeat:', notifErr?.message || notifErr);
+            }
+
+            return res.status(201).json({
+                success: true,
+                message: `Payment successful! ${repeatRequests.length} repeat class(es) booked. Confirmation email sent.`,
+                requestsCreated: repeatRequests.length,
+                dates: resolvedPayload.sessionDates,
+                transactionId: transactionID,
+            });
         }
 
         // 🛡️ DEFENSIVE: Safely destructure with defaults for every field
@@ -818,4 +964,181 @@ export const requestRepeatClasses = asyncHandler(async (req, res) => {
         requestsCreated: classRequests.length,
         dates: sessionDates,
     });
+});
+
+// 🟢 NEW CONTROLLER: Initiate eWAY Payment for Repeat Classes 🟢
+// @desc    Calculate total cost and create eWAY payment session for repeat classes
+// @route   POST /api/user/initiate-repeat-payment
+// @access  Private (Student - requires authentication)
+import PricingModel from '../models/PricingModel.js';
+
+// Helper: extract year level number from course name like "All - Year 3" or "Maths (Year 10)"
+function extractYearLevel(courseName) {
+    const match = (courseName || '').match(/Year\s*(\d+)/i);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+// Helper: get session price for a given year level from PricingModel
+function getSessionPriceForYear(classRanges, yearLevel) {
+    if (!yearLevel || !classRanges) return null;
+
+    // classRanges keys are like "2-6", "7-9", "10-12"
+    for (const [range, prices] of Object.entries(classRanges)) {
+        const [low, high] = range.split('-').map(Number);
+        if (yearLevel >= low && yearLevel <= high) {
+            return prices.sessionPrice;
+        }
+    }
+    return null;
+}
+
+export const initiateRepeatPayment = asyncHandler(async (req, res) => {
+    const clerkId = getClerkUserIdFromToken(req);
+
+    if (!clerkId) {
+        return res.status(401).json({ success: false, message: "Authentication failed. Please log in again." });
+    }
+
+    const { courseId, dayOfWeek, timeSlot, repeatWeeks } = req.body;
+
+    // --- Validation ---
+    if (!courseId || !timeSlot || dayOfWeek === undefined || dayOfWeek === null) {
+        return res.status(400).json({ success: false, message: "Missing required fields: courseId, dayOfWeek, timeSlot." });
+    }
+
+    const parsedDay = parseInt(dayOfWeek, 10);
+    if (isNaN(parsedDay) || parsedDay < 1 || parsedDay > 6) {
+        return res.status(400).json({ success: false, message: "dayOfWeek must be 1 (Mon) through 6 (Sat)." });
+    }
+
+    const weeks = parseInt(repeatWeeks, 10);
+    if (isNaN(weeks) || weeks < 1 || weeks > 12) {
+        return res.status(400).json({ success: false, message: "repeatWeeks must be between 1 and 12." });
+    }
+
+    // --- Find student and course ---
+    const student = await User.findOne({ clerkId });
+    if (!student) {
+        return res.status(404).json({ success: false, message: "Student not found." });
+    }
+
+    const course = student.courses.id(courseId);
+    if (!course) {
+        return res.status(404).json({ success: false, message: "Course not found in your enrollment." });
+    }
+
+    // --- Get pricing ---
+    const yearLevel = extractYearLevel(course.name);
+    if (!yearLevel) {
+        return res.status(400).json({ success: false, message: "Could not determine year level from course. Please contact support." });
+    }
+
+    let pricing = await PricingModel.findOne({ _singletonKey: 'global_pricing' });
+    if (!pricing) {
+        return res.status(500).json({ success: false, message: "Pricing configuration not found. Please contact support." });
+    }
+
+    const classRanges = Object.fromEntries(pricing.classRanges);
+    const sessionPrice = getSessionPriceForYear(classRanges, yearLevel);
+
+    if (!sessionPrice || sessionPrice <= 0) {
+        return res.status(400).json({ success: false, message: `No pricing found for Year ${yearLevel}. Please contact support.` });
+    }
+
+    const totalAmount = sessionPrice * weeks;
+    console.log(`💰 Repeat payment: ${weeks} sessions × $${sessionPrice} = $${totalAmount} for Year ${yearLevel}`);
+
+    try {
+        // --- Create eWAY payment session ---
+        const amountInCents = Math.round(totalAmount * 100);
+        const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+        const response = await ewayClient.createTransaction(rapid.Enum.Method.RESPONSIVE_SHARED, {
+            Payment: {
+                TotalAmount: amountInCents,
+                CurrencyCode: 'AUD',
+            },
+            Customer: {
+                Reference: clerkId,
+            },
+            RedirectUrl: `${FRONTEND_URL}/payment-status?clerkId=${clerkId}`,
+            CancelUrl: `${FRONTEND_URL}/my-courses`,
+            TransactionType: "Purchase",
+            PartnerAgreementGuid: clerkId,
+            DeviceID: 'NODESDK',
+        });
+
+        if (response.getErrors().length > 0) {
+            const errors = response.getErrors().map(error => rapid.getMessage(error, "en"));
+            console.error('eWAY Error during repeat payment createTransaction:', errors);
+            return res.status(500).json({ success: false, message: errors.join(' | ') || 'eWAY initialization failed.' });
+        }
+
+        const redirectURL = response.get('SharedPaymentUrl');
+        const accessCode = response.get('AccessCode');
+
+        if (!redirectURL) {
+            return res.status(500).json({ success: false, message: 'eWAY did not return a Redirect URL.' });
+        }
+
+        console.log(`✅ eWAY Repeat Payment session created. AccessCode: ${accessCode}`);
+
+        // --- Store repeat payload in MongoDB ---
+        // Generate session dates now so finishEway doesn't need to recalculate
+        const auFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' });
+        const todayStr = auFormatter.format(new Date());
+        const todayParts = todayStr.split('-').map(Number);
+        let cursor = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
+        const currentDayUTC = cursor.getUTCDay();
+        let daysToAdd = parsedDay - currentDayUTC;
+        if (daysToAdd <= 0) daysToAdd += 7;
+        cursor.setUTCDate(cursor.getUTCDate() + daysToAdd);
+
+        const sessionDates = [];
+        for (let i = 0; i < weeks; i++) {
+            const yyyy = cursor.getUTCFullYear();
+            const mm = String(cursor.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(cursor.getUTCDate()).padStart(2, '0');
+            sessionDates.push(`${yyyy}-${mm}-${dd}`);
+            cursor.setUTCDate(cursor.getUTCDate() + 7);
+        }
+
+        const repeatPayload = {
+            type: 'REPEAT',
+            courseId: course._id.toString(),
+            courseName: course.name,
+            courseSubject: course.subject || 'N/A',
+            studentId: clerkId,
+            studentName: student.studentName,
+            studentEmail: student.email,
+            dayOfWeek: parsedDay,
+            timeSlot,
+            repeatWeeks: weeks,
+            sessionDates,
+            sessionPrice,
+            paymentAmount: totalAmount,
+            currency: 'AUD',
+        };
+
+        await PendingPayload.findOneAndUpdate(
+            { accessCode },
+            { accessCode, payload: repeatPayload, clerkId },
+            { upsert: true, new: true }
+        );
+        console.log(`📦 Repeat booking payload persisted to MongoDB for AccessCode: ${accessCode}`);
+
+        // --- Return redirect URL ---
+        res.status(200).json({
+            success: true,
+            redirectUrl: redirectURL,
+            accessCode,
+            totalAmount,
+            sessionPrice,
+            weeks,
+            message: `Redirecting to eWAY to pay $${totalAmount} AUD for ${weeks} repeat sessions.`,
+        });
+    } catch (error) {
+        console.error('Error initiating repeat payment:', error.message);
+        res.status(500).json({ success: false, message: error.message || 'Server error during repeat payment initiation.' });
+    }
 });

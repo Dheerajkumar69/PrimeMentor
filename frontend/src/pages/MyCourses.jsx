@@ -264,12 +264,13 @@ const MyCourses = () => {
                                                     onClick={() => {
                                                         // Pre-fill from last course if available
                                                         const lastCourse = courses.length > 0 ? courses[courses.length - 1] : null;
+                                                        const nameParts = (studentData?.name || '').split(' ');
                                                         const quizData = lastCourse ? {
                                                             year: lastCourse.year || 8,
                                                             subject: lastCourse.subject || 'Mathematics',
                                                             initialClassRange: lastCourse.classRange || '7-9',
-                                                            name: { firstName: user?.firstName || '', lastName: user?.lastName || '' },
-                                                            email: user?.emailAddresses?.[0]?.emailAddress || '',
+                                                            name: { firstName: nameParts[0] || '', lastName: nameParts.slice(1).join(' ') || '' },
+                                                            email: studentData?.email || '',
                                                             needs: "I'm ready to extend my learning",
                                                             state: lastCourse.state || 'New South Wales',
                                                         } : {};

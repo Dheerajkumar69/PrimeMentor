@@ -12,8 +12,9 @@ import axios from 'axios';
  * @param {function} props.onClose - Function to manually close the popup.
  * @param {function} props.onBookFreeAssessment - Function to trigger the main booking modal.
  */
-export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessment }) {
+export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessment, onStartClasses }) {
     const [lowestPrice, setLowestPrice] = useState(22); // Default fallback
+    const [cheapestRange, setCheapestRange] = useState('2-6'); // Default fallback
 
     useEffect(() => {
         const fetchPricing = async () => {
@@ -21,9 +22,18 @@ export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessmen
                 const apiBase = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
                 const response = await axios.get(`${apiBase}/api/admin/pricing`);
                 const { classRanges } = response.data;
-                const prices = Object.values(classRanges).map(r => r.sessionPrice);
-                if (prices.length > 0) {
-                    setLowestPrice(Math.min(...prices));
+                // Find the range with the lowest session price
+                let minPrice = Infinity;
+                let minRange = '2-6';
+                for (const [range, data] of Object.entries(classRanges)) {
+                    if (data.sessionPrice < minPrice) {
+                        minPrice = data.sessionPrice;
+                        minRange = range;
+                    }
+                }
+                if (minPrice < Infinity) {
+                    setLowestPrice(minPrice);
+                    setCheapestRange(minRange);
                 }
             } catch (err) {
                 console.error('Failed to fetch pricing for callout:', err);
@@ -80,9 +90,12 @@ export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessmen
                         Book your <b>Free Assessment</b> now to get a personalized learning roadmap for your child's success.
                     </p>
 
-                    <p className="mt-4 text-sm md:text-xl font-semibold text-gray-900 bg-yellow-100 px-6 py-3 rounded-full border border-yellow-300 shadow-md transition duration-300 hover:scale-[1.03] hover:shadow-lg cursor-default inline-flex items-center mx-auto md:mx-0">
+                    <button
+                        onClick={() => onStartClasses(cheapestRange, lowestPrice)}
+                        className="mt-4 text-sm md:text-xl font-semibold text-gray-900 bg-yellow-100 px-6 py-3 rounded-full border border-yellow-300 shadow-md transition duration-300 hover:scale-[1.03] hover:shadow-lg cursor-pointer inline-flex items-center mx-auto md:mx-0"
+                    >
                         Classes starts from &nbsp;<span className="text-xxl text-orange-600 font-extrabold"> ${lowestPrice}</span> <span className='text-sm md:text-xl text-gray-500 ml-1'>/ session</span>
-                    </p>
+                    </button>
 
                     {/* Button */}
                     <button

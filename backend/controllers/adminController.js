@@ -18,6 +18,7 @@ import TeacherAvailability from '../models/TeacherAvailabilityModel.js';
 import generateToken from '../utils/generateToken.js';
 import { createZoomMeeting, getAvailableHost } from '../utils/zoomIntegration.js';
 import { sendAssessmentApprovalEmail, sendClassAssignmentEmail, sendPaidClassZoomEmail } from '../utils/emailService.js';
+import { enqueueEmail } from '../utils/emailQueue.js';
 
 // Admin credentials are now stored in MongoDB via AdminModel.
 // Run `node seedAdmin.js` to create/update the admin account.
@@ -634,25 +635,18 @@ export const assignTeacher = asyncHandler(async (req, res) => {
         const studentEmail = student?.email || request.studentDetails?.email;
         const studentEmailName = request.studentName || student?.studentName || 'Student';
         if (studentEmail) {
-            try {
-                await sendPaidClassZoomEmail(studentEmail, studentEmailName, 'student', emailDetails);
-                console.log('✅ Student paid class zoom email sent to:', studentEmail);
-            } catch (emailErr) {
-                console.error('⚠️ Failed to send student paid class zoom email:', emailErr.message);
-            }
-            await new Promise(r => setTimeout(r, 600)); // Rate-limit buffer
+            enqueueEmail('paidClassZoom', sendPaidClassZoomEmail, [
+                studentEmail, studentEmailName, 'student', emailDetails
+            ], { requestId, studentId: request.studentId });
         } else {
             console.error('⚠️ Could not send student email — no email address found for studentId:', request.studentId);
         }
 
         // Email to teacher (host/start link)
         if (teacher.email) {
-            try {
-                await sendPaidClassZoomEmail(teacher.email, teacher.name, 'teacher', emailDetails);
-                console.log('✅ Teacher paid class zoom email sent to:', teacher.email);
-            } catch (emailErr) {
-                console.error('⚠️ Failed to send teacher paid class zoom email:', emailErr.message);
-            }
+            enqueueEmail('paidClassZoom', sendPaidClassZoomEmail, [
+                teacher.email, teacher.name, 'teacher', emailDetails
+            ], { requestId, teacherId });
         }
     } else {
         // Zoom failed — send basic assignment emails (no Zoom link)
@@ -668,22 +662,16 @@ export const assignTeacher = asyncHandler(async (req, res) => {
 
         const studentEmailFallback = student?.email || request.studentDetails?.email;
         if (studentEmailFallback) {
-            try {
-                await sendClassAssignmentEmail(studentEmailFallback, request.studentName, 'student', emailDetails);
-                console.log('✅ Student class assignment email sent to:', studentEmailFallback);
-            } catch (emailErr) {
-                console.error('⚠️ Failed to send student class assignment email:', emailErr.message);
-            }
+            enqueueEmail('classAssignment', sendClassAssignmentEmail, [
+                studentEmailFallback, request.studentName, 'student', emailDetails
+            ], { requestId, studentId: request.studentId });
         } else {
             console.error('⚠️ No student email found for assignment notification. studentId:', request.studentId);
         }
         if (teacher.email) {
-            try {
-                await sendClassAssignmentEmail(teacher.email, teacher.name, 'teacher', emailDetails);
-                console.log('✅ Teacher class assignment email sent to:', teacher.email);
-            } catch (emailErr) {
-                console.error('⚠️ Failed to send teacher class assignment email:', emailErr.message);
-            }
+            enqueueEmail('classAssignment', sendClassAssignmentEmail, [
+                teacher.email, teacher.name, 'teacher', emailDetails
+            ], { requestId, teacherId });
         }
     }
 
@@ -1151,36 +1139,16 @@ export const approveAssessment = asyncHandler(async (req, res) => {
     };
 
     if (assessment.studentEmail) {
-        try {
-            await sendAssessmentApprovalEmail(
-                assessment.studentEmail,
-                studentName,
-                'student',
-                studentEmailDetails
-            );
-            console.log('✅ Student email sent to:', assessment.studentEmail);
-        } catch (emailErr) {
-            console.error('⚠️ Failed to send student email:', emailErr.message);
-        }
-        // Rate-limit buffer: Resend allows max 2 req/s
-        await new Promise(r => setTimeout(r, 600));
+        enqueueEmail('assessmentApproval', sendAssessmentApprovalEmail, [
+            assessment.studentEmail, studentName, 'student', studentEmailDetails
+        ], { assessmentId: assessment._id });
     }
 
     // Also send to parent email if it's different from student email
     if (assessment.parentEmail && assessment.parentEmail !== assessment.studentEmail) {
-        try {
-            await sendAssessmentApprovalEmail(
-                assessment.parentEmail,
-                studentName,
-                'student',
-                studentEmailDetails
-            );
-            console.log('✅ Parent email sent to:', assessment.parentEmail);
-        } catch (emailErr) {
-            console.error('⚠️ Failed to send parent email:', emailErr.message);
-        }
-        // Rate-limit buffer
-        await new Promise(r => setTimeout(r, 600));
+        enqueueEmail('assessmentApproval', sendAssessmentApprovalEmail, [
+            assessment.parentEmail, studentName, 'student', studentEmailDetails
+        ], { assessmentId: assessment._id });
     }
 
     // Send to ALL selected teachers — shows time in IST
@@ -1196,21 +1164,9 @@ export const approveAssessment = asyncHandler(async (req, res) => {
             zoomStartLink: zoomData.startUrl,
         };
 
-        try {
-            await sendAssessmentApprovalEmail(
-                teacher.email,
-                teacher.name,
-                'teacher',
-                teacherEmailDetails
-            );
-            console.log('✅ Teacher email sent to:', teacher.email);
-        } catch (emailErr) {
-            console.error(`⚠️ Failed to send teacher email to ${teacher.email}:`, emailErr.message);
-        }
-        // Rate-limit buffer between teacher emails
-        if (teachers.indexOf(teacher) < teachers.length - 1) {
-            await new Promise(r => setTimeout(r, 600));
-        }
+        enqueueEmail('assessmentApproval', sendAssessmentApprovalEmail, [
+            teacher.email, teacher.name, 'teacher', teacherEmailDetails
+        ], { assessmentId: assessment._id, teacherId: teacher._id });
     }
 
     // 8. Return success response
@@ -1325,21 +1281,9 @@ export const updateAssessmentTeachers = asyncHandler(async (req, res) => {
             zoomStartLink: assessment.zoomStartLink,
         };
 
-        try {
-            await sendAssessmentApprovalEmail(
-                teacher.email,
-                teacher.name,
-                'teacher',
-                emailDetails
-            );
-            console.log('✅ Teacher re-assignment email sent to:', teacher.email);
-        } catch (emailErr) {
-            console.error(`⚠️ Failed to send teacher email to ${teacher.email}:`, emailErr.message);
-        }
-        // Rate-limit buffer between teacher emails
-        if (teachers.indexOf(teacher) < teachers.length - 1) {
-            await new Promise(r => setTimeout(r, 600));
-        }
+        enqueueEmail('assessmentApproval', sendAssessmentApprovalEmail, [
+            teacher.email, teacher.name, 'teacher', emailDetails
+        ], { assessmentId: assessment._id, teacherId: teacher._id });
     }
 
     res.json({

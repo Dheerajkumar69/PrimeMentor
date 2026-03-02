@@ -286,7 +286,7 @@ const Booking = () => {
             courseId: program.courseId,
             price: isStarterPack ? program.package.starterPackTotalPrice : program.package.sessionFee,
             initialClassRange: program.initialClassRange,
-            sessionPrice: isStarterPack ? program.package.price : program.package.sessionFee,
+            sessionPrice: program.package.sessionFee,
             numberOfSessions: isStarterPack ? program.package.numberOfSessions : 1,
             fixedDiscount: isStarterPack ? program.package.fixedDiscountAmount : 0,
 

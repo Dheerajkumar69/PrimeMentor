@@ -7,35 +7,63 @@ import { AppContext } from '../../context/AppContext.jsx';
 // 🚨 NEW: API Endpoint for Promo Validation 🚨
 const PROMO_VALIDATE_API = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/user/promo/validate`;
 
-// MODIFIED: generateTimeSlots function now takes a dayOfWeek parameter (0=Sun, 6=Sat)
+// Melbourne time slots — 1:00 PM to 6:00 PM (same for all days Mon-Sat)
+const MELBOURNE_SLOTS = [
+    '1:00 PM - 2:00 PM',
+    '2:00 PM - 3:00 PM',
+    '3:00 PM - 4:00 PM',
+    '4:00 PM - 5:00 PM',
+    '5:00 PM - 6:00 PM',
+];
+
 const generateTimeSlots = (dayOfWeek) => {
-    // Default slots for Mon-Fri (1 - 5, where 1=Mon, 5=Fri)
-    const defaultSlots = [
-        '4:00pm - 5:00pm',
-        '5:00pm - 6:00pm',
-        '6:00pm - 7:00pm',
-        '7:00pm - 8:00pm',
-        '8:00pm - 9:00pm',
-    ];
-
-    // Saturday-specific slots (6)
-    const saturdaySlots = [
-        '1:00pm - 2:00pm',
-        '2:00pm - 3:00pm',
-        '3:00pm - 4:00pm',
-        '4:00pm - 5:00pm',
-        '5:00pm - 6:00pm',
-    ];
-
     if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Mon-Fri
-        return { 'Popular Evening Slots (Mon-Fri)': defaultSlots };
+        return { 'Available Slots — Mon-Fri (Melbourne Time)': MELBOURNE_SLOTS };
     } else if (dayOfWeek === 6) { // Saturday
-        return { 'Saturday Sessions': saturdaySlots };
+        return { 'Available Slots — Saturday (Melbourne Time)': MELBOURNE_SLOTS };
     }
     return {}; // Sunday or other
 };
 
-// MODIFIED: TimePreferencesModal (UNCHANGED LOGIC)
+/**
+ * Checks if a time slot's start time has already passed for the given date.
+ * Only relevant when the selected date is today (in Melbourne timezone).
+ * @param {string} slot - e.g. '1:00 PM - 2:00 PM'
+ * @param {Date} selectedDate - the date the student selected
+ * @returns {boolean} true if the slot start has passed
+ */
+const isSlotPassed = (slot, selectedDate) => {
+    if (!selectedDate) return false;
+
+    const now = new Date();
+    // Get today's date in Melbourne timezone for comparison
+    const melbNow = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
+    const selectedLocal = new Date(selectedDate);
+
+    // Only check if the selected date is today (Melbourne time)
+    const isToday = melbNow.getFullYear() === selectedLocal.getFullYear() &&
+        melbNow.getMonth() === selectedLocal.getMonth() &&
+        melbNow.getDate() === selectedLocal.getDate();
+    if (!isToday) return false;
+
+    // Parse the start time from the slot (e.g. '1:00 PM' from '1:00 PM - 2:00 PM')
+    const startStr = slot.split(' - ')[0].trim();
+    const match = startStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return false;
+
+    let hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+    if (period === 'PM' && hour !== 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+
+    // Compare: if current Melbourne hour:minute >= slot start hour:minute, it's passed
+    const currentMinutes = melbNow.getHours() * 60 + melbNow.getMinutes();
+    const slotMinutes = hour * 60 + minute;
+    return currentMinutes >= slotMinutes;
+};
+
+// MODIFIED: TimePreferencesModal
 const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarterPack, currentTimes }) => {
     // ... (TimePreferencesModal logic unchanged)
     if (!isOpen) return null;
@@ -122,17 +150,21 @@ const TimePreferencesModal = ({ isOpen, onClose, selectedDate, onSave, isStarter
                                     {slots.map((time, index) => {
                                         const isMonFri = period.includes('Mon-Fri');
                                         const isSelected = (isMonFri && selectedMonFriSlot === time) || (!isMonFri && selectedSatSlot === time);
+                                        const isPassed = !isStarterPack && isSlotPassed(time, selectedDate);
 
                                         return (
                                             <button
                                                 key={index}
-                                                onClick={() => handleSlotSelect(time, period)}
-                                                className={`w-full text-center py-3 px-4 rounded-xl transition text-base font-semibold border-2 shadow-md hover:scale-[1.02] hover:shadow-lg focus:outline-none focus:ring-4 ring-offset-2 ring-blue-300 ${isSelected
-                                                    ? 'bg-blue-600 text-white border-blue-700 shadow-xl'
-                                                    : 'bg-white text-gray-800 border-gray-300 hover:bg-blue-50'
+                                                onClick={() => !isPassed && handleSlotSelect(time, period)}
+                                                disabled={isPassed}
+                                                className={`w-full text-center py-3 px-4 rounded-xl transition text-base font-semibold border-2 shadow-md focus:outline-none focus:ring-4 ring-offset-2 ring-blue-300 ${isPassed
+                                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                                                    : isSelected
+                                                        ? 'bg-blue-600 text-white border-blue-700 shadow-xl'
+                                                        : 'bg-white text-gray-800 border-gray-300 hover:bg-blue-50 hover:scale-[1.02] hover:shadow-lg'
                                                     }`}
                                             >
-                                                {time}
+                                                {time}{isPassed ? ' (Passed)' : ''}
                                             </button>
                                         );
                                     })}
@@ -577,9 +609,10 @@ const Step2Schedule = ({
             </div>
 
             <h3 className="text-lg font-bold text-gray-800 mb-4">Lock in your preferred time</h3>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-gray-600 mb-2">
                 To help us find a suitable tutor, please let us know the best **start day** and **consistent time** to schedule your {isStarterPack ? '6 sessions' : 'Assessment session'}.
             </p>
+            <p className="text-xs text-blue-600 font-semibold mb-6">⏰ All times shown are in Melbourne, Australia time (AEDT/AEST)</p>
 
             {/* Date Selection (Calendar remains for both) */}
             <div className="relative mb-6">

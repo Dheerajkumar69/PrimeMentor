@@ -19,6 +19,8 @@ const classRequestSchema = new mongoose.Schema(
 
         // CRITICAL: Store Australian time slot as a string (HH:MM AM/PM - HH:MM AM/PM)
         scheduleTime: { type: String },
+        // IST equivalent of scheduleTime (pre-computed at booking time)
+        scheduleTimeIST: { type: String },
         preferredTimeMonFri: { type: String },
         preferredTimeSaturday: { type: String },
         postcode: { type: String },

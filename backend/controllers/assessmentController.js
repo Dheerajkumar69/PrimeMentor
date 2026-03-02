@@ -2,6 +2,7 @@
 import Assessment from '../models/AssessmentModel.js';
 import asyncHandler from 'express-async-handler';
 import { sendAssessmentBookingConfirmation } from '../utils/emailService.js';
+import { enqueueEmail } from '../utils/emailQueue.js';
 import { resolveTimezone } from '../utils/timezoneHelper.js';
 
 // @desc    Submit new free assessment request from the modal
@@ -107,15 +108,12 @@ const submitAssessmentRequest = asyncHandler(async (req, res) => {
 
         // Send only to student email
         const recipients = [trimmed.studentEmail].filter(Boolean);
-        console.log('📧 Attempting to send assessment booking confirmation to:', recipients);
+        console.log('📧 Enqueuing assessment booking confirmation to:', recipients);
 
         for (const email of recipients) {
-            try {
-                const result = await sendAssessmentBookingConfirmation(email, emailDetails);
-                console.log('✅ Assessment booking confirmation email sent to:', email, '| Result:', JSON.stringify(result));
-            } catch (emailErr) {
-                console.error('⚠️ Failed to send assessment booking confirmation to:', email, '| Error:', emailErr.message, emailErr);
-            }
+            enqueueEmail('assessmentBookingConfirmation', sendAssessmentBookingConfirmation, [
+                email, emailDetails
+            ], { assessmentId: newAssessment._id });
         }
 
         res.status(201).json({

@@ -11,6 +11,8 @@ import PendingPayload from '../models/PendingPayload.js';
 import PromoCode from '../models/PromoCodeModel.js';
 import PricingModel from '../models/PricingModel.js';
 import { sendCourseConfirmationEmail, sendNewPurchaseNotification, sendPaymentFailureEmail, sendPasswordResetEmail } from '../utils/emailService.js';
+import { convertMelbourneToIST } from '../utils/timezoneUtils.js';
+import { enqueueEmail } from '../utils/emailQueue.js';
 
 dotenv.config();
 
@@ -360,14 +362,14 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
                     const customerEmail = studentDetails.email || guardianDetails.email;
                     if (customerEmail && customerEmail.includes('@')) {
-                        await sendPaymentFailureEmail(customerEmail, {
+                        enqueueEmail('paymentFailure', sendPaymentFailureEmail, [customerEmail, {
                             studentName: studentDetails.first ? `${studentDetails.first} ${studentDetails.last || ''}`.trim() : 'Valued Customer',
                             courseTitle: courseDetails.courseTitle || 'Course',
                             amountAttempted: amount > 0 ? amount.toFixed(2) : '0.00',
                             currency: 'AUD',
                             failureReason,
                             transactionId: transactionID,
-                        }).catch(e => console.error('Failed to send payment failure email:', e.message));
+                        }], { transactionId: transactionID, studentId });
                     }
                 }
             } catch (trackingErr) {
@@ -385,14 +387,16 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
         // ── REPEAT booking ──
         if (resolvedPayload.type === 'REPEAT') {
+            const totalSessionCount = (resolvedPayload.sessionDates || []).length;
             const repeatRequests = (resolvedPayload.sessionDates || []).map((dateStr, i) => new ClassRequest({
                 courseId: resolvedPayload.courseId || 'unknown',
-                courseTitle: `${(resolvedPayload.courseName || 'Course').split('(')[0].trim()} (Repeat ${i + 1}/${resolvedPayload.repeatWeeks})`,
+                courseTitle: `${(resolvedPayload.courseName || 'Course').split('(')[0].trim()} (Repeat ${i + 1}/${totalSessionCount})`,
                 studentId,
                 studentName: resolvedPayload.studentName || 'Unknown Student',
                 purchaseType: 'TRIAL',
                 preferredDate: dateStr,
                 scheduleTime: resolvedPayload.timeSlot || 'N/A',
+                scheduleTimeIST: convertMelbourneToIST(dateStr, resolvedPayload.timeSlot),
                 subject: resolvedPayload.courseSubject || 'N/A',
                 studentDetails: {
                     firstName: (resolvedPayload.studentName || '').split(' ')[0] || '',
@@ -407,17 +411,17 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
 
             const emailRecipient = resolvedPayload.studentEmail;
             if (emailRecipient && emailRecipient.includes('@')) {
-                await sendCourseConfirmationEmail(emailRecipient, {
+                enqueueEmail('courseConfirmation', sendCourseConfirmationEmail, [emailRecipient, {
                     courseTitle: resolvedPayload.courseName || 'Course', transactionId: transactionID,
                     amountPaid: resolvedPayload.paymentAmount || 0, currency: resolvedPayload.currency || 'AUD',
-                }, { name: resolvedPayload.studentName || 'Student' }, repeatRequests).catch(e => console.error('Failed to send repeat email:', e.message));
+                }, { name: resolvedPayload.studentName || 'Student' }, repeatRequests], { transactionId: transactionID, studentId });
             }
 
-            await sendNewPurchaseNotification({
+            enqueueEmail('purchaseNotification', sendNewPurchaseNotification, [{
                 studentName: resolvedPayload.studentName, studentEmail: resolvedPayload.studentEmail,
                 courseTitle: resolvedPayload.courseName, amountPaid: resolvedPayload.paymentAmount,
                 transactionId: transactionID, purchaseType: `REPEAT (${resolvedPayload.repeatWeeks} sessions)`,
-            }, repeatRequests).catch(e => console.error('Failed to send notification:', e.message));
+            }, repeatRequests], { transactionId: transactionID, studentId });
 
             return res.status(201).json({
                 success: true,
@@ -468,7 +472,9 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             classRequestsToSave.push({
                 courseId: courseDetails.courseId, courseTitle: courseDetails.courseTitle,
                 studentId, studentName: student.studentName, purchaseType: 'TRIAL',
-                preferredDate, scheduleTime: preferredTime, postcode,
+                preferredDate, scheduleTime: preferredTime,
+                scheduleTimeIST: convertMelbourneToIST(preferredDate, preferredTime),
+                postcode,
                 subject: courseDetails.subject || 'N/A',
                 studentDetails: { firstName: studentDetails?.first || '', lastName: studentDetails?.last || '', email: emailToUse },
                 paymentStatus: 'paid', transactionId: transactionID, amountPaid: paymentAmount,
@@ -492,6 +498,7 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                     courseTitle: `${courseDetails.courseTitle} (Session ${i + 1}/${sessionsToCreate})`,
                     studentId, studentName: student.studentName, purchaseType: 'STARTER_PACK',
                     preferredDate: dates[i], scheduleTime: sessionTime,
+                    scheduleTimeIST: convertMelbourneToIST(dates[i], sessionTime),
                     preferredTimeMonFri, preferredTimeSaturday, postcode,
                     subject: courseDetails.subject || 'N/A',
                     studentDetails: { firstName: studentDetails?.first || '', lastName: studentDetails?.last || '', email: emailToUse },
@@ -526,20 +533,19 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                 : isValidEmail(student.email) ? student.email.trim() : null;
 
         if (emailRecipient) {
-            await sendCourseConfirmationEmail(emailRecipient, {
+            enqueueEmail('courseConfirmation', sendCourseConfirmationEmail, [emailRecipient, {
                 courseTitle: courseDetails.courseTitle || 'Course', purchaseType: purchaseType || 'TRIAL',
                 amountPaid: paymentAmount.toFixed(2), currency: 'AUD', transactionId: transactionID || 'N/A',
                 promoCode: promoCode || null, discountApplied: appliedDiscountAmount || 0,
-            }, { name: student.studentName || 'Valued Student' }, classRequestsToSave)
-                .catch(e => console.error('Failed to send confirmation email:', e.message));
+            }, { name: student.studentName || 'Valued Student' }, classRequestsToSave], { transactionId: transactionID, studentId });
         }
 
-        await sendNewPurchaseNotification({
+        enqueueEmail('purchaseNotification', sendNewPurchaseNotification, [{
             studentName: student.studentName || nameToUse, studentEmail: emailRecipient || 'N/A',
             courseTitle: courseDetails.courseTitle || 'Course', purchaseType: purchaseType || 'TRIAL',
             amountPaid: paymentAmount.toFixed(2), currency: 'AUD', transactionId: transactionID || 'N/A',
             promoCode: promoCode || null, discountApplied: appliedDiscountAmount || 0,
-        }, classRequestsToSave).catch(e => console.error('Failed to send company notification:', e.message));
+        }, classRequestsToSave], { transactionId: transactionID, studentId });
 
         res.status(201).json({
             success: true,
@@ -647,6 +653,7 @@ export const requestRepeatClasses = asyncHandler(async (req, res) => {
         courseId: course._id, courseTitle: `${course.name.split('(')[0].trim()} (Repeat ${i + 1}/${weeks})`,
         studentId: student._id.toString(), studentName: student.studentName,
         purchaseType: 'TRIAL', preferredDate: dateStr, scheduleTime: timeSlot,
+        scheduleTimeIST: convertMelbourneToIST(dateStr, timeSlot),
         status: 'pending', paymentStatus: 'unpaid', amountPaid: 0,
     }));
 
@@ -678,15 +685,22 @@ function getSessionPriceForYear(classRanges, yearLevel) {
 
 export const initiateRepeatPayment = asyncHandler(async (req, res) => {
     const student = req.user;
-    const { courseId, dayOfWeek, timeSlot, repeatWeeks } = req.body;
+    // Support both new `daysOfWeek` (array) and legacy `dayOfWeek` (single integer)
+    const { courseId, daysOfWeek, dayOfWeek, timeSlot, repeatWeeks } = req.body;
 
-    if (!courseId || !timeSlot || dayOfWeek === undefined) {
-        return res.status(400).json({ success: false, message: "Missing required fields." });
+    // Normalize to array
+    let parsedDays;
+    if (Array.isArray(daysOfWeek) && daysOfWeek.length > 0) {
+        parsedDays = daysOfWeek.map(d => parseInt(d, 10)).filter(d => d >= 1 && d <= 6);
+    } else if (dayOfWeek !== undefined) {
+        const single = parseInt(dayOfWeek, 10);
+        parsedDays = (single >= 1 && single <= 6) ? [single] : [];
+    } else {
+        parsedDays = [];
     }
 
-    const parsedDay = parseInt(dayOfWeek, 10);
-    if (isNaN(parsedDay) || parsedDay < 1 || parsedDay > 6) {
-        return res.status(400).json({ success: false, message: "dayOfWeek must be 1 (Mon) through 6 (Sat)." });
+    if (!courseId || !timeSlot || parsedDays.length === 0) {
+        return res.status(400).json({ success: false, message: "Missing required fields (courseId, timeSlot, daysOfWeek)." });
     }
 
     const weeks = parseInt(repeatWeeks, 10);
@@ -709,7 +723,8 @@ export const initiateRepeatPayment = asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: `No pricing found for Year ${yearLevel}.` });
     }
 
-    const totalAmount = sessionPrice * weeks;
+    const totalSessions = parsedDays.length * weeks;
+    const totalAmount = sessionPrice * totalSessions;
 
     try {
         const amountInCents = Math.round(totalAmount * 100);
@@ -734,26 +749,35 @@ export const initiateRepeatPayment = asyncHandler(async (req, res) => {
         const accessCode = response.get('AccessCode');
         if (!redirectURL) return res.status(500).json({ success: false, message: 'eWAY did not return a Redirect URL.' });
 
-        // Generate session dates
+        // Generate session dates for ALL selected days across each week
         const auFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' });
         const todayStr = auFormatter.format(new Date());
         const todayParts = todayStr.split('-').map(Number);
-        let cursor = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
-        let daysToAdd = parsedDay - cursor.getUTCDay();
-        if (daysToAdd <= 0) daysToAdd += 7;
-        cursor.setUTCDate(cursor.getUTCDate() + daysToAdd);
+        const todayDate = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
+        const todayDow = todayDate.getUTCDay(); // 0=Sun, 6=Sat
 
         const sessionDates = [];
-        for (let i = 0; i < weeks; i++) {
-            sessionDates.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`);
-            cursor.setUTCDate(cursor.getUTCDate() + 7);
+        for (const targetDay of parsedDays.sort((a, b) => a - b)) {
+            let daysToAdd = targetDay - todayDow;
+            if (daysToAdd <= 0) daysToAdd += 7; // start from next occurrence
+            const cursor = new Date(todayDate.getTime());
+            cursor.setUTCDate(cursor.getUTCDate() + daysToAdd);
+
+            for (let w = 0; w < weeks; w++) {
+                const dateStr = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`;
+                sessionDates.push(dateStr);
+                cursor.setUTCDate(cursor.getUTCDate() + 7);
+            }
         }
+
+        // Sort all dates chronologically
+        sessionDates.sort();
 
         const repeatPayload = {
             type: 'REPEAT', courseId: course._id.toString(), courseName: course.name,
             courseSubject: course.subject || 'N/A', studentId,
             studentName: student.studentName, studentEmail: student.email,
-            dayOfWeek: parsedDay, timeSlot, repeatWeeks: weeks,
+            daysOfWeek: parsedDays, timeSlot, repeatWeeks: weeks,
             sessionDates, sessionPrice, paymentAmount: totalAmount, currency: 'AUD',
         };
 
@@ -764,8 +788,9 @@ export const initiateRepeatPayment = asyncHandler(async (req, res) => {
         );
 
         res.status(200).json({
-            success: true, redirectUrl: redirectURL, accessCode, totalAmount, sessionPrice, weeks,
-            message: `Redirecting to eWAY to pay $${totalAmount} AUD for ${weeks} repeat sessions.`,
+            success: true, redirectUrl: redirectURL, accessCode, totalAmount, sessionPrice,
+            weeks, totalSessions, daysSelected: parsedDays.length,
+            message: `Redirecting to eWAY to pay $${totalAmount} AUD for ${totalSessions} repeat sessions.`,
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message || 'Server error.' });

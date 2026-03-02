@@ -2,14 +2,13 @@
 
 import express from 'express';
 import { sendMessage } from '../controllers/chatController.js';
-import { protect } from '../middlewares/authMiddleware.js';
 import { chatLimiter } from '../middlewares/rateLimiters.js';
 
 const router = express.Router();
 
 // POST /api/chat/message
-// - protect: requires valid JWT session (blocks anonymous users)
+// - PUBLIC: accessible to all visitors (no JWT required)
 // - chatLimiter: max 30 messages per IP per 10 min (caps Gemini API cost)
-router.post('/message', protect, chatLimiter, sendMessage);
+router.post('/message', chatLimiter, sendMessage);
 
 export default router;

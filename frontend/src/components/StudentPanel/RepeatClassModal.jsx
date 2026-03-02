@@ -17,18 +17,13 @@ const DAYS_OF_WEEK = [
     { value: 6, label: 'Saturday' },
 ];
 
+// Melbourne time slots — 1:00 PM to 6:00 PM (all days Mon-Sat)
 const TIME_SLOTS = [
-    '9:00 AM - 10:00 AM',
-    '10:00 AM - 11:00 AM',
-    '11:00 AM - 12:00 PM',
-    '12:00 PM - 1:00 PM',
     '1:00 PM - 2:00 PM',
     '2:00 PM - 3:00 PM',
     '3:00 PM - 4:00 PM',
     '4:00 PM - 5:00 PM',
     '5:00 PM - 6:00 PM',
-    '6:00 PM - 7:00 PM',
-    '7:00 PM - 8:00 PM',
 ];
 
 // Extract year level from course name like "All - Year 3" or "Maths (Year 10)"
@@ -68,7 +63,11 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
         return match || course.preferredTime || TIME_SLOTS[0];
     };
 
-    const [dayOfWeek, setDayOfWeek] = useState(getInitialDay());
+    // Multi-day selection: array of day values
+    const [selectedDays, setSelectedDays] = useState(() => {
+        const initial = getInitialDay();
+        return [initial];
+    });
     const [timeSlot, setTimeSlot] = useState(getInitialTime());
     const [repeatWeeks, setRepeatWeeks] = useState(4);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -113,7 +112,21 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
         fetchPricing();
     }, [isOpen, course?.name]);
 
-    const totalAmount = sessionPrice ? sessionPrice * repeatWeeks : 0;
+    const totalSessions = selectedDays.length * repeatWeeks;
+    const totalAmount = sessionPrice ? sessionPrice * totalSessions : 0;
+
+    // Toggle day selection
+    const handleDayToggle = (dayValue) => {
+        setSelectedDays(prev => {
+            if (prev.includes(dayValue)) {
+                // Don't allow deselecting the last day
+                if (prev.length === 1) return prev;
+                return prev.filter(d => d !== dayValue);
+            } else {
+                return [...prev, dayValue].sort((a, b) => a - b);
+            }
+        });
+    };
 
     const handleSubmit = async () => {
         if (!sessionPrice || totalAmount <= 0) {
@@ -125,7 +138,7 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
         try {
             const res = await axios.post(
                 `${BACKEND_URL}/api/user/initiate-repeat-payment`,
-                { courseId: course._id, dayOfWeek, timeSlot, repeatWeeks },
+                { courseId: course._id, daysOfWeek: selectedDays, timeSlot, repeatWeeks },
                 { headers: { Authorization: `Bearer ${studentToken}` } }
             );
 
@@ -187,35 +200,67 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
                                 Day of Week
                             </label>
                             <div className="grid grid-cols-3 gap-2">
-                                {DAYS_OF_WEEK.map(d => (
-                                    <button
-                                        key={d.value}
-                                        onClick={() => setDayOfWeek(d.value)}
-                                        className={`py-2 px-3 rounded-lg text-sm font-medium transition border ${dayOfWeek === d.value
-                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                                            : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
-                                            }`}
-                                    >
-                                        {d.label}
-                                    </button>
-                                ))}
+                                {DAYS_OF_WEEK.map(d => {
+                                    const isSelected = selectedDays.includes(d.value);
+                                    return (
+                                        <button
+                                            key={d.value}
+                                            onClick={() => handleDayToggle(d.value)}
+                                            className={`py-2 px-3 rounded-lg text-sm font-medium transition border ${isSelected
+                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                                                : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+                                                }`}
+                                        >
+                                            {d.label}{isSelected ? ' ✓' : ''}
+                                        </button>
+                                    );
+                                })}
                             </div>
+                            <p className="text-[11px] text-gray-400 mt-1">
+                                {selectedDays.length === 1 ? '1 day selected' : `${selectedDays.length} days selected`}
+                                {' — tap to toggle multiple days'}
+                            </p>
                         </div>
 
                         {/* Time Slot */}
                         <div>
-                            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">
                                 <Clock size={16} className="text-indigo-500" />
                                 Time Slot
                             </label>
+                            <p className="text-[11px] text-blue-600 font-medium mb-2">⏰ Melbourne, Australia Time (AEDT/AEST)</p>
                             <select
                                 value={timeSlot}
                                 onChange={(e) => setTimeSlot(e.target.value)}
                                 className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                             >
-                                {TIME_SLOTS.map(slot => (
-                                    <option key={slot} value={slot}>{slot}</option>
-                                ))}
+                                {TIME_SLOTS.map(slot => {
+                                    // Check if ANY selected day is today and slot has passed
+                                    const now = new Date();
+                                    const melbNow = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
+                                    const todayDow = melbNow.getDay();
+                                    const anySelectedDayIsToday = selectedDays.includes(todayDow);
+
+                                    let isPassed = false;
+                                    if (anySelectedDayIsToday) {
+                                        const startStr = slot.split(' - ')[0].trim();
+                                        const match = startStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+                                        if (match) {
+                                            let h = parseInt(match[1], 10);
+                                            const m = parseInt(match[2], 10);
+                                            const p = match[3].toUpperCase();
+                                            if (p === 'PM' && h !== 12) h += 12;
+                                            if (p === 'AM' && h === 12) h = 0;
+                                            isPassed = (melbNow.getHours() * 60 + melbNow.getMinutes()) >= (h * 60 + m);
+                                        }
+                                    }
+
+                                    return (
+                                        <option key={slot} value={slot} disabled={isPassed}>
+                                            {slot}{isPassed ? ' (Passed)' : ''}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 
@@ -239,8 +284,8 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
                                 </span>
                             </div>
                             <p className="text-xs text-gray-400 mt-1">
-                                {repeatWeeks} {repeatWeeks === 1 ? 'class' : 'classes'} will be scheduled, one per week on{' '}
-                                {DAYS_OF_WEEK.find(d => d.value === dayOfWeek)?.label || 'your chosen day'}.
+                                {totalSessions} {totalSessions === 1 ? 'class' : 'classes'} will be scheduled ({selectedDays.length} {selectedDays.length === 1 ? 'day' : 'days'}/week × {repeatWeeks} {repeatWeeks === 1 ? 'week' : 'weeks'}) on{' '}
+                                {selectedDays.map(d => DAYS_OF_WEEK.find(day => day.value === d)?.label).join(', ') || 'your chosen days'}.
                             </p>
                         </div>
 
@@ -265,7 +310,7 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
                                     </div>
                                     <div className="flex justify-between text-sm text-gray-600">
                                         <span>Number of sessions</span>
-                                        <span>× {repeatWeeks}</span>
+                                        <span>{selectedDays.length} day{selectedDays.length > 1 ? 's' : ''}/wk × {repeatWeeks} wk{repeatWeeks > 1 ? 's' : ''} = {totalSessions}</span>
                                     </div>
                                     <hr className="border-green-200 my-2" />
                                     <div className="flex justify-between text-base font-bold text-green-800">
@@ -290,7 +335,7 @@ const RepeatClassModal = ({ course, isOpen, onClose, onSuccess }) => {
                             ) : (
                                 <>
                                     <CreditCard size={18} />
-                                    Pay ${totalAmount > 0 ? totalAmount.toFixed(2) : '...'} & Set {repeatWeeks} Repeat {repeatWeeks === 1 ? 'Class' : 'Classes'}
+                                    Pay ${totalAmount > 0 ? totalAmount.toFixed(2) : '...'} & Set {totalSessions} Repeat {totalSessions === 1 ? 'Class' : 'Classes'}
                                 </>
                             )}
                         </button>

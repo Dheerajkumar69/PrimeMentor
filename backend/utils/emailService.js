@@ -1,5 +1,6 @@
 // backend/utils/emailService.js
 import { Resend } from 'resend';
+import { convertMelbourneToIST } from './timezoneUtils.js';
 
 let resendClient = null;
 function getResendClient() {
@@ -24,8 +25,8 @@ function getResendClient() {
 const senderEmail = process.env.EMAIL_SENDER || 'info@primementor.com.au';
 
 // ======================== RATE-LIMIT RETRY HELPER ========================
-const RETRY_MAX = 3;
-const RETRY_BASE_MS = 1000; // 1 second, doubles each retry
+const RETRY_MAX = 5;
+const RETRY_BASE_MS = 1500; // 1.5 seconds, doubles each retry
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -228,7 +229,8 @@ export const sendAssessmentApprovalEmail = async (recipientEmail, recipientName,
                         <li><strong>Subject:</strong> ${details.subject}</li>
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Date:</strong> ${details.scheduledDate}</li>
-                        <li><strong>Time:</strong> ${details.scheduledTime}</li>
+                        <li><strong>Time (Melbourne):</strong> ${details.scheduledTime || 'To be confirmed'}</li>
+                        ${!isStudent && details.scheduledDate && details.scheduledTime ? `<li><strong>Time (India IST):</strong> ${convertMelbourneToIST(details.scheduledDate, details.scheduledTime)}</li>` : ''}
                     </ul>
                 </div>
 
@@ -340,7 +342,8 @@ export const sendClassAssignmentEmail = async (recipientEmail, recipientName, ro
                         <li><strong>Type:</strong> ${courseType}</li>
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Preferred Date:</strong> ${details.preferredDate || 'To be confirmed'}</li>
-                        <li><strong>Preferred Time:</strong> ${details.scheduleTime || 'To be confirmed'}</li>
+                        <li><strong>Preferred Time (Melbourne):</strong> ${details.scheduleTime || 'To be confirmed'}</li>
+                        ${!isStudent && details.preferredDate && details.scheduleTime ? `<li><strong>Time (India IST):</strong> ${convertMelbourneToIST(details.preferredDate, details.scheduleTime)}</li>` : ''}
                     </ul>
                 </div>
 
@@ -457,7 +460,8 @@ export const sendPaidClassZoomEmail = async (recipientEmail, recipientName, role
                         <li><strong>Type:</strong> ${courseType}</li>
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Date:</strong> ${details.scheduledDate}</li>
-                        <li><strong>Time:</strong> ${details.scheduledTime}</li>
+                        <li><strong>Time (Melbourne):</strong> ${details.scheduledTime || 'To be confirmed'}</li>
+                        ${!isStudent && details.scheduledDate && details.scheduledTime ? `<li><strong>Time (India IST):</strong> ${convertMelbourneToIST(details.scheduledDate, details.scheduledTime)}</li>` : ''}
                     </ul>
                 </div>
 

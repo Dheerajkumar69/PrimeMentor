@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { User, Book, ClipboardList, Clock, CheckCircle, Bell, UserPlus, Zap, X, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { User, Book, ClipboardList, Clock, CheckCircle, Bell, UserPlus, Zap, X, AlertTriangle, CheckCircle2, Loader2, Globe } from 'lucide-react';
 import Select from 'react-select';
+import { convertAuTimeToIndiaDisplay } from '../../utils/dateUtils.js';
 
 const getBackendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
@@ -68,7 +69,11 @@ const StudentRow = ({ student }) => {
                                 </span>
                                 <span className='text-gray-500 ml-4 flex items-center'>
                                     <Clock className='w-3 h-3 mr-1' />
-                                    {formatDate(course.preferredDate)} @ {course.preferredTime}
+                                    🇦🇺 {formatDate(course.preferredDate)} @ {course.preferredTime} (Melbourne)
+                                </span>
+                                <span className='text-blue-600 ml-4 flex items-center text-[11px]'>
+                                    <Globe className='w-3 h-3 mr-1' />
+                                    🇮🇳 {convertAuTimeToIndiaDisplay(course.preferredDate, course.preferredTime)} (IST)
                                 </span>
                             </div>
                         ))
@@ -214,6 +219,7 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
 
     const isTrial = request.purchaseType === 'TRIAL';
     const preferredSchedule = `${formatDate(request.preferredDate)} @ ${request.scheduleTime}`;
+    const istTime = request.scheduleTimeIST || convertAuTimeToIndiaDisplay(request.preferredDate, request.scheduleTime);
     const weeklyContext = !isTrial && request.preferredTimeMonFri ? `(M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})` : '';
 
     return (
@@ -233,7 +239,11 @@ const PendingRequestRow = ({ request, teachers, onAssignSuccess }) => {
                 <div className='text-xs'>
                     <p className='font-medium flex items-center'>
                         <Clock className='w-3 h-3 mr-1' />
-                        {preferredSchedule}
+                        🇦🇺 {preferredSchedule} (Melbourne)
+                    </p>
+                    <p className='font-medium flex items-center text-blue-700 mt-0.5'>
+                        <Globe className='w-3 h-3 mr-1' />
+                        🇮🇳 {formatDate(request.preferredDate)} @ {istTime}
                     </p>
                     {weeklyContext && <p className='text-gray-500 italic mt-0.5'>{weeklyContext}</p>}
                     <p className='text-gray-500'>Postcode: {request.postcode || 'N/A'}</p>
@@ -330,6 +340,7 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
 
     const isTrial = request.purchaseType === 'TRIAL';
     const preferredSchedule = `${formatDate(request.preferredDate)} @ ${request.scheduleTime}`;
+    const istTime = request.scheduleTimeIST || convertAuTimeToIndiaDisplay(request.preferredDate, request.scheduleTime);
     const weeklyContext = !isTrial && request.preferredTimeMonFri ? `(M-F: ${request.preferredTimeMonFri} / Sat: ${request.preferredTimeSaturday})` : '';
 
     const teacherDisplay = request.teacherId
@@ -349,7 +360,8 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
             </td>
             <td className="px-6 py-4 text-sm text-gray-700">
                 <span className="font-bold">{request.courseTitle}</span>
-                <span className='block text-xs text-gray-500 mt-1'>Schedule: {preferredSchedule}</span>
+                <span className='block text-xs text-gray-500 mt-1'>🇦🇺 {preferredSchedule} (Melbourne)</span>
+                <span className='block text-xs text-blue-700 mt-0.5'>🇮🇳 {formatDate(request.preferredDate)} @ {istTime}</span>
                 {weeklyContext && <span className='block text-xs text-gray-500 italic mt-0.5'>{weeklyContext}</span>}
             </td>
             <td className="px-6 py-4 text-sm text-gray-600">

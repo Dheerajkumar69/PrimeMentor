@@ -383,7 +383,7 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
                             rel="noopener noreferrer"
                             className="text-blue-500 hover:underline text-xs break-all"
                         >
-                            {zoomLink.substring(0, 60)}...
+                            {zoomLink.length > 60 ? `${zoomLink.substring(0, 60)}…` : zoomLink}
                         </a>
                         <button
                             onClick={() => setShowInput(true)}
@@ -432,7 +432,7 @@ const AcceptedClassRow = ({ request, onLinkSuccess }) => {
                             rel="noopener noreferrer"
                             className="text-blue-500 hover:underline text-xs break-all"
                         >
-                            {zoomLink.substring(0, 50)}...
+                            {zoomLink.length > 50 ? `${zoomLink.substring(0, 50)}…` : zoomLink}
                         </a>
                         <button
                             onClick={() => setShowInput(true)}

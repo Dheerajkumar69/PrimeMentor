@@ -22,11 +22,12 @@ const EWAY_PASSWORD = process.env.EWAY_PASSWORD;
 const EWAY_ENDPOINT = process.env.EWAY_ENDPOINT || 'sandbox';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+let ewayClient = null;
 if (!EWAY_API_KEY || !EWAY_PASSWORD) {
-    console.error("FATAL ERROR: EWAY_API_KEY or EWAY_PASSWORD is not defined in .env");
+    console.error("⚠️ EWAY_API_KEY or EWAY_PASSWORD is not defined in .env — payment endpoints will return 503.");
+} else {
+    ewayClient = rapid.createClient(EWAY_API_KEY, EWAY_PASSWORD, EWAY_ENDPOINT);
 }
-
-const ewayClient = rapid.createClient(EWAY_API_KEY, EWAY_PASSWORD, EWAY_ENDPOINT);
 
 // ── JWT helper ──
 const generateStudentToken = (id) =>
@@ -252,6 +253,10 @@ export const initiatePaymentAndBooking = asyncHandler(async (req, res) => {
     const { bookingPayload } = req.body;
     const { paymentAmount, currency = 'AUD' } = bookingPayload;
 
+    if (!ewayClient) {
+        return res.status(503).json({ success: false, message: 'Payment system is not configured. Please contact support.' });
+    }
+
     try {
         const amountInCents = Math.round(paymentAmount * 100);
         const cleanCancelUrl = `${FRONTEND_URL}/enrollment?step=3`;
@@ -299,6 +304,9 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
     // Use authenticated user from middleware
     const studentId = req.user?._id?.toString() || req.body?.studentId;
 
+    if (!ewayClient) {
+        return res.status(503).json({ success: false, message: 'Payment system is not configured. Please contact support.' });
+    }
     if (!accessCode) return res.status(400).json({ success: false, message: "Missing eWAY AccessCode." });
     if (!studentId) return res.status(401).json({ success: false, message: "Authentication failed. Missing student ID." });
 
@@ -408,6 +416,40 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
             }));
 
             await ClassRequest.insertMany(repeatRequests);
+
+            // Add each repeat session to the student's User.courses so they appear in "My Courses"
+            try {
+                const student = await User.findById(studentId);
+                if (student) {
+                    const sessionDates = resolvedPayload.sessionDates || [];
+                    const timeSlot = resolvedPayload.timeSlot || 'N/A';
+                    const courseName = (resolvedPayload.courseName || 'Course').split('(')[0].trim();
+
+                    sessionDates.forEach((dateStr, i) => {
+                        student.courses.push({
+                            name: `${courseName} (Repeat ${i + 1}/${totalSessionCount})`,
+                            description: `Repeat session ${i + 1} of ${totalSessionCount}`,
+                            teacher: 'Pending Teacher',
+                            duration: '1 hour',
+                            preferredDate: dateStr,
+                            preferredTime: timeSlot,
+                            status: 'pending',
+                            enrollmentDate: new Date(),
+                            zoomMeetingUrl: '',
+                            sessionsRemaining: 1,
+                            paymentStatus: 'paid',
+                            transactionId: transactionID,
+                            amountPaid: resolvedPayload.sessionPrice || 0,
+                        });
+                    });
+
+                    student.markModified('courses');
+                    await student.save();
+                    console.log(`✅ Added ${sessionDates.length} repeat course entries to student ${student.studentName}`);
+                }
+            } catch (userUpdateErr) {
+                console.error('⚠️ Failed to update student courses for repeat booking:', userUpdateErr.message);
+            }
 
             const emailRecipient = resolvedPayload.studentEmail;
             if (emailRecipient && emailRecipient.includes('@')) {
@@ -613,55 +655,12 @@ export const submitFeedback = asyncHandler(async (req, res) => {
 // ============================================================
 // REPEAT CLASSES
 // ============================================================
+// M3 FIX: requestRepeatClasses previously created unpaid ClassRequests, allowing
+// free class bookings via direct API. Now directs users to the payment flow.
 export const requestRepeatClasses = asyncHandler(async (req, res) => {
-    const student = req.user;
-    const { courseId, dayOfWeek, timeSlot, repeatWeeks } = req.body;
-
-    if (!courseId || !timeSlot || dayOfWeek === undefined) {
-        return res.status(400).json({ success: false, message: "Missing required fields: courseId, dayOfWeek, timeSlot." });
-    }
-
-    const parsedDay = parseInt(dayOfWeek, 10);
-    if (isNaN(parsedDay) || parsedDay < 1 || parsedDay > 6) {
-        return res.status(400).json({ success: false, message: "dayOfWeek must be 1 (Mon) through 6 (Sat)." });
-    }
-
-    const weeks = parseInt(repeatWeeks, 10);
-    if (isNaN(weeks) || weeks < 1 || weeks > 12) {
-        return res.status(400).json({ success: false, message: "repeatWeeks must be between 1 and 12." });
-    }
-
-    const course = student.courses.id(courseId);
-    if (!course) return res.status(404).json({ success: false, message: "Course not found in your enrollment." });
-
-    const auFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' });
-    const todayStr = auFormatter.format(new Date());
-    const todayParts = todayStr.split('-').map(Number);
-    let cursor = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
-    const currentDayUTC = cursor.getUTCDay();
-    let daysToAdd = parsedDay - currentDayUTC;
-    if (daysToAdd <= 0) daysToAdd += 7;
-    cursor.setUTCDate(cursor.getUTCDate() + daysToAdd);
-
-    const sessionDates = [];
-    for (let i = 0; i < weeks; i++) {
-        sessionDates.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`);
-        cursor.setUTCDate(cursor.getUTCDate() + 7);
-    }
-
-    const classRequests = sessionDates.map((dateStr, i) => new ClassRequest({
-        courseId: course._id, courseTitle: `${course.name.split('(')[0].trim()} (Repeat ${i + 1}/${weeks})`,
-        studentId: student._id.toString(), studentName: student.studentName,
-        purchaseType: 'TRIAL', preferredDate: dateStr, scheduleTime: timeSlot,
-        scheduleTimeIST: convertMelbourneToIST(dateStr, timeSlot),
-        status: 'pending', paymentStatus: 'unpaid', amountPaid: 0,
-    }));
-
-    await ClassRequest.insertMany(classRequests);
-    res.status(201).json({
-        success: true,
-        message: `${weeks} recurring class request(s) created!`,
-        requestsCreated: classRequests.length, dates: sessionDates,
+    return res.status(405).json({
+        success: false,
+        message: 'Direct repeat class requests are no longer supported. Please use the /initiate-repeat-payment endpoint to book and pay for repeat classes.',
     });
 });
 
@@ -725,6 +724,10 @@ export const initiateRepeatPayment = asyncHandler(async (req, res) => {
 
     const totalSessions = parsedDays.length * weeks;
     const totalAmount = sessionPrice * totalSessions;
+
+    if (!ewayClient) {
+        return res.status(503).json({ success: false, message: 'Payment system is not configured. Please contact support.' });
+    }
 
     try {
         const amountInCents = Math.round(totalAmount * 100);

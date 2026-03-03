@@ -41,7 +41,7 @@ const classRequestSchema = new mongoose.Schema(
         // Zoom Meeting Details (auto-created when admin assigns a teacher)
         zoomMeetingLink: {
             type: String,
-            default: '',
+            default: null,
         },
         zoomStartLink: {
             type: String,

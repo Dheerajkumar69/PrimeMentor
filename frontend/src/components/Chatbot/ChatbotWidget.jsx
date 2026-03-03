@@ -17,8 +17,11 @@ const ChatbotWidget = () => {
   const messagesEndRef = useRef(null);
 
   // Use a stable, unique ID for the session. 
-  // For a basic bot, a local storage key works. For a logged-in user, use their Clerk ID.
-  const CHAT_USER_ID = localStorage.getItem('chatUserId') || `guest-${Date.now()}`;
+  // We use a lazy initializer to prevent regenerating Date.now() on every render if localStorage is empty
+  const [CHAT_USER_ID] = useState(() => {
+    return localStorage.getItem('chatUserId') || `guest-${Date.now()}`;
+  });
+
   useEffect(() => {
     localStorage.setItem('chatUserId', CHAT_USER_ID);
   }, [CHAT_USER_ID]);
@@ -109,9 +112,9 @@ const ChatbotWidget = () => {
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[75%] px-3 py-2 rounded-xl text-sm shadow-md ${message.sender === 'user'
-                      ? 'bg-indigo-500 text-white rounded-br-none'
-                      : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                  className={`max-w-[75%] px-3 py-2 rounded-xl text-sm shadow-md whitespace-pre-wrap ${message.sender === 'user'
+                    ? 'bg-indigo-500 text-white rounded-br-none'
+                    : 'bg-gray-100 text-gray-800 rounded-tl-none'
                     }`}
                 >
                   {message.text}

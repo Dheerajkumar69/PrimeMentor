@@ -9,18 +9,12 @@ export const knowledgeBase = [
     // ── Subjects ──
     "We currently offer tutoring in three core subjects: Mathematics, Science, and English. Students can also select 'All' subjects during enrollment.",
 
-    // ── Pricing (AUD) ──
-    "Our tutoring prices are in Australian Dollars (AUD) and vary by year level:",
-    "Year 2-6: $22 per session (original price $35 per session).",
-    "Year 7-9: $25 per session (original price $40 per session).",
-    "Year 10-12: $27 per session (original price $45 per session).",
-    "Prices start from $22/session onwards. All prices shown are per 60-minute session.",
-    "Pricing is dynamically managed and may be updated by our admin team. Always refer to the pricing section on our website for the latest rates.",
-
-    // ── Starter Pack ──
-    "We offer a Starter Pack: 6 x 60-minute 1-on-1 sessions with a $5 fixed discount off the total price.",
-    "For example, for Year 2-6 the Starter Pack costs: (6 × $22) - $5 = $127. That's equivalent to about $21.17 per session!",
+    // ── Purchase Options & Starter Pack ──
+    "Students have two purchase options when enrolling:",
+    "1. TRIAL (Single Session): Book a one-off 60-minute trial session at the standard per-session price.",
+    "2. STARTER PACK: Book 6 sessions at a discounted total price.",
     "The Starter Pack is a great way to assess whether a PrimeMentor program is right for you at a discounted rate.",
+    "After completing a starter pack or trial, students can book recurring weekly sessions (1 to 12 weeks) from their course dashboard.",
 
     // ── Session Details ──
     "Each session is 60 minutes of live, 1-on-1 online tutoring delivered via Zoom.",

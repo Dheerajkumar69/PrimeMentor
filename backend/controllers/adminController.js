@@ -19,6 +19,7 @@ import generateToken from '../utils/generateToken.js';
 import { createZoomMeeting, getAvailableHost } from '../utils/zoomIntegration.js';
 import { sendAssessmentApprovalEmail, sendClassAssignmentEmail, sendPaidClassZoomEmail } from '../utils/emailService.js';
 import { enqueueEmail } from '../utils/emailQueue.js';
+import { convertMelbourneToIST } from '../utils/timezoneUtils.js';
 
 // Admin credentials are now stored in MongoDB via AdminModel.
 // Run `node seedAdmin.js` to create/update the admin account.
@@ -56,7 +57,8 @@ const buildDateTime = (dateStr, timeParsed) => {
     if (!dateStr || !timeParsed) return null;
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return null;
-    d.setHours(timeParsed.hours, timeParsed.minutes, 0, 0);
+    // H3 FIX: Use setUTCHours so conflict detection is timezone-independent
+    d.setUTCHours(timeParsed.hours, timeParsed.minutes, 0, 0);
     return d;
 };
 
@@ -333,7 +335,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
 export const getAllStudents = asyncHandler(async (req, res) => {
     // Retrieve all User records. 
     // Select specific student fields, including embedded courses.
-    const students = await User.find({}).select('clerkId studentName email courses createdAt');
+    const students = await User.find({}).select('studentName email courses createdAt');
 
     res.json(students);
 });
@@ -523,9 +525,10 @@ export const assignTeacher = asyncHandler(async (req, res) => {
         }
 
         if (timeForZoom) {
-            // Build IST-anchored UTC time (admin enters date/time in IST)
-            const istDateTimeISO = `${request.preferredDate}T${timeForZoom}:00+05:30`;
-            meetingStartUTC = new Date(istDateTimeISO);
+            // BUG FIX: preferredDate and scheduleTime are AUSTRALIAN time, not IST.
+            // Use +10:00 (AEST) as default offset for UTC conversion.
+            const auDateTimeISO = `${request.preferredDate}T${timeForZoom}:00+10:00`;
+            meetingStartUTC = new Date(auDateTimeISO);
 
             if (!isNaN(meetingStartUTC.getTime())) {
                 const meetingTopic = `${request.courseTitle} — ${request.studentName} (${request.purchaseType === 'TRIAL' ? 'Trial' : 'Starter Pack'})`;
@@ -599,7 +602,31 @@ export const assignTeacher = asyncHandler(async (req, res) => {
                 console.error(`Error saving student ${student.studentName} course update:`, studentSaveError);
             }
         } else {
-            console.warn(`Could not find pending course for student ${student.studentName} with title ${request.courseTitle}`);
+            // No matching course found — create one from the ClassRequest data
+            // This handles legacy repeat bookings or any case where User.courses was not populated
+            console.warn(`No pending course found for "${request.courseTitle}" — creating new entry for student ${student.studentName}`);
+            try {
+                student.courses.push({
+                    name: request.courseTitle,
+                    description: `Assigned session for ${request.courseTitle}`,
+                    teacher: teacher.name,
+                    duration: '1 hour',
+                    preferredDate: request.preferredDate,
+                    preferredTime: request.scheduleTime,
+                    status: 'active',
+                    enrollmentDate: request.enrollmentDate || new Date(),
+                    zoomMeetingUrl: zoomData?.joinUrl || '',
+                    sessionsRemaining: 1,
+                    paymentStatus: request.paymentStatus || 'paid',
+                    transactionId: request.transactionId || '',
+                    amountPaid: request.amountPaid || 0,
+                });
+                student.markModified('courses');
+                await student.save();
+                console.log(`✅ Created new course entry for ${request.courseTitle} on student ${student.studentName}`);
+            } catch (createErr) {
+                console.error(`Error creating course entry for student ${student.studentName}:`, createErr.message);
+            }
         }
     } else {
         console.error(`Student with ID ${request.studentId} not found in DB.`);
@@ -627,6 +654,9 @@ export const assignTeacher = asyncHandler(async (req, res) => {
             purchaseType: request.purchaseType,
             scheduledDate: dateFormatted,
             scheduledTime: `${timeFormatted} ${tzLabel}`,
+            rawDate: request.preferredDate,
+            rawTimeSlot: request.scheduleTime,
+            istDisplay: convertMelbourneToIST(request.preferredDate, request.scheduleTime),
             zoomLink: zoomData.joinUrl,
             zoomStartLink: zoomData.startUrl,
         };
@@ -658,6 +688,7 @@ export const assignTeacher = asyncHandler(async (req, res) => {
             purchaseType: request.purchaseType,
             preferredDate: request.preferredDate,
             scheduleTime: request.scheduleTime,
+            istDisplay: convertMelbourneToIST(request.preferredDate, request.scheduleTime),
         };
 
         const studentEmailFallback = student?.email || request.studentDetails?.email;
@@ -714,6 +745,17 @@ export const addZoomLink = asyncHandler(async (req, res) => {
         throw new Error('Zoom Meeting Link is required.');
     }
 
+    // BUG FIX: Validate URL format to prevent accidental invalid data
+    try {
+        const url = new URL(zoomMeetingLink);
+        if (!['https:', 'http:'].includes(url.protocol)) {
+            throw new Error('Invalid protocol');
+        }
+    } catch {
+        res.status(400);
+        throw new Error('Zoom Meeting Link must be a valid URL (https://...).');
+    }
+
     // 1. Find the ClassRequest
     const request = await ClassRequest.findById(requestId);
 
@@ -724,6 +766,10 @@ export const addZoomLink = asyncHandler(async (req, res) => {
 
     // 2. Update the ClassRequest with the Zoom link
     request.zoomMeetingLink = zoomMeetingLink;
+    // BUG FIX: Accept optional zoomStartLink from request body
+    if (req.body.zoomStartLink !== undefined) {
+        request.zoomStartLink = req.body.zoomStartLink || null;
+    }
     const updatedRequest = await request.save();
 
     // 3. Update the Student's corresponding course entry
@@ -990,16 +1036,20 @@ export const approveAssessment = asyncHandler(async (req, res) => {
         console.warn(`⚠️ ${resolvedTeacherIds.length - teachers.length} teacher ID(s) did not match any records.`);
     }
 
-    // 4. ⛔ CONFLICT CHECK — Prevent double-booking
-    const proposedStart = new Date(`${scheduledDate}T${scheduledTime}:00`);
-    if (isNaN(proposedStart.getTime())) {
+    // H2 FIX: Build proposedStart as IST-anchored (same as meetingStartUTC used for Zoom)
+    // so conflict detection operates on the exact same time as the scheduled meeting.
+    const istDateTimeISO = `${scheduledDate}T${scheduledTime}:00+05:30`;
+    const meetingStartUTC = new Date(istDateTimeISO); // Correct UTC instant
+
+    if (isNaN(meetingStartUTC.getTime())) {
         res.status(400);
         throw new Error('Invalid date/time format. Use YYYY-MM-DD for date and HH:MM for time.');
     }
 
+    // 4. ⛔ CONFLICT CHECK — Prevent double-booking (uses IST-anchored time)
     const allConflicts = [];
     for (const teacher of teachers) {
-        const teacherConflicts = await _findConflicts(teacher._id, proposedStart, 30, assessment._id);
+        const teacherConflicts = await _findConflicts(teacher._id, meetingStartUTC, 30, assessment._id);
         if (teacherConflicts.length > 0) {
             allConflicts.push({ teacherName: teacher.name, teacherId: teacher._id, conflicts: teacherConflicts });
         }
@@ -1017,26 +1067,9 @@ export const approveAssessment = asyncHandler(async (req, res) => {
     const teacherNamesStr = teachers.map(t => t.name).join(', ');
     const meetingTopic = `Free Assessment: ${assessment.subject} — ${studentName} (Year ${assessment.class})`;
 
-    // ==================== IST-BASED SCHEDULING ====================
-    // Admin enters date & time in IST (Asia/Kolkata).
-    // The `proposedStart` Date was parsed from the raw strings above (e.g. "2026-02-20T14:30:00")
-    // and represents the SERVER's local interpretation. We need the IST interpretation.
-
-    // Build an IST-anchored UTC time: parse the admin's input as IST
-    // IST = UTC+5:30, so we construct the ISO string with +05:30 offset
-    const istDateTimeISO = `${scheduledDate}T${scheduledTime}:00+05:30`;
-    const meetingStartUTC = new Date(istDateTimeISO); // Correct UTC instant
-
-    if (isNaN(meetingStartUTC.getTime())) {
-        res.status(400);
-        throw new Error('Invalid date/time format. Use YYYY-MM-DD for date and HH:MM for time.');
-    }
-
     // Guard against scheduling in the past (compare in IST)
-    const nowIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-    const istNow = new Date(nowIST);
-    // proposedStart was built without TZ info, so compare using the same "naive" approach
-    if (proposedStart < istNow) {
+    // proposedStart is now meetingStartUTC (IST-anchored), so compare directly
+    if (meetingStartUTC < new Date()) {
         res.status(400);
         throw new Error('Cannot schedule an assessment in the past (IST). Please choose a future date and time.');
     }
@@ -1160,6 +1193,7 @@ export const approveAssessment = asyncHandler(async (req, res) => {
             yearLevel: assessment.class,
             scheduledDate: istDateFormatted,
             scheduledTime: `${istTimeFormatted} IST`,
+            istDisplay: `${istTimeFormatted} IST`,
             zoomLink: zoomData.joinUrl,
             zoomStartLink: zoomData.startUrl,
         };

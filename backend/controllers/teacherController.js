@@ -27,9 +27,9 @@ export const registerTeacher = async (req, res) => {
     try {
         // 2. Basic Validation (Email and Password checked first)
         const exists = await TeacherModel.findOne({ email });
-        if (exists) return res.json({ success: false, message: 'Teacher already exists' });
-        if (!validator.isEmail(email)) return res.json({ success: false, message: 'Invalid email' });
-        if (password.length < 8) return res.json({ success: false, message: 'Password too short' });
+        if (exists) return res.status(409).json({ success: false, message: 'Teacher already exists' });
+        if (!validator.isEmail(email)) return res.status(400).json({ success: false, message: 'Invalid email' });
+        if (password.length < 8) return res.status(400).json({ success: false, message: 'Password too short' });
 
         // 3. Hash Password
         const salt = await bcrypt.genSalt(10);
@@ -83,10 +83,10 @@ export const loginTeacher = async (req, res) => {
     const { email, password } = req.body;
     try {
         const teacher = await TeacherModel.findOne({ email });
-        if (!teacher) return res.json({ success: false, message: 'Invalid credentials' });
+        if (!teacher) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
         const match = await bcrypt.compare(password, teacher.password);
-        if (!match) return res.json({ success: false, message: 'Invalid credentials' });
+        if (!match) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
         // Block pending / rejected teachers from obtaining a JWT.
         // Only 'approved' accounts may access the teacher dashboard.

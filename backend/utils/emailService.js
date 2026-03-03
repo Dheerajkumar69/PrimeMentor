@@ -230,7 +230,7 @@ export const sendAssessmentApprovalEmail = async (recipientEmail, recipientName,
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Date:</strong> ${details.scheduledDate}</li>
                         <li><strong>Time (Melbourne):</strong> ${details.scheduledTime || 'To be confirmed'}</li>
-                        ${!isStudent && details.scheduledDate && details.scheduledTime ? `<li><strong>Time (India IST):</strong> ${convertMelbourneToIST(details.scheduledDate, details.scheduledTime)}</li>` : ''}
+                        ${!isStudent && (details.istDisplay || (details.scheduledDate && details.scheduledTime)) ? `<li><strong>Time (India IST):</strong> ${details.istDisplay || convertMelbourneToIST(details.rawDate || details.scheduledDate, details.rawTimeSlot || details.scheduledTime)}</li>` : ''}
                     </ul>
                 </div>
 
@@ -343,7 +343,7 @@ export const sendClassAssignmentEmail = async (recipientEmail, recipientName, ro
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Preferred Date:</strong> ${details.preferredDate || 'To be confirmed'}</li>
                         <li><strong>Preferred Time (Melbourne):</strong> ${details.scheduleTime || 'To be confirmed'}</li>
-                        ${!isStudent && details.preferredDate && details.scheduleTime ? `<li><strong>Time (India IST):</strong> ${convertMelbourneToIST(details.preferredDate, details.scheduleTime)}</li>` : ''}
+                        ${!isStudent && (details.istDisplay || (details.preferredDate && details.scheduleTime)) ? `<li><strong>Time (India IST):</strong> ${details.istDisplay || convertMelbourneToIST(details.preferredDate, details.scheduleTime)}</li>` : ''}
                     </ul>
                 </div>
 
@@ -461,7 +461,7 @@ export const sendPaidClassZoomEmail = async (recipientEmail, recipientName, role
                         <li><strong>Teacher:</strong> ${details.teacherName}</li>
                         <li><strong>Date:</strong> ${details.scheduledDate}</li>
                         <li><strong>Time (Melbourne):</strong> ${details.scheduledTime || 'To be confirmed'}</li>
-                        ${!isStudent && details.scheduledDate && details.scheduledTime ? `<li><strong>Time (India IST):</strong> ${convertMelbourneToIST(details.scheduledDate, details.scheduledTime)}</li>` : ''}
+                        ${!isStudent && (details.istDisplay || (details.scheduledDate && details.scheduledTime)) ? `<li><strong>Time (India IST):</strong> ${details.istDisplay || convertMelbourneToIST(details.rawDate || details.scheduledDate, details.rawTimeSlot || details.scheduledTime)}</li>` : ''}
                     </ul>
                 </div>
 

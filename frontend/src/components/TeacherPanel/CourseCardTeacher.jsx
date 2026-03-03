@@ -1,56 +1,10 @@
 // frontend/src/components/TeacherPanel/CourseCardTeacher.jsx
 import React from "react";
 import { User, Calendar, Clock, CheckCircle, FileText, BookOpen, Video } from "lucide-react";
-// CRITICAL IMPORT: Timezone utility
-import { convertAuTimeToIndiaDisplay } from "../../utils/dateUtils.js";
+// CRITICAL IMPORT: Timezone-correct meeting time calculation
+import { convertAuTimeToIndiaDisplay, getMeetingTime } from "../../utils/dateUtils.js";
 
-// --- Time Parsing Logic (Helper function for Join Button logic, kept for consistency) ---
-const parseClassDateTime = (classData) => {
-    // preferredDate is the Australian YYYY-MM-DD string
-    if (!classData.preferredDate || !classData.scheduleTime) return null;
-
-    try {
-        const dateParts = classData.preferredDate.split("-").map(Number);
-        const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-
-        if (isNaN(dateObj.getTime())) return null;
-
-        // 1. Safely extract the first part of the time string (e.g., '4:00pm')
-        const timeString12h = classData.scheduleTime.split(' - ')[0];
-
-        if (!timeString12h) return null;
-
-        // 2. Convert 12h to 24h
-        let [timeHours, timeMinutes] = timeString12h.replace(/[^0-9:]/g, '').split(':').map(Number);
-        let period = timeString12h.slice(-2).toLowerCase();
-
-        if (period === 'pm' && timeHours !== 12) {
-            timeHours += 12;
-        }
-        if (period === 'am' && timeHours === 12) {
-            timeHours = 0;
-        }
-
-        // 3. Create a Date object interpreted as the Australian local moment
-        const classStart = new Date(
-            dateObj.getFullYear(),
-            dateObj.getMonth(),
-            dateObj.getDate(),
-            timeHours,
-            timeMinutes,
-            0
-        );
-
-        const bufferTimeMinutes = 60; // Class duration buffer
-        const classEndTime = new Date(classStart.getTime() + bufferTimeMinutes * 60000);
-
-        return { classStart, classEndTime };
-    } catch (e) {
-        return null;
-    }
-};
-// --- End Time Parsing Logic ---
-
+// --- Time Parsing Logic removed — now using getMeetingTime from dateUtils.js ---
 
 /**
  * CourseCardTeacher props:
@@ -77,26 +31,21 @@ const CourseCardTeacher = ({ course, isManaged = false, isPast = false }) => {
 
     const zoomLink = course.zoomMeetingLink;
 
-    // CRITICAL FIX: The Join button must still use the Australian time to determine the 
-    // active window, and compare it to the Indian teacher's current IST/local time. 
-    // Since `parseClassDateTime` creates a Date object whose internal UTC value is wrong 
-    // if not in AU, we will rely on a robust system architecture where the *server*
-    // validates the active window using UTC. For this client-side code, we must rely
-    // on the existing logic which is highly dependent on the browser's current TZ.
-    // For demonstration, we keep it as-is, acknowledging it's a weak point without a library/server sync.
+    // FIXED: Uses getMeetingTime which produces a UTC-correct Date object
+    // anchored to Australia/Melbourne. Date.now() comparisons work in ANY timezone.
     const isJoinActive = () => {
-        const times = parseClassDateTime(course);
-        if (!times || !zoomLink) return false;
+        const classStart = getMeetingTime(course.preferredDate, course.scheduleTime);
+        if (!classStart || !zoomLink) return false;
 
         try {
-            const now = new Date();
-
+            const now = Date.now();
             const activeBeforeMinutes = 15;
-            // The comparison is currently operating in the Teacher's local timezone (IST)
-            const activeStartTime = new Date(times.classStart.getTime() - activeBeforeMinutes * 60000);
+            const bufferTimeMinutes = 60; // Class duration
 
-            return now >= activeStartTime && now <= times.classEndTime;
+            const activeStartTime = classStart.getTime() - activeBeforeMinutes * 60000;
+            const classEndTime = classStart.getTime() + bufferTimeMinutes * 60000;
 
+            return now >= activeStartTime && now <= classEndTime;
         } catch (e) {
             console.error("Error checking join activity:", e);
             return false;

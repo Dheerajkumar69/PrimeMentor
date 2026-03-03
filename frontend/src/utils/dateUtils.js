@@ -52,48 +52,66 @@ export const formatDate = (dateInput) => {
 
 
 /**
- * Helper function to calculate the Date object for a scheduled meeting,
- * assuming the inputs are based on AUSTRALIAN TIMEZONE (for the student).
- * This date object will be in the client's local timezone.
- * * @param {string | null} preferredDate - The preferred date string (e.g., 'YYYY-MM-DD').
- * @param {string | null} preferredTime - The preferred time string (e.g., '9:00 AM - 10:00 AM').
- * @returns {Date | null} The Date object for the start of the meeting (in client's local TZ).
+ * Helper function to calculate the **UTC-correct** Date object for a scheduled meeting,
+ * assuming the inputs are based on AUSTRALIAN TIMEZONE (Australia/Melbourne).
+ *
+ * Uses Intl.DateTimeFormat offset probing (UTC+10 AEST / UTC+11 AEDT) to produce
+ * a Date whose `.getTime()` is the true UTC instant of the Australian meeting.
+ * This means `Date.now()` comparisons work correctly in ANY browser timezone.
+ *
+ * @param {string | null} preferredDate - The preferred date string (e.g., 'YYYY-MM-DD').
+ * @param {string | null} preferredTime - The preferred time string (e.g., '9:00 AM - 10:00 AM' or '3:00 PM - 4:00 PM').
+ * @returns {Date | null} The Date object for the start of the meeting (UTC-correct).
  */
 export const getMeetingTime = (preferredDate, preferredTime) => {
     if (!preferredDate || !preferredTime) return null;
 
-    // 1. Date Parsing: Ensure we only use YYYY, M, D components
+    // 1. Date Parsing
     const dateParts = preferredDate.substring(0, 10).split('-');
     const year = parseInt(dateParts[0]);
-    const month = parseInt(dateParts[1]) - 1;
+    const month = parseInt(dateParts[1]); // 1-indexed for our probing below
     const day = parseInt(dateParts[2]);
 
-    // 2. Time Parsing (Same as before, converts 12h to 24h)
-    const [startTimeStr] = preferredTime.split(' ');
-    let timePart = startTimeStr.replace(/[^0-9:]/g, '');
-    let period = startTimeStr.slice(-2).toLowerCase();
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
 
+    // 2. Time Parsing (converts 12h to 24h)
+    const [startTimeStr] = preferredTime.split(' - ');
+    if (!startTimeStr) return null;
+
+    let timePart = startTimeStr.replace(/[^0-9:]/g, '');
+    let period = startTimeStr.trim().slice(-2).toLowerCase();
     let [hour, minute] = timePart.split(':').map(Number);
 
-    // Adjust hour for 24-hour format
-    if (period === 'pm' && hour !== 12) {
-        hour += 12;
+    if (isNaN(hour) || isNaN(minute)) return null;
+
+    if (period === 'pm' && hour !== 12) hour += 12;
+    if (period === 'am' && hour === 12) hour = 0;
+
+    // 3. CRITICAL: Probe UTC+10 (AEST) and UTC+11 (AEDT) to find which offset
+    //    produces the correct Australia/Melbourne local time for this date.
+    //    This is the same robust approach used in convertAuTimeToIndiaDisplay.
+    const melbFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: AUSTRALIA_TIMEZONE,
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: 'numeric', hour12: false,
+    });
+
+    for (const offset of [11, 10]) {
+        const utcMs = Date.UTC(year, month - 1, day, hour - offset, minute, 0);
+        const probe = new Date(utcMs);
+        const parts = melbFormatter.formatToParts(probe);
+        const getPart = (type) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+
+        if (getPart('hour') === hour && getPart('minute') === minute &&
+            getPart('day') === day && getPart('month') === month) {
+            return probe; // Correct UTC instant!
+        }
     }
-    if (period === 'am' && hour === 12) {
-        hour = 0;
-    }
 
-    // 3. CRITICAL: Construct the Date object using the local components.
-    // We assume the selected YYYY-MM-DD HH:MM is based on the Australian timezone 
-    // and use this as a reference point.
-    // NOTE: This Date object's internal UTC time will be wrong if the user's browser 
-    // isn't set to AU, but we use this object's local time components for display/comparison.
-    const date = new Date(year, month, day, hour, minute, 0);
-
-    // Ensure the resulting date is valid
-    if (isNaN(date.getTime())) return null;
-
-    return date;
+    // 4. Fallback: assume UTC+11 (AEDT, most common for Victoria)
+    const fallbackMs = Date.UTC(year, month - 1, day, hour - 11, minute, 0);
+    const fallback = new Date(fallbackMs);
+    return isNaN(fallback.getTime()) ? null : fallback;
 };
 
 /**

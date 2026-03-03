@@ -1,5 +1,6 @@
 // backend/utils/zoomIntegration.js
 import axios from 'axios';
+import crypto from 'crypto';
 import Assessment from '../models/AssessmentModel.js';
 import ClassRequest from '../models/ClassRequest.js';
 
@@ -134,18 +135,26 @@ export const getAvailableHost = async (proposedStart, durationMin = 30) => {
 
     const proposedEnd = new Date(proposedStart.getTime() + durationMin * 60 * 1000);
 
-    // Find all scheduled assessments that overlap with the proposed time slot
+    // BUG FIX: Add date-range filter to avoid loading ALL records from DB.
+    // Only check records within ±24 hours of the proposed time.
+    const windowStart = new Date(proposedStart.getTime() - 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(proposedEnd.getTime() + 24 * 60 * 60 * 1000);
+
+    // Find scheduled assessments that could overlap with the proposed time slot
     const overlappingAssessments = await Assessment.find({
         status: 'Scheduled',
-        scheduledDate: { $ne: null },
+        scheduledDate: { $gte: windowStart, $lte: windowEnd },
         zoomHostEmail: { $ne: null },
     }).lean();
 
     // Also check accepted paid class requests with Zoom meetings
+    // Note: preferredDate is a YYYY-MM-DD string, so we filter with $gte/$lte on strings
+    const windowStartStr = windowStart.toISOString().substring(0, 10);
+    const windowEndStr = windowEnd.toISOString().substring(0, 10);
     const overlappingClasses = await ClassRequest.find({
         status: 'accepted',
         zoomHostEmail: { $ne: null },
-        preferredDate: { $ne: null },
+        preferredDate: { $gte: windowStartStr, $lte: windowEndStr },
     }).lean();
 
     // Track which hosts have overlapping meetings
@@ -186,7 +195,11 @@ export const getAvailableHost = async (proposedStart, durationMin = 30) => {
                         const period = match12[3].toUpperCase();
                         if (period === 'PM' && h !== 12) h += 12;
                         if (period === 'AM' && h === 12) h = 0;
-                        classStart = new Date(`${classReq.preferredDate}T${String(h).padStart(2, '0')}:${m}:00+05:30`);
+                        // BUG FIX: preferredDate is Australian time, NOT IST.
+                        // Use +10:00 (AEST) as default; AEDT (+11:00) would be more
+                        // accurate Oct-Apr but +10:00 is safer for conflict detection
+                        // (errs on the side of detecting more conflicts).
+                        classStart = new Date(`${classReq.preferredDate}T${String(h).padStart(2, '0')}:${m}:00+10:00`);
                     }
                 }
             }
@@ -326,7 +339,7 @@ const generateMeetingPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing characters (0, O, I, 1)
     let password = '';
     for (let i = 0; i < 6; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
+        password += chars.charAt(crypto.randomInt(chars.length));
     }
     return password;
 };

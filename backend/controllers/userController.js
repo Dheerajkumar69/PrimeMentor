@@ -344,22 +344,29 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                 const failedPayload = cachedEntry ? cachedEntry.payload : bookingPayload;
 
                 if (failedPayload) {
+                    const isRepeat = failedPayload.type === 'REPEAT';
                     const courseDetails = failedPayload.courseDetails || {};
                     const studentDetails = failedPayload.studentDetails || {};
                     const guardianDetails = failedPayload.guardianDetails || {};
                     const rawAmount = failedPayload.paymentAmount;
                     const amount = (typeof rawAmount === 'number' && Number.isFinite(rawAmount) && rawAmount > 0) ? rawAmount : 0;
 
+                    // Resolve fields that differ between standard and repeat payloads
+                    const resolvedCourseId = isRepeat ? (failedPayload.courseId || 'unknown') : (courseDetails.courseId || 'unknown');
+                    const resolvedCourseTitle = isRepeat ? (failedPayload.courseName || 'Unknown Course') : (courseDetails.courseTitle || 'Unknown Course');
+                    const resolvedStudentName = isRepeat ? (failedPayload.studentName || 'Unknown Student') : (studentDetails.first && studentDetails.last ? `${studentDetails.first} ${studentDetails.last}` : 'Unknown Student');
+                    const resolvedEmail = isRepeat ? failedPayload.studentEmail : (studentDetails.email || guardianDetails.email);
+
                     await ClassRequest.create({
-                        courseId: courseDetails.courseId || 'unknown',
-                        courseTitle: courseDetails.courseTitle || 'Unknown Course',
+                        courseId: resolvedCourseId,
+                        courseTitle: resolvedCourseTitle,
                         studentId,
-                        studentName: studentDetails.first && studentDetails.last ? `${studentDetails.first} ${studentDetails.last}` : 'Unknown Student',
-                        purchaseType: failedPayload.scheduleDetails?.purchaseType || 'TRIAL',
-                        preferredDate: failedPayload.scheduleDetails?.preferredDate || null,
-                        scheduleTime: failedPayload.scheduleDetails?.preferredTime || null,
-                        subject: courseDetails.subject || 'N/A',
-                        studentDetails: { firstName: studentDetails.first || '', lastName: studentDetails.last || '', email: studentDetails.email || guardianDetails.email || '' },
+                        studentName: resolvedStudentName,
+                        purchaseType: isRepeat ? 'TRIAL' : (failedPayload.scheduleDetails?.purchaseType || 'TRIAL'),
+                        preferredDate: isRepeat ? (failedPayload.sessionDates?.[0] || null) : (failedPayload.scheduleDetails?.preferredDate || null),
+                        scheduleTime: isRepeat ? (failedPayload.timeSlot || null) : (failedPayload.scheduleDetails?.preferredTime || null),
+                        subject: isRepeat ? (failedPayload.courseSubject || 'N/A') : (courseDetails.subject || 'N/A'),
+                        studentDetails: { firstName: isRepeat ? (resolvedStudentName.split(' ')[0] || '') : (studentDetails.first || ''), lastName: isRepeat ? (resolvedStudentName.split(' ').slice(1).join(' ') || '') : (studentDetails.last || ''), email: resolvedEmail || '' },
                         paymentStatus: 'failed',
                         transactionId: transactionID,
                         amountPaid: amount,
@@ -368,11 +375,10 @@ export const finishEwayPaymentAndBooking = asyncHandler(async (req, res) => {
                         status: 'rejected',
                     });
 
-                    const customerEmail = studentDetails.email || guardianDetails.email;
-                    if (customerEmail && customerEmail.includes('@')) {
-                        enqueueEmail('paymentFailure', sendPaymentFailureEmail, [customerEmail, {
-                            studentName: studentDetails.first ? `${studentDetails.first} ${studentDetails.last || ''}`.trim() : 'Valued Customer',
-                            courseTitle: courseDetails.courseTitle || 'Course',
+                    if (resolvedEmail && resolvedEmail.includes('@')) {
+                        enqueueEmail('paymentFailure', sendPaymentFailureEmail, [resolvedEmail, {
+                            studentName: resolvedStudentName !== 'Unknown Student' ? resolvedStudentName : 'Valued Customer',
+                            courseTitle: resolvedCourseTitle,
                             amountAttempted: amount > 0 ? amount.toFixed(2) : '0.00',
                             currency: 'AUD',
                             failureReason,

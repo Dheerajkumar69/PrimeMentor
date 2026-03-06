@@ -84,7 +84,7 @@ const Header = () => {
                 title="Open Learning Management System"
                 className="flex items-center gap-1 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 rounded-full font-semibold hover:shadow-lg transition"
               >
-                Go to LMS <ExternalLink className="w-3.5 h-3.5" />
+                My Dashboard <ExternalLink className="w-3.5 h-3.5" />
               </a>
               <button
                 onClick={handleLogout}
@@ -97,14 +97,14 @@ const Header = () => {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {/* Go to LMS (replaces Teacher Login — teachers log in via Wise LMS) */}
+              {/* My Dashboard (replaces Teacher Login — teachers log in via Wise LMS) */}
               <a
                 href={`${WISE_LMS_URL}/student/classes`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`${baseButtonClasses} hidden lg:flex items-center gap-1 text-white bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg hover:shadow-xl`}
               >
-                Go to LMS <ExternalLink className="w-3.5 h-3.5" />
+                My Dashboard <ExternalLink className="w-3.5 h-3.5" />
               </a>
 
               {/* Student Login — redirects to Wise LMS */}
@@ -151,7 +151,7 @@ const Header = () => {
                   onClick={() => setIsMenuOpen(false)}
                   className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full font-semibold text-center hover:shadow-lg transition flex items-center justify-center gap-2"
                 >
-                  Go to LMS <ExternalLink className="w-4 h-4" />
+                  My Dashboard <ExternalLink className="w-4 h-4" />
                 </a>
                 <div className="flex items-center justify-between w-full pt-2">
                   <p className="font-medium text-gray-700">Hello, {displayName.split(' ')[0]}</p>
@@ -169,7 +169,7 @@ const Header = () => {
                   onClick={() => setIsMenuOpen(false)}
                   className="w-full py-3 text-gray-700 font-semibold text-left hover:text-blue-600 transition border-b border-gray-100 flex items-center gap-2"
                 >
-                  Go to LMS <ExternalLink className="w-4 h-4" />
+                  My Dashboard <ExternalLink className="w-4 h-4" />
                 </a>
                 <a
                   href={`${WISE_LMS_URL}/signup`}

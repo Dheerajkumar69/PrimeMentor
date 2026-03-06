@@ -8,7 +8,7 @@ import { AppContext } from './context/AppContext.jsx';
 import TeacherLogin from './components/TeacherPanel/TeacherLogin.jsx';
 import StudentLogin from './components/StudentPanel/StudentLogin.jsx';
 import AdminLogin from './components/AdminPanel/AdminLogin.jsx';
-import AssessmentModal from './components/Booking/AssessmentModal.jsx';
+// AssessmentModal removed — free assessments now handled by Wise LMS consultations
 import AssessmentCallout from './components/Home/AssessmentCallout.jsx';
 // PricingFlow removed — enrollment now handled by Wise LMS
 import Header from './components/Home/Header.jsx';
@@ -77,7 +77,6 @@ const App = () => {
     const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
         !!localStorage.getItem('adminAuthenticated')
     );
-    const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
     const [isAssessmentCalloutOpen, setIsAssessmentCalloutOpen] = useState(false);
 
 
@@ -97,14 +96,18 @@ const App = () => {
         setIsAssessmentCalloutOpen(isHomePage && !isSignedIn);
     }, [isSignedIn]);
 
-    const handleCalloutBook = () => {
+    // Wise LMS URLs
+    const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
+    const WISE_STORE_URL = import.meta.env.VITE_WISE_STORE_URL || 'https://primementor.wise.live/store';
+    const WISE_CONSULTATION_URL = import.meta.env.VITE_WISE_CONSULTATION_URL || 'https://primementor.wise.live/book/free-assessment';
+
+    // Opens the Wise LMS free assessment booking page
+    const handleBookAssessment = () => {
         setIsAssessmentCalloutOpen(false);
-        setIsAssessmentModalOpen(true);
+        window.open(WISE_CONSULTATION_URL, '_blank', 'noopener,noreferrer');
     };
 
     // Handle "Classes starts from $X" button — redirect to Wise LMS store
-    const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
-    const WISE_STORE_URL = import.meta.env.VITE_WISE_STORE_URL || 'https://primementor.wise.live/institutes/69a53129cd5c5c1bf3ec3e48/store';
     const handleStartClasses = () => {
         setIsAssessmentCalloutOpen(false);
         window.open(WISE_STORE_URL, '_blank', 'noopener,noreferrer');
@@ -117,13 +120,10 @@ const App = () => {
         window.location.href = '/admin/login';
     };
 
-    const handleSubmissionComplete = useCallback((data) => {
-        console.log("Assessment submitted:", data);
-    }, []);
 
     const hideNavPaths = ['/teacher/dashboard', '/admin/login', '/admin/dashboard', '/booking', '/enrollment', '/payment-status'];
     const shouldHideNav = showTeacherLogin || showStudentLogin || hideNavPaths.some(p => location.pathname.startsWith(p));
-    const isModalOpen = showTeacherLogin || showStudentLogin || isAssessmentModalOpen;
+    const isModalOpen = showTeacherLogin || showStudentLogin;
 
     return (
         <div className="min-h-screen bg-white">
@@ -133,18 +133,13 @@ const App = () => {
             {/* Modals */}
             {showTeacherLogin && <TeacherLogin setShowTeacherLogin={setShowTeacherLogin} />}
             {showStudentLogin && <StudentLogin setShowStudentLogin={setShowStudentLogin} />}
-            <AssessmentModal
-                isOpen={isAssessmentModalOpen}
-                onClose={() => setIsAssessmentModalOpen(false)}
-                onSubmissionComplete={handleSubmissionComplete}
-            />
 
             <ChatbotWidget />
 
             <AssessmentCallout
                 isOpen={isAssessmentCalloutOpen}
                 onClose={() => setIsAssessmentCalloutOpen(false)}
-                onBookFreeAssessment={handleCalloutBook}
+                onBookFreeAssessment={handleBookAssessment}
                 onStartClasses={handleStartClasses}
             />
 
@@ -155,7 +150,7 @@ const App = () => {
 
                 <Suspense fallback={<Fallback />}>
                     <Routes>
-                        <Route path="/" element={<Home setIsAssessmentModalOpen={setIsAssessmentModalOpen} />} />
+                        <Route path="/" element={<Home handleBookAssessment={handleBookAssessment} />} />
 
                         {/* Public pages */}
                         <Route path="/courses" element={<Courses />} />

@@ -13,15 +13,15 @@ import Footer from '../components/Home/Footer.jsx'; // Assuming Footer is in thi
  * The main Home page container. It accepts the modal setter to trigger the assessment modal
  * from within its child components (HeroSection).
  * @param {object} props
- * @param {function} props.setIsAssessmentModalOpen - Function to control the modal's visibility.
+ * @param {function} props.handleBookAssessment - Function to open the Wise LMS consultation booking.
  */
-const Home = ({ setIsAssessmentModalOpen }) => {
+const Home = ({ handleBookAssessment }) => {
   return (
     <div>
       {/* Header is managed by App.jsx — not rendered here to avoid double-render */}
 
       {/* The HeroSection is a direct child of the Home page */}
-      <HeroSection setIsAssessmentModalOpen={setIsAssessmentModalOpen} />
+      <HeroSection handleBookAssessment={handleBookAssessment} />
 
       {/* Other components of the Home page */}
       <ReasonsSection />

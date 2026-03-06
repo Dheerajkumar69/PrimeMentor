@@ -36,7 +36,7 @@ const animations = `
 }
 `;
 
-export default function HeroSection({ setIsAssessmentModalOpen }) {
+export default function HeroSection({ handleBookAssessment }) {
   const [buttons, setButtons] = useState([]);
   const [loadingPrices, setLoadingPrices] = useState(true);
 
@@ -126,7 +126,7 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
             {/* CTA Buttons */}
             <div className="flex flex-wrap gap-4 justify-center lg:justify-start animate-[fade-in-up_1s_ease-out_forwards_0.8s]">
               <button
-                onClick={() => setIsAssessmentModalOpen(true)}
+                onClick={handleBookAssessment}
                 className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-base sm:text-lg transition transform hover:scale-105 shadow-xl"
               >
                 Book a Free Assessment

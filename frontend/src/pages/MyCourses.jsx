@@ -246,7 +246,7 @@ const MyCourses = () => {
                     </div>
                 </div>
 
-                {/* ── Go to LMS Banner ── */}
+                {/* ── My Dashboard Banner ── */}
                 <div className="mx-auto max-w-8xl px-6 -mt-5 mb-6">
                     <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="flex items-center gap-3 text-white">
@@ -262,7 +262,7 @@ const MyCourses = () => {
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 bg-white text-blue-700 font-bold py-3 px-8 rounded-full shadow-md hover:shadow-xl transition transform hover:-translate-y-0.5 duration-300 whitespace-nowrap"
                         >
-                            Go to LMS <ExternalLink className="w-4 h-4" />
+                            My Dashboard <ExternalLink className="w-4 h-4" />
                         </a>
                     </div>
                 </div>

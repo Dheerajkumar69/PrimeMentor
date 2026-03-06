@@ -10,7 +10,7 @@ import StudentLogin from './components/StudentPanel/StudentLogin.jsx';
 import AdminLogin from './components/AdminPanel/AdminLogin.jsx';
 import AssessmentModal from './components/Booking/AssessmentModal.jsx';
 import AssessmentCallout from './components/Home/AssessmentCallout.jsx';
-import PricingFlow from './components/Pricing/PricingFlow.jsx';
+// PricingFlow removed — enrollment now handled by Wise LMS
 import Header from './components/Home/Header.jsx';
 import Footer from './components/Home/Footer.jsx';
 import ChatbotWidget from './components/Chatbot/ChatbotWidget.jsx';
@@ -79,9 +79,7 @@ const App = () => {
     );
     const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
     const [isAssessmentCalloutOpen, setIsAssessmentCalloutOpen] = useState(false);
-    const [isPricingFlowOpen, setIsPricingFlowOpen] = useState(false);
-    const [pricingFlowData, setPricingFlowData] = useState(null);
-    const [pendingPricingFlowData, setPendingPricingFlowData] = useState(null);
+
 
     useEffect(() => {
         const checkAuth = () => setIsAdminAuthenticated(!!localStorage.getItem('adminAuthenticated'));
@@ -104,26 +102,13 @@ const App = () => {
         setIsAssessmentModalOpen(true);
     };
 
-    // Handle "Classes starts from $X" button — same logic as HeroSection's pricing buttons
-    const handleStartClasses = (classRange, price) => {
+    // Handle "Classes starts from $X" button — redirect to Wise LMS store
+    const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
+    const WISE_STORE_URL = import.meta.env.VITE_WISE_STORE_URL || 'https://primementor.wise.live/institutes/69a53129cd5c5c1bf3ec3e48/store';
+    const handleStartClasses = () => {
         setIsAssessmentCalloutOpen(false);
-        if (isSignedIn) {
-            setPricingFlowData({ initialClassRange: classRange, basePrice: price });
-            setIsPricingFlowOpen(true);
-        } else {
-            setPendingPricingFlowData({ initialClassRange: classRange, basePrice: price });
-            setShowStudentLogin(true);
-        }
+        window.open(WISE_STORE_URL, '_blank', 'noopener,noreferrer');
     };
-
-    // Auto-resume PricingFlow after sign-in
-    useEffect(() => {
-        if (isSignedIn && pendingPricingFlowData) {
-            setPricingFlowData(pendingPricingFlowData);
-            setIsPricingFlowOpen(true);
-            setPendingPricingFlowData(null);
-        }
-    }, [isSignedIn, pendingPricingFlowData]);
 
     const handleAdminLogout = () => {
         localStorage.removeItem('adminToken');
@@ -163,13 +148,7 @@ const App = () => {
                 onStartClasses={handleStartClasses}
             />
 
-            {isPricingFlowOpen && (
-                <PricingFlow
-                    isOpen={isPricingFlowOpen}
-                    onClose={() => { setIsPricingFlowOpen(false); setPricingFlowData(null); }}
-                    initialClassFlowData={pricingFlowData}
-                />
-            )}
+
 
             <div className={`relative z-10 ${isModalOpen ? 'pointer-events-none' : ''}`}>
                 {!shouldHideNav && <Header />}

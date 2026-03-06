@@ -1,8 +1,10 @@
-import React, { useState, useContext, useEffect } from 'react';
-import { TrendingUp, Loader } from 'lucide-react';
-import { AppContext } from '../../context/AppContext.jsx';
-import PricingFlow from '../Pricing/PricingFlow.jsx';
+import React, { useState, useEffect } from 'react';
+import { TrendingUp, Loader, ExternalLink } from 'lucide-react';
 import axios from 'axios';
+
+// Wise LMS store URL — students are redirected here to buy courses
+const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
+const WISE_STORE_URL = import.meta.env.VITE_WISE_STORE_URL || 'https://primementor.wise.live/institutes/69a53129cd5c5c1bf3ec3e48/store';
 
 const animations = `
 @keyframes fade-in-up {
@@ -35,11 +37,6 @@ const animations = `
 `;
 
 export default function HeroSection({ setIsAssessmentModalOpen }) {
-  const { isSignedIn, backendUrl, setShowStudentLogin } = useContext(AppContext);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [initialClassFlowData, setInitialClassFlowData] = useState(null);
-  const [pendingFlowData, setPendingFlowData] = useState(null);
   const [buttons, setButtons] = useState([]);
   const [loadingPrices, setLoadingPrices] = useState(true);
 
@@ -47,7 +44,7 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const apiBase = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+        const apiBase = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
         const response = await axios.get(`${apiBase}/api/admin/pricing`);
         const { classRanges } = response.data;
         setButtons([
@@ -66,30 +63,11 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
       }
     };
     fetchPricing();
-  }, [backendUrl]);
+  }, []);
 
-  // Resume flow after sign-in
-  useEffect(() => {
-    if (isSignedIn && pendingFlowData) {
-      setInitialClassFlowData(pendingFlowData);
-      setIsModalOpen(true);
-      setPendingFlowData(null);
-    }
-  }, [isSignedIn, pendingFlowData]);
-
-  const handleButtonClick = (classRange, price) => {
-    if (isSignedIn) {
-      setInitialClassFlowData({ initialClassRange: classRange, basePrice: price });
-      setIsModalOpen(true);
-    } else {
-      setPendingFlowData({ initialClassRange: classRange, basePrice: price });
-      setShowStudentLogin(true);
-    }
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setInitialClassFlowData(null);
+  const handleEnrollClick = () => {
+    // Open the Wise LMS store page where students can browse and buy courses
+    window.open(WISE_STORE_URL, '_blank', 'noopener,noreferrer');
   };
 
   const lowestPrice = buttons.length > 0 ? Math.min(...buttons.map(b => b.price)) : '...';
@@ -182,13 +160,13 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
 
               {/* Title */}
               <h2 className="text-white text-2xl sm:text-3xl md:text-4xl font-bold mb-3 pr-20">
-                Unlock Your Personalized Pricing
+                Find Your Perfect Course
               </h2>
               <p className="text-gray-300 text-base sm:text-lg mb-8">
-                Complete a quick questionnaire (less than 1 minute) to find your ideal learning package.
+                Browse our courses and enroll directly through our Learning Management System.
               </p>
 
-              {/* Pricing Buttons */}
+              {/* Pricing Buttons — ALL redirect to Wise LMS store */}
               <div className="flex flex-col gap-4">
                 {loadingPrices ? (
                   <Loader className="w-7 h-7 text-orange-400 animate-spin mx-auto" />
@@ -196,10 +174,10 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
                   buttons.map((button) => (
                     <button
                       key={button.range}
-                      onClick={() => handleButtonClick(button.range, button.price)}
-                      className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-4 px-6 rounded-full shadow-lg transition-all duration-300 hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wide"
+                      onClick={handleEnrollClick}
+                      className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-4 px-6 rounded-full shadow-lg transition-all duration-300 hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wide flex items-center justify-center gap-2"
                     >
-                      View Pricing for {button.label}
+                      Enroll for {button.label} <ExternalLink className="w-5 h-5" />
                     </button>
                   ))
                 )}
@@ -216,10 +194,6 @@ export default function HeroSection({ setIsAssessmentModalOpen }) {
           <path d="M0 80L1440 80L1440 0C1440 0 1080 60 720 60C360 60 0 0 0 0L0 80Z" fill="white" />
         </svg>
       </div>
-
-      {isModalOpen && (
-        <PricingFlow isOpen={isModalOpen} onClose={closeModal} initialClassFlowData={initialClassFlowData} />
-      )}
     </section>
   );
 }

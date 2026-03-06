@@ -1,10 +1,13 @@
 // frontend/src/components/Home/Header.jsx
 
-import { Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut, ExternalLink } from 'lucide-react';
 import { useState, useEffect, useRef, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import { assets } from '../../assets/assets';
+
+// Wise LMS URL — where students access their courses and live classes
+const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -74,6 +77,15 @@ const Header = () => {
               <Link to="/my-courses" className="hidden lg:block text-gray-700 hover:text-orange-500 transition font-medium">My Courses</Link>
               <span className="hidden lg:block text-gray-300">|</span>
               <span className="text-gray-700 font-medium text-sm whitespace-nowrap">Hello, {displayName.split(' ')[0]}</span>
+              <a
+                href={`${WISE_LMS_URL}/student/classes`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open Learning Management System"
+                className="flex items-center gap-1 text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 rounded-full font-semibold hover:shadow-lg transition"
+              >
+                Go to LMS <ExternalLink className="w-3.5 h-3.5" />
+              </a>
               <button
                 onClick={handleLogout}
                 title="Logout"
@@ -85,23 +97,25 @@ const Header = () => {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {/* Teacher Login */}
-              <button
-                onClick={() => setShowTeacherLogin(true)}
-                className={`${baseButtonClasses} hidden lg:block ${isLoginHovered ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg' : 'text-gray-700 hover:text-orange-500 border border-gray-300'}`}
-                onMouseEnter={() => setIsLoginHovered(true)}
-                onMouseLeave={() => setIsLoginHovered(false)}
+              {/* Go to LMS (replaces Teacher Login — teachers log in via Wise LMS) */}
+              <a
+                href={`${WISE_LMS_URL}/student/classes`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${baseButtonClasses} hidden lg:flex items-center gap-1 text-white bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg hover:shadow-xl`}
               >
-                Teacher Login
-              </button>
+                Go to LMS <ExternalLink className="w-3.5 h-3.5" />
+              </a>
 
-              {/* Student Login */}
-              <button
-                onClick={() => setShowStudentLogin(true)}
+              {/* Student Login — redirects to Wise LMS */}
+              <a
+                href={`${WISE_LMS_URL}/signup`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className={`${baseButtonClasses} bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg hover:shadow-xl`}
               >
                 Login / Sign Up
-              </button>
+              </a>
             </div>
           )}
         </div>
@@ -130,6 +144,15 @@ const Header = () => {
             {isSignedIn ? (
               <>
                 <Link to="/my-courses" onClick={() => setIsMenuOpen(false)} className="w-full py-2 text-orange-600 font-semibold text-left border-b border-gray-100">My Courses</Link>
+                <a
+                  href={`${WISE_LMS_URL}/student/classes`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full font-semibold text-center hover:shadow-lg transition flex items-center justify-center gap-2"
+                >
+                  Go to LMS <ExternalLink className="w-4 h-4" />
+                </a>
                 <div className="flex items-center justify-between w-full pt-2">
                   <p className="font-medium text-gray-700">Hello, {displayName.split(' ')[0]}</p>
                   <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-red-500 font-medium">
@@ -139,18 +162,24 @@ const Header = () => {
               </>
             ) : (
               <>
-                <button
-                  onClick={() => { setShowTeacherLogin(true); setIsMenuOpen(false); }}
-                  className="w-full py-3 text-gray-700 font-semibold text-left hover:text-orange-500 transition border-b border-gray-100"
+                <a
+                  href={`${WISE_LMS_URL}/student/classes`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full py-3 text-gray-700 font-semibold text-left hover:text-blue-600 transition border-b border-gray-100 flex items-center gap-2"
                 >
-                  Teacher Login
-                </button>
-                <button
-                  onClick={() => { setShowStudentLogin(true); setIsMenuOpen(false); }}
+                  Go to LMS <ExternalLink className="w-4 h-4" />
+                </a>
+                <a
+                  href={`${WISE_LMS_URL}/signup`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsMenuOpen(false)}
                   className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-center hover:shadow-lg transition mt-2"
                 >
-                  Student Login / Sign Up
-                </button>
+                  Login / Sign Up
+                </a>
               </>
             )}
           </nav>

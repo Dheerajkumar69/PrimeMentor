@@ -1,15 +1,14 @@
 // frontend/src/components/Home/PricingSection.jsx
 
-import React, { useState, useContext, useEffect } from 'react';
-import PricingFlow from '../Pricing/PricingFlow.jsx';
-import { AppContext } from '../../context/AppContext.jsx';
-import { Sparkles, TrendingUp, Loader } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, TrendingUp, Loader, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 
+// Wise LMS store URL — students are redirected here to buy courses
+const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
+const WISE_STORE_URL = import.meta.env.VITE_WISE_STORE_URL || 'https://primementor.wise.live/institutes/69a53129cd5c5c1bf3ec3e48/store';
+
 export default function PricingSection() {
-    const { isSignedIn, backendUrl, setShowStudentLogin } = useContext(AppContext);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [initialClassFlowData, setInitialClassFlowData] = useState(null);
     const [buttons, setButtons] = useState([]);
     const [loadingPrices, setLoadingPrices] = useState(true);
 
@@ -17,7 +16,7 @@ export default function PricingSection() {
     useEffect(() => {
         const fetchPricing = async () => {
             try {
-                const apiBase = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+                const apiBase = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
                 const response = await axios.get(`${apiBase}/api/admin/pricing`);
                 const { classRanges } = response.data;
                 setButtons([
@@ -38,33 +37,11 @@ export default function PricingSection() {
             }
         };
         fetchPricing();
-    }, [backendUrl]);
+    }, []);
 
-    // Pending flow data for after sign-in
-    const [pendingFlowData, setPendingFlowData] = useState(null);
-
-    const handleButtonClick = (classRange, price) => {
-        if (isSignedIn) {
-            setInitialClassFlowData({ initialClassRange: classRange, basePrice: price });
-            setIsModalOpen(true);
-        } else {
-            // Store the intended flow data so we can resume after sign-in
-            setPendingFlowData({ initialClassRange: classRange, basePrice: price });
-        }
-    };
-
-    // After sign-in completes, check if there's a pending flow to resume
-    useEffect(() => {
-        if (isSignedIn && pendingFlowData) {
-            setInitialClassFlowData(pendingFlowData);
-            setIsModalOpen(true);
-            setPendingFlowData(null);
-        }
-    }, [isSignedIn, pendingFlowData]);
-
-    const closeModal = () => {
-        setIsModalOpen(false);
-        setInitialClassFlowData(null);
+    const handleButtonClick = () => {
+        // Open the Wise LMS store page where students can browse and buy courses
+        window.open(WISE_STORE_URL, '_blank', 'noopener,noreferrer');
     };
 
     const customAnimations = `
@@ -124,42 +101,29 @@ export default function PricingSection() {
                             Unlock Your Personalized Pricing
                         </h2>
                         <p className="text-gray-300 text-base sm:text-lg mb-8 sm:mb-12 max-w-xl mx-auto">
-                            Complete a quick questionnaire (in less than 1 minute) to determine your ideal learning package.
+                            Browse our courses and find the perfect learning package for your needs.
                         </p>
 
-                        {/* Responsive Button Layout — Visible to ALL users */}
+                        {/* Pricing Buttons — ALL redirect to Wise LMS store */}
                         <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
                             {loadingPrices ? (
                                 <Loader className="w-8 h-8 text-orange-400 animate-spin mx-auto" />
                             ) : (
                                 <>
                                     {buttons.map((button) => (
-                                        isSignedIn ? (
-                                            <button
-                                                key={button.range}
-                                                className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
-                                                onClick={() => handleButtonClick(button.range, button.price)}
-                                            >
-                                                View Pricing for {button.label}
-                                            </button>
-                                        ) : (
-                                            <SignInButton key={button.range} mode="modal">
-                                                <button
-                                                    className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider"
-                                                    onClick={() => handleButtonClick(button.range, button.price)}
-                                                >
-                                                    View Pricing for {button.label}
-                                                </button>
-                                            </SignInButton>
-                                        )
+                                        <button
+                                            key={button.range}
+                                            className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider flex items-center justify-center gap-2"
+                                            onClick={handleButtonClick}
+                                        >
+                                            Enroll for {button.label} <ExternalLink className="w-5 h-5" />
+                                        </button>
                                     ))}
                                 </>
                             )}
                         </div>
                     </div>
                 </div>
-
-                {isModalOpen && <PricingFlow isOpen={isModalOpen} onClose={closeModal} initialClassFlowData={initialClassFlowData} />}
             </div>
         </div>
     );

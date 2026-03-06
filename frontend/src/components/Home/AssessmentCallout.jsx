@@ -91,7 +91,7 @@ export default function AssessmentCallout({ isOpen, onClose, onBookFreeAssessmen
                     </p>
 
                     <button
-                        onClick={() => onStartClasses(cheapestRange, lowestPrice)}
+                        onClick={() => onStartClasses()}
                         className="mt-4 text-sm md:text-xl font-semibold text-gray-900 bg-yellow-100 px-6 py-3 rounded-full border border-yellow-300 shadow-md transition duration-300 hover:scale-[1.03] hover:shadow-lg cursor-pointer inline-flex items-center mx-auto md:mx-0"
                     >
                         Classes starts from &nbsp;<span className="text-xxl text-orange-600 font-extrabold"> ${lowestPrice}</span> <span className='text-sm md:text-xl text-gray-500 ml-1'>/ session</span>

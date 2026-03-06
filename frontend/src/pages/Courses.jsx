@@ -1,34 +1,20 @@
 // frontend/src/pages/Courses.jsx
 
 import React, { useState, useEffect } from 'react';
-import { Users, School, GraduationCap, ChevronRight, Loader } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Users, School, GraduationCap, ChevronRight, Loader, ExternalLink } from 'lucide-react';
 import axios from 'axios';
+
+// Wise LMS store URL — students are redirected here to purchase courses
+const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
+const WISE_STORE_URL = import.meta.env.VITE_WISE_STORE_URL || 'https://primementor.wise.live/institutes/69a53129cd5c5c1bf3ec3e48/store';
 
 // Course Card Component
 const CourseCard = ({ course }) => {
   const Icon = course.icon;
-  const navigate = useNavigate();
 
   const handleEnrollClick = () => {
-    // Navigate to home page first, then try scrolling to pricing
-    navigate('/');
-    // Use a MutationObserver approach: wait for pricing section to render
-    const scrollToPricing = () => {
-      const pricingSection = document.getElementById('pricing');
-      if (pricingSection) {
-        pricingSection.scrollIntoView({ behavior: 'smooth' });
-        return true;
-      }
-      return false;
-    };
-    // Try immediately, then retry a few times for lazy-loaded content
-    if (!scrollToPricing()) {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        if (scrollToPricing() || attempts++ > 10) clearInterval(interval);
-      }, 200);
-    }
+    // Open the Wise LMS store in a new tab so students can purchase the course there
+    window.open(WISE_STORE_URL, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -55,7 +41,7 @@ const CourseCard = ({ course }) => {
             onClick={handleEnrollClick}
             className="flex items-center text-lg font-semibold bg-white text-gray-800 py-2 px-6 rounded-full hover:bg-gray-100 transition-colors duration-300"
           >
-            Enroll Now <ChevronRight className="w-5 h-5 ml-1" />
+            Enroll Now <ExternalLink className="w-4 h-4 ml-2" />
           </button>
         </div>
         <p className="text-sm italic text-white/90 font-medium pt-2">
@@ -85,7 +71,7 @@ const Courses = () => {
             price: `$${classRanges['2-6']?.sessionPrice || 22} / hr`,
             icon: Users,
             description: "Build a rock-solid academic foundation. Focus on core skills in Math, English, and Science through engaging, interactive lessons.",
-            tagline: "Interactive online Zoom sessions to spark curiosity and confidence early on!",
+            tagline: "Interactive online sessions to spark curiosity and confidence early on!",
             color: "bg-green-600",
             hoverShadow: "hover:shadow-green-500/50"
           },
@@ -96,7 +82,7 @@ const Courses = () => {
             price: `$${classRanges['7-9']?.sessionPrice || 25} / hr`,
             icon: School,
             description: "Deepen subject understanding and critical thinking. Prepare for high school with advanced coursework and conceptual clarity.",
-            tagline: "Dedicated one-on-one and small group Zoom classes focusing on conceptual clarity and exam success!",
+            tagline: "Dedicated one-on-one and small group classes focusing on conceptual clarity and exam success!",
             color: "bg-blue-600",
             hoverShadow: "hover:shadow-blue-500/50"
           },
@@ -107,7 +93,7 @@ const Courses = () => {
             price: `$${classRanges['10-12']?.sessionPrice || 27} / hr`,
             icon: GraduationCap,
             description: "Targeted support for board exams and university entrance. Master complex topics with focused, personalized tutoring.",
-            tagline: "Premium online Zoom tutoring tailored for Board Exams, AP, and college readiness!",
+            tagline: "Premium online tutoring tailored for Board Exams, AP, and college readiness!",
             color: "bg-red-600",
             hoverShadow: "hover:shadow-red-500/50"
           },
@@ -119,17 +105,17 @@ const Courses = () => {
           {
             id: 1, title: "Primary Years Excellence", grades: "Classes 2 - 6", price: "$22 / hr",
             icon: Users, description: "Build a rock-solid academic foundation. Focus on core skills in Math, English, and Science through engaging, interactive lessons.",
-            tagline: "Interactive online Zoom sessions to spark curiosity and confidence early on!", color: "bg-green-600", hoverShadow: "hover:shadow-green-500/50"
+            tagline: "Interactive online sessions to spark curiosity and confidence early on!", color: "bg-green-600", hoverShadow: "hover:shadow-green-500/50"
           },
           {
             id: 2, title: "Middle School Mastery", grades: "Classes 7 - 9", price: "$25 / hr",
             icon: School, description: "Deepen subject understanding and critical thinking. Prepare for high school with advanced coursework and conceptual clarity.",
-            tagline: "Dedicated one-on-one and small group Zoom classes focusing on conceptual clarity and exam success!", color: "bg-blue-600", hoverShadow: "hover:shadow-blue-500/50"
+            tagline: "Dedicated one-on-one and small group classes focusing on conceptual clarity and exam success!", color: "bg-blue-600", hoverShadow: "hover:shadow-blue-500/50"
           },
           {
             id: 3, title: "High School Achievement", grades: "Classes 10 - 12", price: "$27 / hr",
             icon: GraduationCap, description: "Targeted support for board exams and university entrance. Master complex topics with focused, personalized tutoring.",
-            tagline: "Premium online Zoom tutoring tailored for Board Exams, AP, and college readiness!", color: "bg-red-600", hoverShadow: "hover:shadow-red-500/50"
+            tagline: "Premium online tutoring tailored for Board Exams, AP, and college readiness!", color: "bg-red-600", hoverShadow: "hover:shadow-red-500/50"
           },
         ]);
       } finally {

@@ -5,6 +5,7 @@ import axios from "axios"
 import toast from "react-hot-toast"
 import { motion } from "framer-motion"
 import { useLocation, useNavigate } from "react-router-dom"
+import { ExternalLink, BookOpen } from "lucide-react"
 
 import Footer from "../components/Home/Footer.jsx"
 import CourseCard from "../components/StudentPanel/CourseCard.jsx"
@@ -12,6 +13,9 @@ import UserProfileCard from "../components/StudentPanel/UserProfileCard.jsx"
 import PastClasses from "../components/StudentPanel/PastClasses.jsx"
 import RepeatClassModal from "../components/StudentPanel/RepeatClassModal.jsx"
 import { getMeetingTime } from "../utils/dateUtils.js"
+
+// Wise LMS URL — where students access their courses 
+const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
 
 // Animation Variants
 const containerVariants = {
@@ -239,6 +243,27 @@ const MyCourses = () => {
                         <p className="text-lg sm:text-xl font-medium text-purple-200 flex justify-center items-center">
                             Welcome back, <span className="font-bold text-white">{userName}</span>. Your next lesson awaits!
                         </p>
+                    </div>
+                </div>
+
+                {/* ── Go to LMS Banner ── */}
+                <div className="mx-auto max-w-8xl px-6 -mt-5 mb-6">
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 text-white">
+                            <BookOpen className="w-8 h-8 flex-shrink-0" />
+                            <div>
+                                <h3 className="text-lg font-bold">Access Your Learning Portal</h3>
+                                <p className="text-blue-100 text-sm">View your courses, attend live classes, and track your progress on the LMS.</p>
+                            </div>
+                        </div>
+                        <a
+                            href={`${WISE_LMS_URL}/student/classes`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 bg-white text-blue-700 font-bold py-3 px-8 rounded-full shadow-md hover:shadow-xl transition transform hover:-translate-y-0.5 duration-300 whitespace-nowrap"
+                        >
+                            Go to LMS <ExternalLink className="w-4 h-4" />
+                        </a>
                     </div>
                 </div>
 

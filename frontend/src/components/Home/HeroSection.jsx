@@ -129,7 +129,7 @@ export default function HeroSection({ handleBookAssessment }) {
                 onClick={handleBookAssessment}
                 className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold text-base sm:text-lg transition transform hover:scale-105 shadow-xl"
               >
-                Book a Free Assessment
+                Book A Free Trial Session Today
               </button>
               <button
                 onClick={() => document.getElementById('how')?.scrollIntoView({ behavior: 'smooth' })}
@@ -154,7 +154,7 @@ export default function HeroSection({ handleBookAssessment }) {
                               transition-transform hover:scale-105">
                 <span className="text-xs sm:text-sm font-semibold">Starts from</span>
                 <span className="text-3xl sm:text-4xl md:text-5xl font-black leading-none">${lowestPrice}</span>
-                <span className="text-sm font-bold">onwards</span>
+                <span className="text-sm font-bold">/hr</span>
                 <TrendingUp className="w-3 h-3 text-green-300 mt-0.5" />
               </div>
 
@@ -177,7 +177,7 @@ export default function HeroSection({ handleBookAssessment }) {
                       onClick={handleEnrollClick}
                       className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-4 px-6 rounded-full shadow-lg transition-all duration-300 hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wide flex items-center justify-center gap-2"
                     >
-                      Enroll for {button.label} <ExternalLink className="w-5 h-5" />
+                      View Pricing for {button.label}
                     </button>
                   ))
                 )}

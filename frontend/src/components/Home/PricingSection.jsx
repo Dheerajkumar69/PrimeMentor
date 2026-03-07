@@ -90,7 +90,7 @@ export default function PricingSection() {
                         <span className='text-xs sm:text-lg mb-1 mt-2 font-semibold'>Starts from</span>
                         <div className="flex flex-col items-center leading-none">
                             <span className='text-2xl sm:text-4xl md:text-5xl font-black'>${lowestPrice}</span>
-                            <span className="text-sm sm:text-md md:text-lg font-bold">onwards</span>
+                            <span className="text-sm sm:text-md md:text-lg font-bold">/hr</span>
                         </div>
                         <TrendingUp className="w-3 h-3 sm:w-4 mt-0.5 text-green-300" />
                     </div>
@@ -116,7 +116,7 @@ export default function PricingSection() {
                                             className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 text-white font-extrabold py-4 px-10 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 hover:ring-4 ring-orange-400 text-lg tracking-wider flex items-center justify-center gap-2"
                                             onClick={handleButtonClick}
                                         >
-                                            Enroll for {button.label} <ExternalLink className="w-5 h-5" />
+                                            View Pricing for {button.label}
                                         </button>
                                     ))}
                                 </>

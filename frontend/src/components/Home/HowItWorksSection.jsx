@@ -39,13 +39,13 @@ const FlowArrows = () => (
   <div className="hidden md:flex absolute inset-x-0 top-1/2 -translate-y-1/2 justify-evenly -mt-1 h-0.5 z-0 pointer-events-none">
     {/* Creating space for 3 arrows between 4 cards */}
     <div className="flex justify-center items-center w-1/4">
-        <ChevronRight className="w-6 h-6 text-gray-400 opacity-50" />
+      <ChevronRight className="w-6 h-6 text-gray-400 opacity-50" />
     </div>
     <div className="flex justify-center items-center w-1/4">
-        <ChevronRight className="w-6 h-6 text-gray-400 opacity-50" />
+      <ChevronRight className="w-6 h-6 text-gray-400 opacity-50" />
     </div>
     <div className="flex justify-center items-center w-1/4">
-        <ChevronRight className="w-6 h-6 text-gray-400 opacity-50" />
+      <ChevronRight className="w-6 h-6 text-gray-400 opacity-50" />
     </div>
   </div>
 );
@@ -74,9 +74,9 @@ const StepSection = () => {
   return (
     <section id="how" className="py-16 sm:py-20 bg-gradient-to-br from-blue-50 via-white to-cyan-50">
       <style>{customStyles}</style>
-      
+
       <div className="container mx-auto px-4 sm:px-6 max-w-6xl">
-        
+
         {/* Header Section */}
         <div className="text-center mb-12 sm:mb-16">
           {/* Responsive Heading */}
@@ -104,7 +104,7 @@ const StepSection = () => {
             {stepsData.map((step) => {
               const isHovered = hoveredStep === step.id;
               const isOtherStepHovered = hoveredStep !== null && hoveredStep !== step.id;
-              const IconComponent = step.icon; 
+              const IconComponent = step.icon;
 
               return (
                 // Wrapper to handle expansion and perspective
@@ -119,48 +119,48 @@ const StepSection = () => {
                     h-36 sm:h-40 md:h-44 
 
                     /* Hover state: Expands vertically for content, scales slightly - Adjusted h-64 for mobile */
-                    ${isHovered 
-                      ? 'h-64 sm:h-64 md:h-72 z-10 transform scale-[1.05] sm:scale-105' 
-                      : isOtherStepHovered 
-                        ? 'opacity-70 scale-[0.98]' 
+                    ${isHovered
+                      ? 'h-64 sm:h-64 md:h-72 z-10 transform scale-[1.05] sm:scale-105'
+                      : isOtherStepHovered
+                        ? 'opacity-70 scale-[0.98]'
                         : 'hover:scale-[1.01]'
                     }
                   `}
                   onMouseEnter={() => setHoveredStep(step.id)}
                 >
-                  
+
                   {/* Inner container that performs the 3D flip */}
-                  <div 
+                  <div
                     className={`
                       relative w-full h-full shadow-xl rounded-2xl bg-white
                       transition-transform duration-700 ease-in-out
                       ${isHovered ? 'shadow-2xl ring-4 ring-purple-300' : 'shadow-lg'}
                     `}
                     style={{
-                        transformStyle: 'preserve-3d',
-                        transform: isHovered ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                      transformStyle: 'preserve-3d',
+                      transform: isHovered ? 'rotateY(180deg)' : 'rotateY(0deg)',
                     }}
                   >
-                    
+
                     {/* --- CARD FRONT (Icon + Title - Always visible initially) --- */}
-                    <div 
+                    <div
                       className={`
                         absolute inset-0 w-full h-full flex flex-col items-center justify-center p-4 sm:p-6 rounded-2xl bg-white
                         transition-opacity duration-300
                       `}
                       style={{
-                          backfaceVisibility: 'hidden',
-                          WebkitBackfaceVisibility: 'hidden', // For Safari
+                        backfaceVisibility: 'hidden',
+                        WebkitBackfaceVisibility: 'hidden', // For Safari
                       }}
                     >
                       {/* Icon Container - Adjusted size for mobile */}
                       <div className={`
                           w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br ${step.gradient} rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 relative overflow-hidden
                       `}>
-                          <div className="pulse-overlay absolute inset-0 bg-white/10 opacity-0 transition-opacity duration-300"></div>
-                          <IconComponent className="w-6 h-6 sm:w-7 sm:h-7 text-white relative z-10" strokeWidth={2} />
+                        <div className="pulse-overlay absolute inset-0 bg-white/10 opacity-0 transition-opacity duration-300"></div>
+                        <IconComponent className="w-6 h-6 sm:w-7 sm:h-7 text-white relative z-10" strokeWidth={2} />
                       </div>
-                      
+
                       {/* Title - Adjusted font size for mobile */}
                       <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">
                         {step.title}
@@ -168,32 +168,25 @@ const StepSection = () => {
                     </div>
 
                     {/* --- CARD BACK (Content revealed on flip) --- */}
-                    <div 
+                    <div
                       className={`
                         absolute inset-0 w-full h-full flex flex-col items-center justify-center p-4 sm:p-6 rounded-2xl bg-white text-center
                       `}
                       style={{
-                          backfaceVisibility: 'hidden',
-                          WebkitBackfaceVisibility: 'hidden', // For Safari
-                          transform: 'rotateY(180deg)', // Initially flipped
+                        backfaceVisibility: 'hidden',
+                        WebkitBackfaceVisibility: 'hidden', // For Safari
+                        transform: 'rotateY(180deg)', // Initially flipped
                       }}
                     >
                       {/* Title (Repeated on back face for context) - Adjusted font size */}
                       <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3">{step.title}</h3>
-                      
+
                       {/* Content - Adjusted font size */}
                       <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed px-1 sm:px-2">
                         {step.description}
                       </p>
-                      
-                      {/* Learn More Link - Adjusted font size */}
-                      <a 
-                        href="#" 
-                        className="text-xs sm:text-sm font-semibold text-purple-600 hover:text-purple-800 transition-colors flex items-center justify-center"
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        Learn More <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
-                      </a>
+
+
                     </div>
                   </div>
                 </div>

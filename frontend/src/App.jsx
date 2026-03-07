@@ -8,8 +8,7 @@ import { AppContext } from './context/AppContext.jsx';
 import TeacherLogin from './components/TeacherPanel/TeacherLogin.jsx';
 import StudentLogin from './components/StudentPanel/StudentLogin.jsx';
 import AdminLogin from './components/AdminPanel/AdminLogin.jsx';
-// AssessmentModal removed — free assessments now handled by Wise LMS consultations
-import AssessmentCallout from './components/Home/AssessmentCallout.jsx';
+// AssessmentModal and AssessmentCallout removed — free assessments now handled by Wise LMS consultations
 // PricingFlow removed — enrollment now handled by Wise LMS
 import Header from './components/Home/Header.jsx';
 import Footer from './components/Home/Footer.jsx';
@@ -77,7 +76,7 @@ const App = () => {
     const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
         !!localStorage.getItem('adminAuthenticated')
     );
-    const [isAssessmentCalloutOpen, setIsAssessmentCalloutOpen] = useState(false);
+
 
 
     useEffect(() => {
@@ -90,11 +89,7 @@ const App = () => {
         return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
-    // Show callout only on home page when not signed in
-    useEffect(() => {
-        const isHomePage = window.location.pathname === '/';
-        setIsAssessmentCalloutOpen(isHomePage && !isSignedIn);
-    }, [isSignedIn]);
+
 
     // Wise LMS URLs
     const WISE_LMS_URL = import.meta.env.VITE_WISE_LMS_URL || 'https://primementor.wise.live';
@@ -103,14 +98,7 @@ const App = () => {
 
     // Opens the Wise LMS free assessment booking page
     const handleBookAssessment = () => {
-        setIsAssessmentCalloutOpen(false);
         window.open(WISE_CONSULTATION_URL, '_blank', 'noopener,noreferrer');
-    };
-
-    // Handle "Classes starts from $X" button — redirect to Wise LMS store
-    const handleStartClasses = () => {
-        setIsAssessmentCalloutOpen(false);
-        window.open(WISE_STORE_URL, '_blank', 'noopener,noreferrer');
     };
 
     const handleAdminLogout = () => {
@@ -136,12 +124,7 @@ const App = () => {
 
             <ChatbotWidget />
 
-            <AssessmentCallout
-                isOpen={isAssessmentCalloutOpen}
-                onClose={() => setIsAssessmentCalloutOpen(false)}
-                onBookFreeAssessment={handleBookAssessment}
-                onStartClasses={handleStartClasses}
-            />
+
 
 
 

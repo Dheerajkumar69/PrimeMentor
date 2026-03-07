@@ -45,11 +45,11 @@ const Header = () => {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md transition-all duration-300">
-      <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div className="container mx-auto px-4 sm:px-6 py-0 sm:py-3 flex items-center justify-between">
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 sm:gap-4 group">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 relative cursor-pointer transform transition-transform duration-300 group-hover:scale-105">
+          <div className="w-[6.25rem] h-[6.25rem] -my-px sm:my-0 sm:w-16 sm:h-16 lg:w-20 lg:h-20 relative cursor-pointer transform transition-transform duration-300 group-hover:scale-105">
             <img src={assets.primementor} alt="Prime Mentor Logo" className="w-full h-full object-contain" />
           </div>
           <div className="hidden sm:block">

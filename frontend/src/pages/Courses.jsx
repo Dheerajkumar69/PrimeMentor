@@ -19,32 +19,32 @@ const CourseCard = ({ course }) => {
 
   return (
     <div className={`
-      ${course.color} text-white p-8 rounded-2xl 
+      ${course.color} text-white p-4 sm:p-8 rounded-2xl 
       shadow-xl transition-all duration-500 
       transform hover:scale-[1.03] cursor-pointer 
       flex flex-col h-full
       ${course.hoverShadow}
     `}>
-      <div className="flex items-center justify-between mb-4">
-        <Icon className="w-10 h-10 text-white/90" />
-        <span className="text-sm font-bold uppercase tracking-wider bg-white/20 px-4 py-2 rounded-full">{course.grades}</span>
+      <div className="flex items-center justify-between mb-2 sm:mb-4">
+        <Icon className="w-7 h-7 sm:w-10 sm:h-10 text-white/90" />
+        <span className="text-xs sm:text-sm font-bold uppercase tracking-wider bg-white/20 px-3 py-1 sm:px-4 sm:py-2 rounded-full">{course.grades}</span>
       </div>
 
-      <h3 className="text-3xl font-extrabold mb-3 leading-snug">{course.title}</h3>
-      <p className="text-white/80 mb-6 flex-grow text-lg">{course.description}</p>
+      <h3 className="text-xl sm:text-3xl font-extrabold mb-1 sm:mb-3 leading-snug">{course.title}</h3>
+      <p className="text-white/80 mb-3 sm:mb-6 flex-grow text-sm sm:text-lg line-clamp-3 sm:line-clamp-none">{course.description}</p>
 
       {/* Price and Tagline */}
-      <div className="mt-auto pt-4 border-t border-white/30">
-        <div className="flex justify-between items-center mb-3">
-          <span className="text-3xl font-extrabold tracking-tight">{course.price}</span>
+      <div className="mt-auto pt-2 sm:pt-4 border-t border-white/30">
+        <div className="flex justify-between items-center mb-1 sm:mb-3">
+          <span className="text-xl sm:text-3xl font-extrabold tracking-tight">{course.price}</span>
           <button
             onClick={handleEnrollClick}
-            className="flex items-center text-lg font-semibold bg-white text-gray-800 py-2 px-6 rounded-full hover:bg-gray-100 transition-colors duration-300"
+            className="flex items-center text-sm sm:text-lg font-semibold bg-white text-gray-800 py-1.5 px-4 sm:py-2 sm:px-6 rounded-full hover:bg-gray-100 transition-colors duration-300"
           >
-            Enroll Now <ExternalLink className="w-4 h-4 ml-2" />
+            Enroll Now <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
           </button>
         </div>
-        <p className="text-sm italic text-white/90 font-medium pt-2">
+        <p className="text-xs sm:text-sm italic text-white/90 font-medium pt-1 sm:pt-2 hidden sm:block">
           {course.tagline}
         </p>
       </div>
@@ -126,15 +126,15 @@ const Courses = () => {
   }, []);
 
   return (
-    <div className="min-h-screen pt-28 pb-12 bg-gray-50 font-inter">
+    <div className="min-h-screen pt-24 sm:pt-28 pb-8 sm:pb-12 bg-gray-50 font-inter">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Hero Header */}
-        <header className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight mb-4">
+        <header className="text-center mb-6 sm:mb-16">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight mb-2 sm:mb-4">
             Find Your Perfect <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600">Online Learning Path</span>
           </h1>
-          <p className="text-xl text-gray-600 max-w-4xl mx-auto">
+          <p className="text-base sm:text-xl text-gray-600 max-w-4xl mx-auto">
             Our <b>Courses</b> offer <b>personalized, real-time tutoring</b> tailored to the unique academic needs of every grade level, ensuring maximum understanding and top grades.
           </p>
         </header>
@@ -145,7 +145,7 @@ const Courses = () => {
             <Loader className="w-10 h-10 text-orange-500 animate-spin" />
           </div>
         ) : (
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
             {courses.map((course) => (
               <CourseCard key={course.id} course={course} />
             ))}
